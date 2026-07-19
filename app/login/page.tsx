@@ -14,16 +14,18 @@ export default function LoginPage() {
   const [quickAccounts, setQuickAccounts] = useState<SystemUser[]>([]);
 
   useEffect(() => {
-    setQuickAccounts(fetchUsers());
+    fetchUsers()
+      .then(data => setQuickAccounts(data || []))
+      .catch(err => console.error("Error loading quick accounts:", err));
   }, []);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    setTimeout(() => {
-      const result = login(email, password);
+    try {
+      const result = await login(email, password);
       setLoading(false);
       if (result.success && result.user) {
         if (result.user.role === "Customer") {
@@ -34,17 +36,21 @@ export default function LoginPage() {
       } else {
         setError(result.error || "Đăng nhập thất bại. Vui lòng kiểm tra lại email/mật khẩu.");
       }
-    }, 600);
+    } catch (err) {
+      setLoading(false);
+      setError("Đăng nhập thất bại. Lỗi kết nối hệ thống.");
+    }
   };
 
-  const handleQuickLogin = (selectedUser: SystemUser) => {
+  const handleQuickLogin = async (selectedUser: SystemUser) => {
     setError("");
     setLoading(true);
     setEmail(selectedUser.email);
-    setPassword(selectedUser.password || "123");
+    const pwd = selectedUser.password || "123";
+    setPassword(pwd);
     
-    setTimeout(() => {
-      const result = login(selectedUser.email, selectedUser.password || "123");
+    try {
+      const result = await login(selectedUser.email, pwd);
       setLoading(false);
       if (result.success && result.user) {
         if (result.user.role === "Customer") {
@@ -55,7 +61,10 @@ export default function LoginPage() {
       } else {
         setError(result.error || "Đăng nhập thất bại.");
       }
-    }, 400);
+    } catch (err) {
+      setLoading(false);
+      setError("Đăng nhập thất bại. Lỗi kết nối hệ thống.");
+    }
   };
 
   return (

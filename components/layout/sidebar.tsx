@@ -19,6 +19,7 @@ import {
   UsersRound,
   UserCheck,
   Inbox,
+  Server,
 } from "lucide-react";
 
 interface MenuItemProps {
@@ -77,7 +78,7 @@ export default function Sidebar() {
   // Section visibility checks
   const showServiceSection = showLink("/dashboard") || showLink("/requests") || showLink("/tickets") || showLink("/maintenance") || showLink("/projects");
   const showInfoSection = showLink("/customers") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts");
-  const showSystemSection = showLink("/sla") || showLink("/users") || showLink("/settings");
+  const showSystemSection = showLink("/sla") || showLink("/users") || showLink("/settings") || showLink("/system");
 
   return (
     <aside className="w-[205px] min-h-screen bg-slate-900 border-r border-slate-700 flex flex-col justify-between px-4 py-6 shrink-0">
@@ -267,6 +268,18 @@ export default function Sidebar() {
                 >
                   <Settings size={18} />
                   <span>Phân quyền nhóm</span>
+                </Link>
+              )}
+
+              {showLink("/system") && (
+                <Link
+                  href="/system"
+                  className={menuItemClass({
+                    isActive: pathname === "/system",
+                  })}
+                >
+                  <Server size={18} />
+                  <span>Quản lý hệ thống</span>
                 </Link>
               )}
             </div>

@@ -59,9 +59,17 @@ export default function UsersPage() {
   const [resetError, setResetError] = useState("");
 
   // Load Data
-  const loadUsersList = () => {
-    setUsers(fetchUsers());
-    setGroups(fetchGroups());
+  const loadUsersList = async () => {
+    try {
+      const [fetchedUsers, fetchedGroups] = await Promise.all([
+        fetchUsers(),
+        fetchGroups()
+      ]);
+      setUsers(fetchedUsers);
+      setGroups(fetchedGroups);
+    } catch (err) {
+      console.error("Error loading users and groups:", err);
+    }
   };
 
   useEffect(() => {
@@ -71,7 +79,7 @@ export default function UsersPage() {
       .catch(err => console.error("Error fetching db customers:", err));
   }, []);
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
 
@@ -95,31 +103,35 @@ export default function UsersPage() {
       return;
     }
 
-    const result = createUser({
-      name: createForm.name.trim(),
-      email: createForm.email.trim(),
-      phone: createForm.phone.trim(),
-      groupId: createForm.groupId,
-      department: createForm.department,
-      active: true,
-      password: createForm.password.trim(),
-      customerId: selectedGroup?.role === "Customer" ? createForm.customerId : undefined
-    });
-
-    if (result.success) {
-      setIsCreateModalOpen(false);
-      setCreateForm({
-        name: "",
-        email: "",
-        phone: "",
-        groupId: "",
-        department: "Phòng Kỹ thuật & Support",
-        password: "",
-        customerId: ""
+    try {
+      const result = await createUser({
+        name: createForm.name.trim(),
+        email: createForm.email.trim(),
+        phone: createForm.phone.trim(),
+        groupId: createForm.groupId,
+        department: createForm.department,
+        active: true,
+        password: createForm.password.trim(),
+        customerId: selectedGroup?.role === "Customer" ? createForm.customerId : undefined
       });
-      loadUsersList();
-    } else {
-      setCreateError(result.error || "Có lỗi xảy ra khi tạo tài khoản.");
+
+      if (result.success) {
+        setIsCreateModalOpen(false);
+        setCreateForm({
+          name: "",
+          email: "",
+          phone: "",
+          groupId: "",
+          department: "Phòng Kỹ thuật & Support",
+          password: "",
+          customerId: ""
+        });
+        await loadUsersList();
+      } else {
+        setCreateError(result.error || "Có lỗi xảy ra khi tạo tài khoản.");
+      }
+    } catch (err) {
+      setCreateError("Lỗi hệ thống khi tạo tài khoản.");
     }
   };
 
@@ -142,30 +154,38 @@ export default function UsersPage() {
     setIsCreateModalOpen(true);
   };
 
-  const handleToggleLock = (id: string, name: string, active: boolean) => {
+  const handleToggleLock = async (id: string, name: string, active: boolean) => {
     const actionText = active ? "Khóa" : "Mở khóa";
     if (window.confirm(`Bạn có chắc chắn muốn ${actionText.toLowerCase()} tài khoản "${name}"?`)) {
-      const result = toggleUserLock(id);
-      if (result.success) {
-        loadUsersList();
-      } else {
-        alert(result.error);
+      try {
+        const result = await toggleUserLock(id);
+        if (result.success) {
+          await loadUsersList();
+        } else {
+          alert(result.error);
+        }
+      } catch (err) {
+        alert("Lỗi hệ thống khi thay đổi trạng thái tài khoản.");
       }
     }
   };
 
-  const handleDeleteUser = (id: string, name: string) => {
+  const handleDeleteUser = async (id: string, name: string) => {
     if (window.confirm(`Xóa tài khoản người dùng "${name}"? Thao tác này không thể hoàn tác.`)) {
-      const result = deleteUser(id);
-      if (result.success) {
-        loadUsersList();
-      } else {
-        alert(result.error);
+      try {
+        const result = await deleteUser(id);
+        if (result.success) {
+          await loadUsersList();
+        } else {
+          alert(result.error);
+        }
+      } catch (err) {
+        alert("Lỗi hệ thống khi xóa tài khoản.");
       }
     }
   };
 
-  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError("");
     setResetSuccessMsg("");
@@ -176,13 +196,17 @@ export default function UsersPage() {
       return;
     }
 
-    const result = resetUserPassword(resetTargetUser.id, newPassword.trim());
-    if (result.success) {
-      setResetSuccessMsg(`Đặt lại mật khẩu thành công cho tài khoản ${resetTargetUser.email}! Mật khẩu mới: ${newPassword}`);
-      setNewPassword("");
-      loadUsersList();
-    } else {
-      setResetError(result.error || "Lỗi khi đặt lại mật khẩu.");
+    try {
+      const result = await resetUserPassword(resetTargetUser.id, newPassword.trim());
+      if (result.success) {
+        setResetSuccessMsg(`Đặt lại mật khẩu thành công cho tài khoản ${resetTargetUser.email}! Mật khẩu mới: ${newPassword}`);
+        setNewPassword("");
+        await loadUsersList();
+      } else {
+        setResetError(result.error || "Lỗi khi đặt lại mật khẩu.");
+      }
+    } catch (err) {
+      setResetError("Lỗi hệ thống khi đặt lại mật khẩu.");
     }
   };
 

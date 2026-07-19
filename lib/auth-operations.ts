@@ -1,3 +1,6 @@
+import { supabase } from "./supabase";
+import { logOperation } from "./logger";
+
 export interface UserSession {
   email: string;
   name: string;
@@ -6,6 +9,7 @@ export interface UserSession {
   department?: string;
   phone?: string;
   customerId?: string; // Associated customer ID from customers table
+  permissions?: string[]; // Paths authorized, e.g., ["/dashboard", "/requests"]
 }
 
 export interface SystemUser {
@@ -113,7 +117,7 @@ const SEED_USERS: SystemUser[] = [
     active: true,
     password: "123",
     groupId: "g-4",
-    customerId: "80c26b95-f7bd-4115-a07b-72748d483ab5", // BANK-VCB UUID from Supabase DB
+    customerId: "80c26b95-f7bd-4115-a07b-72748d483ab5",
     created_at: new Date().toISOString()
   }
 ];
@@ -123,56 +127,53 @@ function isClient() {
 }
 
 // Group Fetch/Save operations
-export function fetchGroups(): UserGroup[] {
-  if (!isClient()) return SEED_GROUPS;
-  const stored = localStorage.getItem("jpt_user_groups");
-  if (!stored) {
-    localStorage.setItem("jpt_user_groups", JSON.stringify(SEED_GROUPS));
+export async function fetchGroups(): Promise<UserGroup[]> {
+  const { data, error } = await supabase
+    .from("user_groups")
+    .select("*")
+    .order("name", { ascending: true });
+  
+  if (error) {
+    console.error("Error fetching user groups:", error);
     return SEED_GROUPS;
   }
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return SEED_GROUPS;
-  }
+  return data || [];
 }
 
 export function setStoredGroups(groups: UserGroup[]) {
-  if (!isClient()) return;
-  localStorage.setItem("jpt_user_groups", JSON.stringify(groups));
+  // Deprecated - groups now saved directly to Supabase via createGroup/updateGroup/deleteGroup
 }
 
 // User Fetch/Save operations
-export function fetchUsers(): SystemUser[] {
-  if (!isClient()) return SEED_USERS;
-  const stored = localStorage.getItem("jpt_users");
-  if (!stored) {
-    localStorage.setItem("jpt_users", JSON.stringify(SEED_USERS));
+export async function fetchUsers(): Promise<SystemUser[]> {
+  const { data, error } = await supabase
+    .from("system_users")
+    .select("*")
+    .order("created_at", { ascending: true });
+  
+  if (error) {
+    console.error("Error fetching system users:", error);
     return SEED_USERS;
   }
-  try {
-    const list = JSON.parse(stored) as SystemUser[];
-    let migrated = false;
-    const updated = list.map(u => {
-      if (u.email === "customer@jpt.vn" && u.customerId === "45a3c7b5-1234-5678-9abc-def012345678") {
-        u.customerId = "80c26b95-f7bd-4115-a07b-72748d483ab5";
-        migrated = true;
-      }
-      return u;
-    });
-    if (migrated) {
-      localStorage.setItem("jpt_users", JSON.stringify(updated));
-      return updated;
-    }
-    return list;
-  } catch (e) {
-    return SEED_USERS;
-  }
+
+  return (data || []).map(u => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    phone: u.phone,
+    role: u.role,
+    roleLabel: u.role_label,
+    department: u.department,
+    active: u.active,
+    password: u.password,
+    groupId: u.group_id,
+    customerId: u.customer_id,
+    created_at: u.created_at
+  }));
 }
 
 export function setStoredUsers(users: SystemUser[]) {
-  if (!isClient()) return;
-  localStorage.setItem("jpt_users", JSON.stringify(users));
+  // Deprecated - users now saved directly to Supabase via createUser/deleteUser/toggleUserLock/resetUserPassword
 }
 
 export function getCurrentUser(): UserSession | null {
@@ -180,50 +181,55 @@ export function getCurrentUser(): UserSession | null {
   const stored = localStorage.getItem("jpt_auth_session");
   if (!stored) return null;
   try {
-    const session = JSON.parse(stored) as UserSession;
-    if (session.email === "customer@jpt.vn" && session.customerId === "45a3c7b5-1234-5678-9abc-def012345678") {
-      session.customerId = "80c26b95-f7bd-4115-a07b-72748d483ab5";
-      localStorage.setItem("jpt_auth_session", JSON.stringify(session));
-    }
-    return session;
+    return JSON.parse(stored) as UserSession;
   } catch (e) {
     return null;
   }
 }
 
-export function login(email: string, password?: string): { success: boolean; user?: UserSession; error?: string } {
-  const users = fetchUsers();
-  const user = users.find(acc => acc.email.toLowerCase() === email.toLowerCase().trim());
-  
-  if (!user) {
+export async function login(email: string, password?: string): Promise<{ success: boolean; user?: UserSession; error?: string }> {
+  const { data: userData, error: userError } = await supabase
+    .from("system_users")
+    .select("*")
+    .eq("email", email.toLowerCase().trim())
+    .maybeSingle();
+
+  if (userError || !userData) {
     return { success: false, error: "Tài khoản không chính xác hoặc chưa được đăng ký." };
   }
   
-  if (!user.active) {
+  if (!userData.active) {
     return { success: false, error: "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên." };
   }
 
-  if (password && password !== "••••••••" && user.password && user.password !== password) {
+  if (password && password !== "••••••••" && userData.password && userData.password !== password) {
     return { success: false, error: "Mật khẩu đăng nhập không chính xác." };
   }
 
-  // Load user's group to get the latest role/label
-  const groups = fetchGroups();
-  const group = groups.find(g => g.id === user.groupId);
+  // Load user's group to get the latest role/label & permissions
+  const { data: groupData } = await supabase
+    .from("user_groups")
+    .select("*")
+    .eq("id", userData.group_id)
+    .maybeSingle();
   
   const session: UserSession = {
-    email: user.email,
-    name: user.name,
-    role: group ? group.role : user.role,
-    roleLabel: group ? group.name : user.roleLabel,
-    department: user.department,
-    phone: user.phone,
-    customerId: user.customerId // Pass linked customer ID
+    email: userData.email,
+    name: userData.name,
+    role: groupData ? groupData.role : userData.role,
+    roleLabel: groupData ? groupData.name : userData.role_label,
+    department: userData.department,
+    phone: userData.phone,
+    customerId: userData.customer_id,
+    permissions: groupData ? groupData.permissions : []
   };
 
   if (isClient()) {
     localStorage.setItem("jpt_auth_session", JSON.stringify(session));
   }
+  
+  // Log successful login
+  logOperation("Đăng nhập", `Người dùng ${session.name} (${session.email}) đăng nhập hệ thống.`);
   return { success: true, user: session };
 }
 
@@ -237,22 +243,14 @@ export function hasAccess(role: UserSession["role"], pathname: string): boolean 
   if (role === "Admin") return true;
 
   const path = pathname.toLowerCase();
-  
   const session = getCurrentUser();
   if (!session) return false;
 
-  const users = fetchUsers();
-  const dbUser = users.find(u => u.email.toLowerCase() === session.email.toLowerCase());
-  
-  if (dbUser && dbUser.groupId) {
-    const groups = fetchGroups();
-    const group = groups.find(g => g.id === dbUser.groupId);
-    if (group) {
-      return group.permissions.some(p => {
-        const cleanP = p.toLowerCase();
-        return path === cleanP || path.startsWith(cleanP + "/");
-      });
-    }
+  if (session.permissions && session.permissions.length > 0) {
+    return session.permissions.some(p => {
+      const cleanP = p.toLowerCase();
+      return path === cleanP || path.startsWith(cleanP + "/");
+    });
   }
 
   // Static Fallback
@@ -274,124 +272,201 @@ export function hasAccess(role: UserSession["role"], pathname: string): boolean 
 }
 
 // User CRUD Helpers
-export function createUser(data: Omit<SystemUser, 'id' | 'role' | 'roleLabel' | 'created_at'> & { role?: SystemUser["role"], roleLabel?: string }): { success: boolean; error?: string } {
-  const users = fetchUsers();
-  
-  const duplicate = users.find(u => u.email.toLowerCase() === data.email.toLowerCase().trim());
+export async function createUser(data: Omit<SystemUser, 'id' | 'role' | 'roleLabel' | 'created_at'> & { role?: SystemUser["role"], roleLabel?: string }): Promise<{ success: boolean; error?: string }> {
+  // Check duplicate email
+  const { data: duplicate, error: checkError } = await supabase
+    .from("system_users")
+    .select("id")
+    .eq("email", data.email.toLowerCase().trim())
+    .maybeSingle();
+
+  if (checkError) {
+    console.error("Error checking duplicate email:", checkError);
+    return { success: false, error: "Lỗi hệ thống khi kiểm tra email." };
+  }
+
   if (duplicate) {
     return { success: false, error: "Email này đã được đăng ký tài khoản khác." };
   }
 
   // Derive role and label from group
-  const groups = fetchGroups();
-  const group = groups.find(g => g.id === data.groupId);
-  const role = group ? group.role : (data.role || "Technical");
-  const roleLabel = group ? group.name : (data.roleLabel || "Kỹ sư Kỹ thuật");
+  const { data: groupData } = await supabase
+    .from("user_groups")
+    .select("*")
+    .eq("id", data.groupId)
+    .maybeSingle();
 
-  const newUser: SystemUser = {
-    ...data,
-    role,
-    roleLabel,
+  const role = groupData ? groupData.role : (data.role || "Technical");
+  const roleLabel = groupData ? groupData.name : (data.roleLabel || "Kỹ sư Kỹ thuật");
+
+  const newUser = {
     id: `u-${Date.now()}`,
-    created_at: new Date().toISOString()
+    email: data.email.toLowerCase().trim(),
+    name: data.name,
+    phone: data.phone,
+    role: role,
+    role_label: roleLabel,
+    department: data.department,
+    active: data.active,
+    password: data.password,
+    group_id: data.groupId,
+    customer_id: data.customerId
   };
 
-  users.push(newUser);
-  setStoredUsers(users);
+  const { error } = await supabase
+    .from("system_users")
+    .insert([newUser]);
+
+  if (error) {
+    console.error("Error creating user:", error);
+    return { success: false, error: "Lỗi hệ thống khi tạo tài khoản." };
+  }
+
+  logOperation("Tạo người dùng", `Đã tạo tài khoản ${newUser.name} (${newUser.email}) với vai trò ${roleLabel}.`);
   return { success: true };
 }
 
-export function deleteUser(id: string): { success: boolean; error?: string } {
-  const users = fetchUsers();
-  const filtered = users.filter(u => u.id !== id);
+export async function deleteUser(id: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("system_users")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting user:", error);
+    return { success: false, error: "Lỗi hệ thống khi xóa tài khoản." };
+  }
   
-  if (filtered.length === users.length) {
-    return { success: false, error: "Không tìm thấy người dùng." };
-  }
-
-  setStoredUsers(filtered);
+  logOperation("Xóa người dùng", `Đã xóa người dùng có ID ${id}.`);
   return { success: true };
 }
 
-export function toggleUserLock(id: string): { success: boolean; error?: string } {
-  const users = fetchUsers();
-  const index = users.findIndex(u => u.id === id);
-  if (index === -1) {
+export async function toggleUserLock(id: string): Promise<{ success: boolean; error?: string }> {
+  const { data, error: fetchError } = await supabase
+    .from("system_users")
+    .select("active")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchError || !data) {
     return { success: false, error: "Không tìm thấy người dùng." };
   }
 
-  users[index].active = !users[index].active;
-  setStoredUsers(users);
+  const { error: updateError } = await supabase
+    .from("system_users")
+    .update({ active: !data.active })
+    .eq("id", id);
+
+  if (updateError) {
+    console.error("Error toggling user lock:", updateError);
+    return { success: false, error: "Lỗi hệ thống khi thay đổi trạng thái tài khoản." };
+  }
+  
+  logOperation(
+    !data.active ? "Mở khóa người dùng" : "Khóa người dùng",
+    `Đã ${!data.active ? "mở khóa" : "khóa"} tài khoản người dùng ID ${id}.`
+  );
   return { success: true };
 }
 
-export function resetUserPassword(id: string, newPassword: string): { success: boolean; error?: string } {
-  const users = fetchUsers();
-  const index = users.findIndex(u => u.id === id);
-  if (index === -1) {
-    return { success: false, error: "Không tìm thấy người dùng." };
-  }
+export async function resetUserPassword(id: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("system_users")
+    .update({ password: newPassword })
+    .eq("id", id);
 
-  users[index].password = newPassword;
-  setStoredUsers(users);
+  if (error) {
+    console.error("Error resetting user password:", error);
+    return { success: false, error: "Lỗi hệ thống khi đặt lại mật khẩu." };
+  }
+  
+  logOperation("Đặt lại mật khẩu", `Đã đặt lại mật khẩu của người dùng ID ${id}.`);
   return { success: true };
 }
 
 // Group CRUD Helpers
-export function createGroup(data: Omit<UserGroup, 'id'>): { success: boolean; group?: UserGroup; error?: string } {
-  const groups = fetchGroups();
-  const duplicate = groups.find(g => g.name.toLowerCase() === data.name.toLowerCase().trim());
+export async function createGroup(data: Omit<UserGroup, 'id'>): Promise<{ success: boolean; group?: UserGroup; error?: string }> {
+  const { data: duplicate } = await supabase
+    .from("user_groups")
+    .select("id")
+    .eq("name", data.name.toLowerCase().trim())
+    .maybeSingle();
+
   if (duplicate) {
     return { success: false, error: "Tên nhóm này đã tồn tại." };
   }
 
-  const newGroup: UserGroup = {
-    ...data,
-    id: `g-${Date.now()}`
+  const newGroup = {
+    id: `g-${Date.now()}`,
+    name: data.name.trim(),
+    description: data.description.trim(),
+    role: data.role,
+    permissions: data.permissions
   };
 
-  groups.push(newGroup);
-  setStoredGroups(groups);
+  const { error } = await supabase
+    .from("user_groups")
+    .insert([newGroup]);
+
+  if (error) {
+    console.error("Error creating group:", error);
+    return { success: false, error: "Lỗi hệ thống khi tạo nhóm phân quyền." };
+  }
+
+  logOperation("Tạo nhóm phân quyền", `Đã tạo nhóm phân quyền mới "${newGroup.name}".`);
   return { success: true, group: newGroup };
 }
 
-export function updateGroup(id: string, updates: Partial<UserGroup>): { success: boolean; group?: UserGroup; error?: string } {
-  const groups = fetchGroups();
-  const index = groups.findIndex(g => g.id === id);
-  if (index === -1) {
-    return { success: false, error: "Không tìm thấy nhóm." };
+export async function updateGroup(id: string, updates: Partial<UserGroup>): Promise<{ success: boolean; group?: UserGroup; error?: string }> {
+  const { error } = await supabase
+    .from("user_groups")
+    .update(updates)
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error updating group:", error);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật nhóm." };
   }
 
-  const role = groups[index].role;
+  logOperation("Cập nhật nhóm phân quyền", `Đã cấu hình lại quyền hạn cho nhóm ID ${id}.`);
+  const { data: updatedGroup } = await supabase
+    .from("user_groups")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
-  groups[index] = {
-    ...groups[index],
-    ...updates,
-    id, // lock ID
-    role // lock Role
-  };
-
-  setStoredGroups(groups);
-  return { success: true, group: groups[index] };
+  return { success: true, group: updatedGroup || undefined };
 }
 
-export function deleteGroup(id: string): { success: boolean; error?: string } {
+export async function deleteGroup(id: string): Promise<{ success: boolean; error?: string }> {
   if (["g-1", "g-2", "g-3", "g-4"].includes(id)) {
     return { success: false, error: "Không thể xóa các nhóm mặc định của hệ thống." };
   }
 
-  const groups = fetchGroups();
-  const filtered = groups.filter(g => g.id !== id);
-  if (filtered.length === groups.length) {
-    return { success: false, error: "Không tìm thấy nhóm." };
+  const { data: hasMembers, error: checkError } = await supabase
+    .from("system_users")
+    .select("id")
+    .eq("group_id", id)
+    .limit(1);
+
+  if (checkError) {
+    return { success: false, error: "Lỗi hệ thống khi kiểm tra thành viên nhóm." };
   }
 
-  const users = fetchUsers();
-  const hasMembers = users.some(u => u.groupId === id);
-  if (hasMembers) {
+  if (hasMembers && hasMembers.length > 0) {
     return { success: false, error: "Không thể xóa nhóm đang có thành viên. Vui lòng chuyển thành viên sang nhóm khác trước." };
   }
 
-  setStoredGroups(filtered);
+  const { error } = await supabase
+    .from("user_groups")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting group:", error);
+    return { success: false, error: "Lỗi hệ thống khi xóa nhóm." };
+  }
+
+  logOperation("Xóa nhóm phân quyền", `Đã xóa nhóm phân quyền ID ${id}.`);
   return { success: true };
 }

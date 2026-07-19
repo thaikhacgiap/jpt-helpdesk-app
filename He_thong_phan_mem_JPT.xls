@@ -1,0 +1,270 @@
+
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  table { border-collapse: collapse; margin-bottom: 30px; width: 100%; }
+  th { background-color: #0f766e; color: white; font-weight: bold; border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 13px; }
+  td { border: 1px solid #cbd5e1; padding: 10px; font-size: 12px; vertical-align: top; }
+  .title { font-size: 20px; font-weight: bold; color: #0f766e; padding: 15px 0; font-family: 'Segoe UI', Arial; }
+  .section-header { font-size: 14px; font-weight: bold; color: #0f766e; background-color: #ccfbf1; padding: 10px; border: 1px solid #cbd5e1; }
+  .bold { font-weight: bold; }
+  .italic { font-style: italic; }
+</style>
+</head>
+<body>
+  <div class="title">BẢN HỆ THỐNG PHÂN MỀM JPT HELPDESK APPLICATION (v4.0)</div>
+  <div style="font-size: 12px; color: #64748b; margin-bottom: 20px;">Thời gian khởi tạo tài liệu: 01:02:19 20/7/2026</div>
+
+  <!-- PHẦN 1: TỔNG QUAN CÔNG NGHỆ -->
+  <table>
+    <thead>
+      <tr>
+        <th colspan="3" class="section-header">1. TỔNG QUAN KIẾN TRÚC CÔNG NGHỆ (TECH STACK)</th>
+      </tr>
+      <tr>
+        <th style="width: 25%;">Thành phần</th>
+        <th style="width: 35%;">Công nghệ sử dụng</th>
+        <th>Ghi chú / Chi tiết phiên bản</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bold">Framework chính</td>
+        <td>Next.js 16.2.6 (App Router)</td>
+        <td>Sử dụng compiler Turbopack biên dịch siêu nhanh, tối ưu hóa Static/Dynamic routing.</td>
+      </tr>
+      <tr>
+        <td class="bold">Thư viện giao diện</td>
+        <td>React 19.2.4 / Lucide React</td>
+        <td>Giao diện xây dựng theo chuẩn React Hooks mới nhất, Icons đa dạng từ Lucide.</td>
+      </tr>
+      <tr>
+        <td class="bold">Styling (CSS)</td>
+        <td>Tailwind CSS v4.0 / PostCSS</td>
+        <td>Thiết kế Responsive, phong cách Modern UI chuyên nghiệp.</td>
+      </tr>
+      <tr>
+        <td class="bold">Cơ sở dữ liệu / Backend</td>
+        <td>Supabase Database (PostgreSQL)</td>
+        <td>Tích hợp kết nối qua SDK Client-side <code>@supabase/supabase-js</code>.</td>
+      </tr>
+      <tr>
+        <td class="bold">Lưu trữ phiên bản</td>
+        <td>LocalStorage</td>
+        <td>Lưu trữ token phiên đăng nhập (<code>jpt_auth_session</code>) để duy trì trạng thái trên trình duyệt.</td>
+      </tr>
+      <tr>
+        <td class="bold">Sao lưu & Khôi phục</td>
+        <td>PowerShell / Node API (ZIP)</td>
+        <td>Đóng gói mã nguồn ứng dụng thông qua PowerShell và xuất dữ liệu DB thông qua tệp JSON.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PHẦN 2: DANH SÁCH MÀN HÌNH (SCREENS) -->
+  <table>
+    <thead>
+      <tr>
+        <th colspan="4" class="section-header">2. HỆ THỐNG CÁC MÀN HÌNH CHỨC NĂNG (SCREENS & PAGES)</th>
+      </tr>
+      <tr>
+        <th style="width: 20%;">Tên màn hình</th>
+        <th style="width: 20%;">Đường dẫn (Path)</th>
+        <th style="width: 20%;">Nhóm quyền truy cập</th>
+        <th>Chức năng chính</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bold">Đăng nhập hệ thống</td>
+        <td><code>/login</code></td>
+        <td>Tất cả người dùng</td>
+        <td>Giao diện đăng nhập credentials, hỗ trợ bảng chọn tài khoản đăng nhập nhanh cho các vai trò mẫu.</td>
+      </tr>
+      <tr>
+        <td class="bold">Bảng điều khiển (Dashboard)</td>
+        <td><code>/dashboard</code></td>
+        <td>Admin, PM, Technical</td>
+        <td>Hiển thị KPI tổng hợp, biểu đồ thống kê vé hỗ trợ (Tickets) theo tuần, trạng thái và dự án.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Yêu cầu</td>
+        <td><code>/requests</code></td>
+        <td>Admin, PM, Technical</td>
+        <td>Tiếp nhận và xem danh sách yêu cầu dịch vụ của khách hàng gửi tới.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Ticket</td>
+        <td><code>/tickets</code></td>
+        <td>Admin, PM, Technical</td>
+        <td>Xử lý sự cố kỹ thuật: tạo mới, cập nhật tiến độ, gán kỹ sư (Assignee), theo dõi (Follower), cấu hình SLA.</td>
+      </tr>
+      <tr>
+        <td class="bold">Dịch vụ Bảo trì</td>
+        <td><code>/maintenance</code></td>
+        <td>Admin, Technical</td>
+        <td>Lên kế hoạch và thực hiện bảo trì định kỳ cho hệ thống máy chủ, mạng của khách hàng doanh nghiệp.</td>
+      </tr>
+      <tr>
+        <td class="bold">Triển khai dự án</td>
+        <td><code>/projects</code></td>
+        <td>Admin, PM</td>
+        <td>Lập kế hoạch dự án triển khai, theo dõi tiến độ công việc và biểu đồ Gantt.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Khách hàng</td>
+        <td><code>/customers</code></td>
+        <td>Admin, PM</td>
+        <td>Danh sách đối tác, khách hàng doanh nghiệp. Import khách hàng từ file và quản lý phân loại khách hàng.</td>
+      </tr>
+      <tr>
+        <td class="bold">Danh bạ Liên hệ</td>
+        <td><code>/contacts</code></td>
+        <td>Admin</td>
+        <td>Quản lý thông tin liên hệ của những đại diện kỹ thuật hoặc đầu mối phía khách hàng.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Nhân sự</td>
+        <td><code>/nhan-su</code></td>
+        <td>Admin</td>
+        <td>Quản lý thông tin nhân viên kỹ thuật, kinh doanh nội bộ của JPT.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Hợp đồng</td>
+        <td><code>/contracts</code></td>
+        <td>Admin, PM</td>
+        <td>Quản lý danh sách hợp đồng dịch vụ ký kết, ngày bắt đầu/kết thúc, giá trị hợp đồng và chủ sở hữu.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý SLA</td>
+        <td><code>/sla</code></td>
+        <td>Admin</td>
+        <td>Thiết lập mức cam kết dịch vụ (Service Level Agreement) theo mức độ ưu tiên: Low, Medium, High, Critical.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý Người dùng</td>
+        <td><code>/users</code></td>
+        <td>Admin</td>
+        <td>Quản trị tài khoản đăng nhập hệ thống, thêm tài khoản mới, khóa/mở khóa tài khoản và reset mật khẩu.</td>
+      </tr>
+      <tr>
+        <td class="bold">Phân quyền nhóm</td>
+        <td><code>/settings</code></td>
+        <td>Admin</td>
+        <td>Định nghĩa các nhóm quyền (Ban Giám Đốc, PM, Support...) và cấu hình danh mục menu được phép truy cập.</td>
+      </tr>
+      <tr>
+        <td class="bold">Quản lý hệ thống</td>
+        <td><code>/system</code></td>
+        <td>Admin</td>
+        <td>Trang quản trị chứa: tải backup app (.zip), khôi phục app, xuất/nhập database (.json) và xem nhật ký hoạt động.</td>
+      </tr>
+      <tr>
+        <td class="bold">Portal Khách hàng</td>
+        <td><code>/portal</code></td>
+        <td>Customer</td>
+        <td>Cổng thông tin tự phục vụ dành riêng cho khách hàng để tạo yêu cầu mới và theo dõi trạng thái xử lý.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PHẦN 3: CẤU TRÚC DATABASE -->
+  <table>
+    <thead>
+      <tr>
+        <th colspan="3" class="section-header">3. HỆ THỐNG CƠ SỞ DỮ LIỆU SUPABASE (DATABASE TABLES SCHEMA)</th>
+      </tr>
+      <tr>
+        <th style="width: 20%;">Tên bảng</th>
+        <th style="width: 40%;">Các cột dữ liệu chính (Fields)</th>
+        <th>Ý nghĩa / Ghi chú</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bold">nhan_su</td>
+        <td>id (UUID), ma_nhan_su, ten_nhan_su, bo_phan, chuc_vu, phu_trach, ngay_sinh, so_cccd, email, so_dien_thoai, dia_chi</td>
+        <td>Lưu trữ dữ liệu nhân sự nội bộ của công ty.</td>
+      </tr>
+      <tr>
+        <td class="bold">customers</td>
+        <td>id (UUID), code, name, email, phone, address, contact_person, contact_phone, type, tinh_trang, khu_vuc, phu_trach, ttkd, phan_loai</td>
+        <td>Quản lý danh sách khách hàng doanh nghiệp đối tác.</td>
+      </tr>
+      <tr>
+        <td class="bold">contacts</td>
+        <td>id (UUID), code, name, email, phone, customer_id (FK), position, address</td>
+        <td>Danh bạ người liên hệ thuộc các doanh nghiệp khách hàng.</td>
+      </tr>
+      <tr>
+        <td class="bold">contracts</td>
+        <td>id (UUID), code, name, customer_id (FK), start_date, end_date, value, status, owner_id (FK staff), description</td>
+        <td>Lưu trữ hợp đồng kỹ thuật đi kèm với khách hàng.</td>
+      </tr>
+      <tr>
+        <td class="bold">tickets</td>
+        <td>id (UUID), ticket_id, title, description, customer_id (FK), tt_type, category, priority, creator_id, contract_id (FK), sla_time, sla_status, tt_status, start_time, end_time, close_time, hold_reason, remark, document_link</td>
+        <td>Bảng trung tâm lưu thông tin các sự cố kỹ thuật cần xử lý.</td>
+      </tr>
+      <tr>
+        <td class="bold">ticket_assigned</td>
+        <td>id (UUID), ticket_id (FK), staff_id (FK), assigned_at</td>
+        <td>Bảng liên kết nhiều-nhiều gán kỹ sư xử lý cho ticket.</td>
+      </tr>
+      <tr>
+        <td class="bold">ticket_following</td>
+        <td>id (UUID), ticket_id (FK), staff_id (FK), following_since</td>
+        <td>Bảng liên kết nhiều-nhiều gán kỹ sư theo dõi ticket.</td>
+      </tr>
+      <tr>
+        <td class="bold">ticket_updates</td>
+        <td>id (UUID), ticket_id (FK), updated_by, update_content, old_status, new_status, created_at</td>
+        <td>Nhật ký tiến độ và thay đổi trạng thái của từng vé ticket.</td>
+      </tr>
+      <tr>
+        <td class="bold">user_groups</td>
+        <td>id (VARCHAR), name, description, role, permissions (TEXT[])</td>
+        <td>Chứa định nghĩa phân quyền nhóm người dùng và các menu path tương ứng.</td>
+      </tr>
+      <tr>
+        <td class="bold">system_users</td>
+        <td>id (VARCHAR), email, name, phone, role, role_label, department, active, password, group_id (FK), customer_id (FK)</td>
+        <td>Quản lý tài khoản đăng nhập phần mềm được đồng bộ qua Supabase.</td>
+      </tr>
+      <tr>
+        <td class="bold">operation_logs</td>
+        <td>id (UUID), user_email, user_name, action, details, created_at</td>
+        <td>Nhật ký ghi lại toàn bộ hành động tương tác hệ thống của người dùng.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PHẦN 4: BACKEND APIS -->
+  <table>
+    <thead>
+      <tr>
+        <th colspan="3" class="section-header">4. DANH SÁCH CÁC API ENDPOINTS</th>
+      </tr>
+      <tr>
+        <th style="width: 25%;">Đường dẫn API</th>
+        <th style="width: 15%;">Phương thức</th>
+        <th>Chức năng</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="bold"><code>/api/setup-nhan-su</code></td>
+        <td>GET</td>
+        <td>Kiểm tra bảng nhân sự, cung cấp script SQL tạo bảng thủ công khi chưa tồn tại.</td>
+      </tr>
+      <tr>
+        <td class="bold"><code>/api/system/backup</code></td>
+        <td>GET</td>
+        <td>API chạy nén ZIP dự án Next.js (bằng PowerShell) và gửi trả file ZIP tải về máy client.</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

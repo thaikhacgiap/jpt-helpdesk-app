@@ -37,6 +37,7 @@ const SYSTEM_MENUS = [
   { path: "/sla", label: "Quản lý SLA (Mức độ cam kết dịch vụ)" },
   { path: "/users", label: "Người dùng (Quản trị tài khoản & Khóa)" },
   { path: "/settings", label: "Phân quyền nhóm (Cấu hình phân quyền)" },
+  { path: "/system", label: "Quản lý hệ thống (Backup/Restore & Logs)" },
   { path: "/portal", label: "Cổng dịch vụ Khách hàng (Portal)" }
 ];
 
@@ -68,23 +69,30 @@ export default function SettingsPage() {
   const [modalError, setModalError] = useState("");
 
   // Load Data
-  const loadData = () => {
-    const loadedGroups = fetchGroups();
-    setGroups(loadedGroups);
-    setUsers(fetchUsers());
-    
-    // Maintain active group selection or default to first
-    if (loadedGroups.length > 0) {
-      if (activeGroup) {
-        const found = loadedGroups.find(g => g.id === activeGroup.id);
-        if (found) {
-          setActiveGroup(found);
-          setSelectedPermissions(found.permissions);
-          return;
+  const loadData = async () => {
+    try {
+      const [loadedGroups, loadedUsers] = await Promise.all([
+        fetchGroups(),
+        fetchUsers()
+      ]);
+      setGroups(loadedGroups);
+      setUsers(loadedUsers);
+      
+      // Maintain active group selection or default to first
+      if (loadedGroups.length > 0) {
+        if (activeGroup) {
+          const found = loadedGroups.find(g => g.id === activeGroup.id);
+          if (found) {
+            setActiveGroup(found);
+            setSelectedPermissions(found.permissions);
+            return;
+          }
         }
+        setActiveGroup(loadedGroups[0]);
+        setSelectedPermissions(loadedGroups[0].permissions);
       }
-      setActiveGroup(loadedGroups[0]);
-      setSelectedPermissions(loadedGroups[0].permissions);
+    } catch (err) {
+      console.error("Error loading settings data:", err);
     }
   };
 
@@ -109,19 +117,23 @@ export default function SettingsPage() {
     });
   };
 
-  const handleSavePermissions = () => {
+  const handleSavePermissions = async () => {
     if (!activeGroup) return;
     
-    const result = updateGroup(activeGroup.id, {
-      permissions: selectedPermissions
-    });
+    try {
+      const result = await updateGroup(activeGroup.id, {
+        permissions: selectedPermissions
+      });
 
-    if (result.success) {
-      setSaveSuccess(true);
-      loadData();
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } else {
-      alert(result.error);
+      if (result.success) {
+        setSaveSuccess(true);
+        await loadData();
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        alert(result.error);
+      }
+    } catch (err) {
+      alert("Lỗi hệ thống khi lưu cấu hình quyền.");
     }
   };
 
@@ -150,7 +162,7 @@ export default function SettingsPage() {
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = (e: React.FormEvent) => {
+  const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError("");
 
@@ -159,51 +171,59 @@ export default function SettingsPage() {
       return;
     }
 
-    if (modalMode === "create") {
-      // Default permissions preset based on role
-      let defaultPerms: string[] = ["/dashboard", "/requests", "/tickets"];
-      if (modalForm.role === "Admin") defaultPerms = SYSTEM_MENUS.map(m => m.path);
-      if (modalForm.role === "PM") defaultPerms = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts"];
-      if (modalForm.role === "Technical") defaultPerms = ["/dashboard", "/requests", "/tickets", "/maintenance"];
-      if (modalForm.role === "Customer") defaultPerms = ["/portal"];
+    try {
+      if (modalMode === "create") {
+        // Default permissions preset based on role
+        let defaultPerms: string[] = ["/dashboard", "/requests", "/tickets"];
+        if (modalForm.role === "Admin") defaultPerms = SYSTEM_MENUS.map(m => m.path);
+        if (modalForm.role === "PM") defaultPerms = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts"];
+        if (modalForm.role === "Technical") defaultPerms = ["/dashboard", "/requests", "/tickets", "/maintenance"];
+        if (modalForm.role === "Customer") defaultPerms = ["/portal"];
 
-      const result = createGroup({
-        name: modalForm.name.trim(),
-        description: modalForm.description.trim(),
-        role: modalForm.role,
-        permissions: defaultPerms
-      });
+        const result = await createGroup({
+          name: modalForm.name.trim(),
+          description: modalForm.description.trim(),
+          role: modalForm.role,
+          permissions: defaultPerms
+        });
 
-      if (result.success && result.group) {
-        setIsModalOpen(false);
-        loadData();
-        handleSelectGroup(result.group);
+        if (result.success && result.group) {
+          setIsModalOpen(false);
+          await loadData();
+          handleSelectGroup(result.group);
+        } else {
+          setModalError(result.error || "Có lỗi xảy ra.");
+        }
       } else {
-        setModalError(result.error || "Có lỗi xảy ra.");
-      }
-    } else {
-      const result = updateGroup(modalForm.id, {
-        name: modalForm.name.trim(),
-        description: modalForm.description.trim()
-      });
+        const result = await updateGroup(modalForm.id, {
+          name: modalForm.name.trim(),
+          description: modalForm.description.trim()
+        });
 
-      if (result.success) {
-        setIsModalOpen(false);
-        loadData();
-      } else {
-        setModalError(result.error || "Có lỗi xảy ra.");
+        if (result.success) {
+          setIsModalOpen(false);
+          await loadData();
+        } else {
+          setModalError(result.error || "Có lỗi xảy ra.");
+        }
       }
+    } catch (err) {
+      setModalError("Lỗi hệ thống khi thao tác với nhóm phân quyền.");
     }
   };
 
-  const handleDeleteGroup = (id: string, name: string, e: React.MouseEvent) => {
+  const handleDeleteGroup = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm(`Xóa nhóm phân quyền "${name}"? Thao tác này không thể hoàn tác.`)) {
-      const result = deleteGroup(id);
-      if (result.success) {
-        loadData();
-      } else {
-        alert(result.error);
+      try {
+        const result = await deleteGroup(id);
+        if (result.success) {
+          await loadData();
+        } else {
+          alert(result.error);
+        }
+      } catch (err) {
+        alert("Lỗi hệ thống khi xóa nhóm phân quyền.");
       }
     }
   };
