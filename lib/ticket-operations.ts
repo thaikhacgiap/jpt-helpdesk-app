@@ -1,0 +1,268 @@
+import { supabase, Ticket, TicketUpdate } from '@/lib/supabase'
+
+// Generate next ticket ID — format: TK-YYYYMMDD-NNN
+export async function generateNextTicketId(): Promise<string> {
+  // Today's date string e.g. "20260623"
+  const today = new Date()
+  const dateStr = today.getFullYear().toString()
+    + String(today.getMonth() + 1).padStart(2, '0')
+    + String(today.getDate()).padStart(2, '0')
+
+  const prefix = `TK-${dateStr}-`
+
+  // Find highest sequence number for today
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('ticket_id')
+    .like('ticket_id', `${prefix}%`)
+    .order('ticket_id', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    console.error('Error fetching last ticket:', error)
+    return `${prefix}001`
+  }
+
+  if (!data || data.length === 0) return `${prefix}001`
+
+  // Extract sequence number from last ticket ID and increment
+  const lastSeq = data[0].ticket_id.split('-').pop() || '000'
+  const nextSeq = String(parseInt(lastSeq, 10) + 1).padStart(3, '0')
+  return `${prefix}${nextSeq}`
+}
+
+// Generate next Portal request ticket ID — format: TH-YYYYMMDD-NNN
+export async function generateNextPortalTicketId(): Promise<string> {
+  const today = new Date()
+  const dateStr = today.getFullYear().toString()
+    + String(today.getMonth() + 1).padStart(2, '0')
+    + String(today.getDate()).padStart(2, '0')
+
+  const prefix = `TH-${dateStr}-`
+
+  // Find highest sequence number for today starting with TH-YYYYMMDD-
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('ticket_id')
+    .like('ticket_id', `${prefix}%`)
+    .order('ticket_id', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    console.error('Error fetching last portal ticket:', error)
+    return `${prefix}001`
+  }
+
+  if (!data || data.length === 0) return `${prefix}001`
+
+  // Extract sequence number from last ticket ID and increment
+  const lastSeq = data[0].ticket_id.split('-').pop() || '000'
+  const nextSeq = String(parseInt(lastSeq, 10) + 1).padStart(3, '0')
+  return `${prefix}${nextSeq}`
+}
+
+
+// Create new ticket
+export async function createTicket(formData: any): Promise<{ success: boolean; ticketId?: string; dbId?: string; error?: string }> {
+  try {
+    const ticketId = await generateNextTicketId()
+
+    const { data, error } = await supabase
+      .from('tickets')
+      .insert([{
+        ticket_id:      ticketId,
+        title:          formData.title,
+        description:    formData.description,
+        customer_id:    formData.customerId    || null,
+        customer_name:  formData.customerName  || null,
+        contract_id:    formData.contractId    || null,
+        contract_no:    formData.contractNo    || null,
+        tt_type:        formData.ttType        || null,
+        contract_scope: formData.contractScope || null,
+        category:       formData.category      || null,
+        priority:       formData.priority      || null,
+        creator_name:   formData.creatorName   || null,
+        assigned:       Array.isArray(formData.assigned) ? formData.assigned.join(', ') : (formData.assigned || null),
+        following:      Array.isArray(formData.following) ? formData.following.join(', ') : (formData.following || null),
+        tt_status:      formData.ttStatus      || 'In progress',
+        sla_status:     formData.slaStatus     || null,
+        sla_time:       formData.slaTime       || null,
+        start_time:     formData.startTime     || null,
+        end_time:       formData.endTime       || null,
+        tt_close_time:  formData.closeTime     || null,
+        hold_time:      formData.holdTime      || null,
+        hold_reason:    formData.holdReason    || null,
+        remark:         formData.remark        || null,
+        document_link:  formData.documentLink  || null,
+        progress:       formData.progress      || null,
+        unhold_time:    formData.unholdTime    || null,
+        onsite:         formData.onsite        || null,
+        runbook:        formData.runbook       || null,
+      }])
+      .select()
+
+    if (error) {
+      console.error('Error creating ticket:', error)
+      return { success: false, error: error.message }
+    }
+
+    const dbId = data?.[0]?.id || ''
+    return { success: true, ticketId, dbId }
+  } catch (error) {
+    console.error('Error creating ticket:', error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// Fetch all tickets
+export async function fetchTickets(): Promise<Ticket[]> {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching tickets:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Error fetching tickets:', error)
+    return []
+  }
+}
+
+// Fetch single ticket by ID
+export async function fetchTicketById(ticketId: string): Promise<Ticket | null> {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .single()
+
+    if (error) {
+      console.error('Error fetching ticket:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error fetching ticket:', error)
+    return null
+  }
+}
+
+// Update ticket
+export async function updateTicket(ticketId: string, updates: any): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First get the ticket to find its database ID - handle both formats
+    let ticketDbId = ticketId;
+    
+    // If it looks like a ticket_id (TH-1021), fetch the database ID
+    if (ticketId.includes('-')) {
+      const { data: ticketData, error: fetchError } = await supabase
+        .from('tickets')
+        .select('id')
+        .eq('ticket_id', ticketId)
+        .single()
+
+      if (fetchError || !ticketData) {
+        return { success: false, error: 'Ticket not found' }
+      }
+      ticketDbId = ticketData.id
+    }
+
+    const { error } = await supabase
+      .from('tickets')
+      .update({
+        start_time: updates.startTime,
+        end_time: updates.endTime,
+        tt_status: updates.ttStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', ticketDbId)
+
+    if (error) {
+      console.error('Error updating ticket:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Add ticket update to history
+    if (updates.updates) {
+      await addTicketUpdate(ticketDbId, updates)
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating ticket:', error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// Add ticket update/note
+export async function addTicketUpdate(ticketDbId: string, updateData: any): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('ticket_updates')
+      .insert([{
+        ticket_id: ticketDbId,
+        update_content: updateData.updates,
+        new_status: updateData.ttStatus,
+      }])
+
+    if (error) {
+      console.error('Error adding ticket update:', error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error adding ticket update:', error)
+    return false
+  }
+}
+
+// Delete ticket
+export async function deleteTicket(ticketId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('tickets')
+      .delete()
+      .eq('ticket_id', ticketId)
+
+    if (error) {
+      console.error('Error deleting ticket:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting ticket:', error)
+    return { success: false, error: String(error) }
+  }
+}
+
+// Fetch updates history for a ticket
+export async function fetchTicketUpdates(ticketDbId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('ticket_updates')
+      .select('*')
+      .eq('ticket_id', ticketDbId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching ticket updates:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Error fetching ticket updates:', error)
+    return []
+  }
+}
+
