@@ -13,7 +13,7 @@ import {
 import {
   Ticket, AlertTriangle, CheckCircle2, Activity, TrendingUp, Clock,
   Wrench, FolderOpen, DollarSign, Briefcase, Percent, ClipboardList,
-  ShieldCheck, FileCode, CheckSquare
+  ShieldCheck, Presentation, BarChart3, Layers
 } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -40,8 +40,13 @@ const TAB_COLORS = {
   "Closed": "#8B5CF6",
 };
 
+const formatVND = (value: number) => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+};
+
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<"general" | "maintenance" | "deployment">("general");
+  const [activeTab, setActiveTab] = useState<"synthesis" | "general" | "maintenance" | "deployment">("synthesis");
+  const [timeFilter, setTimeFilter] = useState<"week" | "month" | "year">("month");
   const [data, setData] = useState<DashboardData | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
@@ -83,84 +88,238 @@ export default function DashboardPage() {
     day: "numeric",
   });
 
-  // 1. Calculate HTKT (Ticket) Stats & Chart Data
-  const htktTickets = tickets; // focus on all tickets
-  const totalTickets = htktTickets.length;
-  const openTickets = htktTickets.filter(t => ["New", "In Progress", "On Hold"].includes(t.tt_status)).length;
-  const resolvedTickets = htktTickets.filter(t => ["Resolved", "Closed"].includes(t.tt_status)).length;
-  const slaBreached = htktTickets.filter(t => t.sla_status === "Breached").length;
-  
-  const todayStr = new Date().toISOString().split("T")[0];
-  const newToday = htktTickets.filter(t => t.created_at?.startsWith(todayStr)).length;
-  
-  const slaMetCount = totalTickets - slaBreached;
-  const slaMetRate = totalTickets > 0 ? Math.round((slaMetCount / totalTickets) * 100) : 100;
+  // Dynamic Date Filter Calculations
+  const getFilterStartDate = () => {
+    const d = new Date();
+    if (timeFilter === "week") {
+      d.setDate(d.getDate() - 7);
+    } else if (timeFilter === "month") {
+      d.setMonth(d.getMonth() - 1);
+    } else {
+      d.setFullYear(d.getFullYear() - 1);
+    }
+    return d;
+  };
 
-  // KPI HTKT Array
-  const kpisHTKT = [
+  const filterDate = getFilterStartDate();
+
+  // Filter datasets dynamic based on selection
+  const filteredTickets = tickets.filter(t => t.created_at && new Date(t.created_at) >= filterDate);
+  const filteredProjects = projects.filter(p => p.startDate && new Date(p.startDate) >= filterDate);
+
+  // 1. SYNTHESIS (CONSOLIDATED) TAB CALCULATIONS
+  const totalHTKTSynth = filteredTickets.filter(t => t.tt_type !== "Maintenance").length;
+  const totalMaintSynth = filteredTickets.filter(t => t.tt_type === "Maintenance").length;
+  const totalProjectsSynth = filteredProjects.length;
+  
+  const totalBudgetSynth = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
+  
+  // Calculate Synthesis combined progress
+  const synthMaintList = filteredTickets.filter(t => t.tt_type === "Maintenance");
+  const avgMaintProgressSynth = synthMaintList.length > 0 
+    ? Math.round(synthMaintList.reduce((sum, t) => sum + (parseInt(t.progress || "0") || 0), 0) / synthMaintList.length) 
+    : 0;
+  const avgProjProgressSynth = totalProjectsSynth > 0 
+    ? Math.round(filteredProjects.reduce((sum, p) => sum + (p.progress || 0), 0) / totalProjectsSynth) 
+    : 0;
+  const overallSynthProgress = Math.round((avgMaintProgressSynth + avgProjProgressSynth) / 2) || 0;
+
+  // Synthesis Tab KPI list
+  const kpisSynthesis = [
     {
-      label: "Tổng số Ticket",
-      value: totalTickets,
+      label: "Ticket HTKT",
+      value: totalHTKTSynth,
       icon: Ticket,
       color: "text-blue-600",
       bg: "bg-blue-50",
       border: "border-blue-100",
-      sub: `${newToday} ticket tạo mới hôm nay`,
+      sub: "Yêu cầu sự cố hỗ trợ",
+    },
+    {
+      label: "Kế hoạch Bảo trì",
+      value: totalMaintSynth,
+      icon: Wrench,
+      color: "text-teal-600",
+      bg: "bg-teal-50",
+      border: "border-teal-100",
+      sub: "Lịch bảo trì định kỳ",
+    },
+    {
+      label: "Dự án Triển khai",
+      value: totalProjectsSynth,
+      icon: Briefcase,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+      border: "border-purple-100",
+      sub: "Dự án đang triển khai",
+    },
+    {
+      label: "Tổng ngân sách dự án",
+      value: totalBudgetSynth > 1000000 ? `${Math.round(totalBudgetSynth / 1000000)} Tr.đ` : formatVND(totalBudgetSynth),
+      icon: DollarSign,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+      border: "border-emerald-100",
+      sub: "Ngân sách triển khai",
+    },
+    {
+      label: "Tiến độ công việc chung",
+      value: `${overallSynthProgress}%`,
+      icon: Percent,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+      border: "border-orange-100",
+      sub: "Tiến độ bảo trì & dự án",
+    },
+  ];
+
+  // Synthesis Chart 1: Activity Trend (Tickets, Maintenance, Projects over time)
+  const generateSynthesisTrendData = () => {
+    const points: { label: string; dateStr: string }[] = [];
+    const now = new Date();
+    
+    if (timeFilter === "week") {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const ds = d.toISOString().split("T")[0];
+        points.push({ label: d.toLocaleDateString("vi-VN", { weekday: "short", day: "numeric" }), dateStr: ds });
+      }
+    } else if (timeFilter === "month") {
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - (i * 3));
+        const ds = d.toISOString().split("T")[0];
+        points.push({ label: d.toLocaleDateString("vi-VN", { month: "short", day: "numeric" }), dateStr: ds });
+      }
+    } else {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(now.getMonth() - i);
+        const label = d.toLocaleDateString("vi-VN", { month: "short" });
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        points.push({ label, dateStr: monthKey });
+      }
+    }
+
+    return points.map(pt => {
+      const ticketsCount = tickets.filter(t => t.tt_type !== "Maintenance" && t.created_at?.startsWith(pt.dateStr)).length;
+      const maintCount = tickets.filter(t => t.tt_type === "Maintenance" && t.created_at?.startsWith(pt.dateStr)).length;
+      const projCount = projects.filter(p => p.startDate?.startsWith(pt.dateStr)).length;
+
+      return {
+        name: pt.label,
+        "Vé HTKT": ticketsCount,
+        "Kỳ Bảo Trì": maintCount,
+        "Dự Án": projCount
+      };
+    });
+  };
+
+  const synthTrendData = generateSynthesisTrendData();
+
+  // Synthesis Chart 2: Workload distribution by status
+  const workloadData = [
+    {
+      name: "Chờ tiếp nhận / Lập lịch",
+      "Vé HTKT": filteredTickets.filter(t => t.tt_type !== "Maintenance" && t.tt_status === "New").length,
+      "Kỳ Bảo Trì": filteredTickets.filter(t => t.tt_type === "Maintenance" && t.tt_status === "New").length,
+      "Dự Án": filteredProjects.filter(p => p.status === "Planning").length,
+    },
+    {
+      name: "Đang triển khai",
+      "Vé HTKT": filteredTickets.filter(t => t.tt_type !== "Maintenance" && t.tt_status === "In Progress").length,
+      "Kỳ Bảo Trì": filteredTickets.filter(t => t.tt_type === "Maintenance" && t.tt_status === "In Progress").length,
+      "Dự Án": filteredProjects.filter(p => p.status === "Active" || p.status === "Delayed").length,
+    },
+    {
+      name: "Tạm dừng (Hold)",
+      "Vé HTKT": filteredTickets.filter(t => t.tt_type !== "Maintenance" && t.tt_status === "On Hold").length,
+      "Kỳ Bảo Trì": filteredTickets.filter(t => t.tt_type === "Maintenance" && t.tt_status === "On Hold").length,
+      "Dự Án": filteredProjects.filter(p => p.status === "On Hold").length,
+    },
+    {
+      name: "Đã hoàn thành",
+      "Vé HTKT": filteredTickets.filter(t => t.tt_type !== "Maintenance" && (t.tt_status === "Resolved" || t.tt_status === "Closed")).length,
+      "Kỳ Bảo Trì": filteredTickets.filter(t => t.tt_type === "Maintenance" && (t.tt_status === "Resolved" || t.tt_status === "Closed")).length,
+      "Dự Án": filteredProjects.filter(p => p.status === "Completed").length,
+    }
+  ];
+
+
+  // 2. HTKT (TICKET FOCUS) TAB CALCULATIONS (Lọc theo thời gian chọn)
+  const htktTickets = filteredTickets;
+  const htktTotal = htktTickets.length;
+  const htktOpen = htktTickets.filter(t => ["New", "In Progress", "On Hold"].includes(t.tt_status)).length;
+  const htktResolved = htktTickets.filter(t => ["Resolved", "Closed"].includes(t.tt_status)).length;
+  const htktSlaBreached = htktTickets.filter(t => t.sla_status === "Breached").length;
+  const htktSlaMetCount = htktTotal - htktSlaBreached;
+  const htktSlaMetRate = htktTotal > 0 ? Math.round((htktSlaMetCount / htktTotal) * 100) : 100;
+
+  const kpisHTKT = [
+    {
+      label: "Tổng số Ticket",
+      value: htktTotal,
+      icon: Ticket,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      border: "border-blue-100",
+      sub: "Tổng vé phát sinh trong kỳ",
     },
     {
       label: "Đang xử lý",
-      value: openTickets,
+      value: htktOpen,
       icon: Activity,
       color: "text-orange-600",
       bg: "bg-orange-50",
       border: "border-orange-100",
-      sub: `${totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0}% tổng số lượng`,
+      sub: `${htktTotal ? Math.round((htktOpen / htktTotal) * 100) : 0}% tổng số lượng`,
     },
     {
       label: "Đã giải quyết",
-      value: resolvedTickets,
+      value: htktResolved,
       icon: CheckCircle2,
       color: "text-green-600",
       bg: "bg-green-50",
       border: "border-green-100",
-      sub: `${totalTickets ? Math.round((resolvedTickets / totalTickets) * 100) : 0}% tỷ lệ hoàn thành`,
+      sub: `${htktTotal ? Math.round((htktResolved / htktTotal) * 100) : 0}% hoàn thành`,
     },
     {
       label: "Vi phạm SLA",
-      value: slaBreached,
+      value: htktSlaBreached,
       icon: AlertTriangle,
       color: "text-red-600",
       bg: "bg-red-50",
       border: "border-red-100",
-      sub: "Yêu cầu phản hồi khẩn cấp",
+      sub: "Yêu cầu xử lý khẩn cấp",
     },
     {
       label: "Tỷ lệ đạt SLA",
-      value: `${slaMetRate}%`,
+      value: `${htktSlaMetRate}%`,
       icon: ShieldCheck,
       color: "text-teal-600",
       bg: "bg-teal-50",
       border: "border-teal-100",
-      sub: "Cam kết chuẩn dịch vụ",
+      sub: "Mức cam kết chất lượng",
     },
     {
-      label: "Đang tạm dừng (Hold)",
+      label: "Đang tạm giữ (Hold)",
       value: htktTickets.filter(t => t.tt_status === "On Hold").length,
       icon: Clock,
       color: "text-purple-600",
       bg: "bg-purple-50",
       border: "border-purple-100",
-      sub: "Đang chờ thông tin đối tác",
+      sub: "Đang chờ thông tin",
     },
   ];
 
-  // Chart 1: SLA Status Pie Data
+  // SLA Status Pie
   const slaStatusData = [
-    { name: "Đạt SLA (Met)", value: slaMetCount, color: "#10B981" },
-    { name: "Trễ SLA (Breached)", value: slaBreached, color: "#EF4444" }
+    { name: "Đạt SLA (Met)", value: htktSlaMetCount, color: "#10B981" },
+    { name: "Trễ SLA (Breached)", value: htktSlaBreached, color: "#EF4444" }
   ];
 
-  // Chart 2: Category Distribution
+  // Category Distribution
   const catMap: Record<string, number> = {};
   htktTickets.forEach(t => {
     const cat = t.category || "Chưa phân loại";
@@ -171,7 +330,7 @@ export default function DashboardPage() {
     name, value, color: catColors[idx % catColors.length]
   }));
 
-  // Chart 3: Type Distribution
+  // Type Distribution
   const typeMap: Record<string, number> = {};
   htktTickets.forEach(t => {
     const type = t.tt_type || "Khác";
@@ -188,16 +347,78 @@ export default function DashboardPage() {
     name, value, color: typeColorsMap[name as keyof typeof typeColorsMap] || "#6B7280"
   }));
 
+  // Tickets by Status Chart
+  const statusMapSynth: Record<string, number> = {};
+  htktTickets.forEach(t => {
+    const s = t.tt_status || "New";
+    statusMapSynth[s] = (statusMapSynth[s] || 0) + 1;
+  });
+  const statusChartData = Object.entries(statusMapSynth).map(([name, value]) => ({
+    name, value, color: TAB_COLORS[name as keyof typeof TAB_COLORS] || "#6B7280"
+  }));
 
-  // 2. Calculate Maintenance Tab Stats & Chart Data
-  const maintTickets = tickets.filter(t => t.tt_type === "Maintenance");
+  // Tickets by Priority Chart
+  const priorityMapSynth: Record<string, number> = {};
+  htktTickets.forEach(t => {
+    const p = t.priority || "Medium";
+    priorityMapSynth[p] = (priorityMapSynth[p] || 0) + 1;
+  });
+  const priorityColors: Record<string, string> = {
+    "Low": "#10B981",
+    "Medium": "#F59E0B",
+    "High": "#EF4444",
+    "Critical": "#7C3AED",
+  };
+  const priorityChartData = Object.entries(priorityMapSynth).map(([name, value]) => ({
+    name, value, color: priorityColors[name] || "#6B7280"
+  }));
+
+  // Trend Chart Data (HTKT focus in selected period)
+  const generateHTKTTrendData = () => {
+    const points: { label: string; dateStr: string }[] = [];
+    const now = new Date();
+    
+    if (timeFilter === "week") {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const ds = d.toISOString().split("T")[0];
+        points.push({ label: d.toLocaleDateString("vi-VN", { weekday: "short", day: "numeric" }), dateStr: ds });
+      }
+    } else if (timeFilter === "month") {
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - (i * 3));
+        const ds = d.toISOString().split("T")[0];
+        points.push({ label: d.toLocaleDateString("vi-VN", { month: "short", day: "numeric" }), dateStr: ds });
+      }
+    } else {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(now.getMonth() - i);
+        const label = d.toLocaleDateString("vi-VN", { month: "short" });
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        points.push({ label, dateStr: monthKey });
+      }
+    }
+
+    return points.map(pt => ({
+      date: pt.label,
+      count: htktTickets.filter(t => t.tt_type !== "Maintenance" && t.created_at?.startsWith(pt.dateStr)).length,
+    }));
+  };
+
+  const htktTrendChartData = generateHTKTTrendData();
+
+
+  // 3. MAINTENANCE (BTR) TAB CALCULATIONS (Lọc theo thời gian chọn)
+  const maintTickets = filteredTickets.filter(t => t.tt_type === "Maintenance");
   const activeMaint = maintTickets.filter(t => t.tt_status !== "Resolved" && t.tt_status !== "Closed");
   const completedMaint = maintTickets.filter(t => t.tt_status === "Resolved" || t.tt_status === "Closed");
   
   const totalMaintProgress = maintTickets.reduce((sum, t) => sum + (parseInt(t.progress || "0") || 0), 0);
   const avgMaintProgress = maintTickets.length > 0 ? Math.round(totalMaintProgress / maintTickets.length) : 0;
 
-  // Group Maintenance tickets by Status
   const maintStatusMap: Record<string, number> = {};
   maintTickets.forEach(t => {
     const s = t.tt_status || "New";
@@ -207,7 +428,6 @@ export default function DashboardPage() {
     name, value, color: TAB_COLORS[name as keyof typeof TAB_COLORS] || "#6B7280"
   }));
 
-  // Top 5 Maintenance Progress Chart Data
   const maintProgressData = maintTickets.slice(0, 5).map(t => ({
     name: t.customer?.name ? (t.customer.name.length > 15 ? t.customer.name.substring(0, 15) + "..." : t.customer.name) : "Khách hàng",
     "Kỳ hiện tại": parseInt(t.sla_time) || 1,
@@ -215,17 +435,16 @@ export default function DashboardPage() {
   }));
 
 
-  // 3. Calculate Projects Tab Stats & Chart Data
-  const totalProjects = projects.length;
-  const activeProjects = projects.filter(p => p.status === "Active" || p.status === "Delayed").length;
-  const completedProjects = projects.filter(p => p.status === "Completed").length;
-  const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
-  const totalProjProgress = projects.reduce((sum, p) => sum + (p.progress || 0), 0);
+  // 4. DEPLOYMENT (PROJ) TAB CALCULATIONS (Lọc theo thời gian chọn)
+  const totalProjects = filteredProjects.length;
+  const activeProjects = filteredProjects.filter(p => p.status === "Active" || p.status === "Delayed").length;
+  const completedProjects = filteredProjects.filter(p => p.status === "Completed").length;
+  const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0);
+  const totalProjProgress = filteredProjects.reduce((sum, p) => sum + (p.progress || 0), 0);
   const avgProjProgress = totalProjects > 0 ? Math.round(totalProjProgress / totalProjects) : 0;
 
-  // Group Projects by Status
   const projStatusMap: Record<string, number> = {};
-  projects.forEach(p => {
+  filteredProjects.forEach(p => {
     const s = p.status || "Planning";
     projStatusMap[s] = (projStatusMap[s] || 0) + 1;
   });
@@ -240,67 +459,175 @@ export default function DashboardPage() {
     name, value, color: projStatusColors[name] || "#6B7280"
   }));
 
-  // Top 5 Projects Budget Chart Data
-  const projBudgetData = projects.slice(0, 5).map(p => ({
+  const projBudgetData = filteredProjects.slice(0, 5).map(p => ({
     name: p.name.length > 15 ? p.name.substring(0, 15) + "..." : p.name,
     "Ngân sách (Tr.đ)": Math.round(p.budget / 1000000)
   }));
 
-  const formatVND = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-  };
 
   return (
     <MainLayout>
       <Header title="Bảng Điều Khiển (Dashboard)" description={today} />
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-6 gap-2">
-        <button
-          onClick={() => setActiveTab("general")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === "general"
-              ? "border-blue-600 text-blue-600 font-extrabold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <TrendingUp size={15} />
-          <span>Dashboard HTKT</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("maintenance")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === "maintenance"
-              ? "border-blue-600 text-blue-600 font-extrabold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <Wrench size={15} />
-          <span>Dashboard Bảo trì định kỳ</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("deployment")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === "deployment"
-              ? "border-blue-600 text-blue-600 font-extrabold"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <FolderOpen size={15} />
-          <span>Dashboard Triển khai dự án</span>
-        </button>
+      {/* Tabs and Time filter Container */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 mb-6 gap-4 pb-1">
+        {/* Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+          <button
+            onClick={() => setActiveTab("synthesis")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "synthesis"
+                ? "border-blue-600 text-blue-600 font-extrabold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Layers size={15} />
+            <span>Dashboard Tổng Hợp</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("general")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "general"
+                ? "border-blue-600 text-blue-600 font-extrabold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <TrendingUp size={15} />
+            <span>Dashboard HTKT</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("maintenance")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "maintenance"
+                ? "border-blue-600 text-blue-600 font-extrabold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Wrench size={15} />
+            <span>Dashboard Bảo trì định kỳ</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("deployment")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "deployment"
+                ? "border-blue-600 text-blue-600 font-extrabold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <FolderOpen size={15} />
+            <span>Dashboard Triển khai dự án</span>
+          </button>
+        </div>
+
+        {/* Time filters */}
+        <div className="flex bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200/50 shrink-0 self-start md:self-auto mb-1.5 shadow-2xs">
+          <button
+            onClick={() => setTimeFilter("week")}
+            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+              timeFilter === "week" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Tuần này
+          </button>
+          <button
+            onClick={() => setTimeFilter("month")}
+            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+              timeFilter === "month" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Tháng này
+          </button>
+          <button
+            onClick={() => setTimeFilter("year")}
+            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+              timeFilter === "year" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Năm nay
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-80">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-blue-650 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-slate-500 text-sm">Đang tải dữ liệu...</p>
           </div>
         </div>
       ) : (
         <>
-          {/* TAB 1: DASHBOARD HTKT (TICKET FOCUS) */}
+          {/* TAB 1: SYNTHESIS (CONSOLIDATED) DASHBOARD */}
+          {activeTab === "synthesis" && (
+            <div className="space-y-6 animate-fade-in">
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+                {kpisSynthesis.map((kpi, i) => {
+                  const Icon = kpi.icon;
+                  return (
+                    <div
+                      key={i}
+                      className={`bg-white rounded-2xl border ${kpi.border} p-4 flex flex-col gap-3 shadow-xs hover:shadow-md transition-shadow`}
+                    >
+                      <div className={`w-10 h-10 ${kpi.bg} rounded-lg flex items-center justify-center`}>
+                        <Icon size={20} className={kpi.color} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-bold">{kpi.label}</p>
+                        <p className="text-2xl font-bold text-slate-900 mt-0.5">{kpi.value}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{kpi.sub}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Charts Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Chart 1: Activity Trend */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Xu hướng hoạt động tổng hợp</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart
+                      data={synthTrendData}
+                      margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line type="monotone" dataKey="Vé HTKT" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="Kỳ Bảo Trì" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="Dự Án" stroke="#8B5CF6" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Chart 2: Workload Distribution */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Khối lượng công việc theo Trạng thái</h3>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart
+                      data={workloadData}
+                      margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="Vé HTKT" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Kỳ Bảo Trì" fill="#10B981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Dự Án" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: DASHBOARD HTKT (TICKET FOCUS) */}
           {activeTab === "general" && (
             <div className="space-y-6 animate-fade-in">
               {/* KPI Cards */}
@@ -330,17 +657,17 @@ export default function DashboardPage() {
                 {/* 1. Status Pie Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
                   <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Trạng thái xử lý Ticket</h3>
-                  {data?.ticketsByStatus && data.ticketsByStatus.length > 0 ? (
+                  {statusChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie
-                          data={data.ticketsByStatus}
+                          data={statusChartData}
                           cx="50%"
                           cy="45%"
                           outerRadius={65}
                           dataKey="value"
                         >
-                          {data.ticketsByStatus.map((entry, index) => (
+                          {statusChartData.map((entry, index) => (
                             <Cell key={index} fill={entry.color} />
                           ))}
                         </Pie>
@@ -359,10 +686,10 @@ export default function DashboardPage() {
                 {/* 2. Priority Bar Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
                   <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Mức độ ưu tiên (Priority)</h3>
-                  {data?.ticketsByPriority && data.ticketsByPriority.length > 0 ? (
+                  {priorityChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart
-                        data={data.ticketsByPriority}
+                        data={priorityChartData}
                         margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -370,7 +697,7 @@ export default function DashboardPage() {
                         <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Tickets">
-                          {data.ticketsByPriority.map((entry, index) => (
+                          {priorityChartData.map((entry, index) => (
                             <Cell key={index} fill={entry.color} />
                           ))}
                         </Bar>
@@ -386,10 +713,10 @@ export default function DashboardPage() {
 
                 {/* 3. Trend Line Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Xu hướng sự cố 7 ngày</h3>
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Xu hướng sự cố</h3>
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart
-                      data={data?.ticketTrend || []}
+                      data={htktTrendChartData}
                       margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -490,7 +817,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 2: MAINTENANCE DASHBOARD */}
+          {/* TAB 3: MAINTENANCE DASHBOARD */}
           {activeTab === "maintenance" && (
             <div className="space-y-6 animate-fade-in">
               {/* KPI Cards */}
@@ -502,7 +829,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-slate-500 font-bold">Tổng kế hoạch Bảo trì</p>
                     <p className="text-2xl font-bold text-slate-900 mt-0.5">{maintTickets.length}</p>
-                    <p className="text-[10px] text-slate-450 mt-0.5">kế hoạch trong hệ thống</p>
+                    <p className="text-[10px] text-slate-450 mt-0.5">kế hoạch trong kỳ</p>
                   </div>
                 </div>
 
@@ -626,7 +953,7 @@ export default function DashboardPage() {
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
                             <Wrench size={32} className="mx-auto mb-2 opacity-30" />
-                            <p className="text-xs">Chưa đăng ký lịch bảo trì định kỳ nào</p>
+                            <p className="text-xs">Chưa đăng ký lịch bảo trì định kỳ nào trong kỳ lọc</p>
                           </td>
                         </tr>
                       ) : (
@@ -674,7 +1001,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 3: DEPLOYMENT DASHBOARD */}
+          {/* TAB 4: DEPLOYMENT DASHBOARD */}
           {activeTab === "deployment" && (
             <div className="space-y-6 animate-fade-in">
               {/* KPI Cards */}
@@ -686,7 +1013,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-slate-500 font-bold">Tổng Dự án triển khai</p>
                     <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalProjects}</p>
-                    <p className="text-[10px] text-slate-450 mt-0.5">dự án đang lập trình / bàn giao</p>
+                    <p className="text-[10px] text-slate-450 mt-0.5">dự án trong kỳ lọc</p>
                   </div>
                 </div>
 
@@ -807,15 +1134,15 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {projects.length === 0 ? (
+                      {filteredProjects.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                             <FolderOpen size={32} className="mx-auto mb-2 opacity-30" />
-                            <p className="text-xs">Chưa có dự án nào được tạo lập</p>
+                            <p className="text-xs">Chưa có dự án nào được tạo lập trong kỳ lọc</p>
                           </td>
                         </tr>
                       ) : (
-                        projects.map((p, idx) => (
+                        filteredProjects.map((p, idx) => (
                           <tr key={p.id || idx} className="hover:bg-slate-50/50 transition">
                             <td className="px-6 py-4 font-bold text-blue-600 whitespace-nowrap">
                               {p.code}
