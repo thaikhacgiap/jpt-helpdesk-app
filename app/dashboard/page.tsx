@@ -260,7 +260,7 @@ export default function DashboardPage() {
           onClick={() => setActiveTab("general")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "general"
-              ? "border-teal-500 text-teal-600 font-extrabold"
+              ? "border-blue-600 text-blue-600 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -271,7 +271,7 @@ export default function DashboardPage() {
           onClick={() => setActiveTab("maintenance")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "maintenance"
-              ? "border-teal-500 text-teal-600 font-extrabold"
+              ? "border-blue-600 text-blue-600 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -282,7 +282,7 @@ export default function DashboardPage() {
           onClick={() => setActiveTab("deployment")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "deployment"
-              ? "border-teal-500 text-teal-600 font-extrabold"
+              ? "border-blue-600 text-blue-600 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >

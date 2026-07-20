@@ -323,7 +323,7 @@ export default function SystemPage() {
           onClick={() => setActiveTab("app")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "app" 
-              ? "border-teal-500 text-teal-600 font-extrabold" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -334,7 +334,7 @@ export default function SystemPage() {
           onClick={() => setActiveTab("db")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "db" 
-              ? "border-teal-500 text-teal-600 font-extrabold" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -345,7 +345,7 @@ export default function SystemPage() {
           onClick={() => setActiveTab("logs")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "logs" 
-              ? "border-teal-500 text-teal-600 font-extrabold" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >

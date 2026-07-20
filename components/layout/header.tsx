@@ -20,14 +20,14 @@ export default function Header({
   }, []);
 
   return (
-    <div className="flex items-start justify-between mb-8">
+    <div className="flex items-start justify-between mb-6">
       {/* LEFT */}
       <div>
-        <h1 className="text-4xl font-bold text-slate-900 leading-tight">
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
           {title}
         </h1>
 
-        <p className="text-base text-slate-500 mt-2">
+        <p className="text-xs text-slate-500 mt-0.5">
           {description}
         </p>
       </div>
