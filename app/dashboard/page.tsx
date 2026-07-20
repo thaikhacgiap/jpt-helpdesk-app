@@ -11,9 +11,9 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
 import {
-  Ticket, Users, FileText, AlertTriangle,
-  CheckCircle2, Activity, TrendingUp, Clock,
-  Wrench, FolderOpen, DollarSign, Briefcase, Percent, ClipboardList
+  Ticket, AlertTriangle, CheckCircle2, Activity, TrendingUp, Clock,
+  Wrench, FolderOpen, DollarSign, Briefcase, Percent, ClipboardList,
+  ShieldCheck, FileCode, CheckSquare
 } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -22,13 +22,6 @@ const STATUS_BADGE: Record<string, string> = {
   "On Hold": "bg-red-100 text-red-600",
   "Resolved": "bg-green-100 text-green-700",
   "Closed": "bg-purple-100 text-purple-700",
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  "Low": "bg-green-100 text-green-700",
-  "Medium": "bg-yellow-100 text-yellow-700",
-  "High": "bg-red-100 text-red-600",
-  "Critical": "bg-purple-100 text-purple-700",
 };
 
 const PROJECT_STATUS_BADGE: Record<string, string> = {
@@ -90,7 +83,113 @@ export default function DashboardPage() {
     day: "numeric",
   });
 
-  // Calculate Maintenance Tab Stats
+  // 1. Calculate HTKT (Ticket) Stats & Chart Data
+  const htktTickets = tickets; // focus on all tickets
+  const totalTickets = htktTickets.length;
+  const openTickets = htktTickets.filter(t => ["New", "In Progress", "On Hold"].includes(t.tt_status)).length;
+  const resolvedTickets = htktTickets.filter(t => ["Resolved", "Closed"].includes(t.tt_status)).length;
+  const slaBreached = htktTickets.filter(t => t.sla_status === "Breached").length;
+  
+  const todayStr = new Date().toISOString().split("T")[0];
+  const newToday = htktTickets.filter(t => t.created_at?.startsWith(todayStr)).length;
+  
+  const slaMetCount = totalTickets - slaBreached;
+  const slaMetRate = totalTickets > 0 ? Math.round((slaMetCount / totalTickets) * 100) : 100;
+
+  // KPI HTKT Array
+  const kpisHTKT = [
+    {
+      label: "Tổng số Ticket",
+      value: totalTickets,
+      icon: Ticket,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      border: "border-blue-100",
+      sub: `${newToday} ticket tạo mới hôm nay`,
+    },
+    {
+      label: "Đang xử lý",
+      value: openTickets,
+      icon: Activity,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+      border: "border-orange-100",
+      sub: `${totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0}% tổng số lượng`,
+    },
+    {
+      label: "Đã giải quyết",
+      value: resolvedTickets,
+      icon: CheckCircle2,
+      color: "text-green-600",
+      bg: "bg-green-50",
+      border: "border-green-100",
+      sub: `${totalTickets ? Math.round((resolvedTickets / totalTickets) * 100) : 0}% tỷ lệ hoàn thành`,
+    },
+    {
+      label: "Vi phạm SLA",
+      value: slaBreached,
+      icon: AlertTriangle,
+      color: "text-red-600",
+      bg: "bg-red-50",
+      border: "border-red-100",
+      sub: "Yêu cầu phản hồi khẩn cấp",
+    },
+    {
+      label: "Tỷ lệ đạt SLA",
+      value: `${slaMetRate}%`,
+      icon: ShieldCheck,
+      color: "text-teal-600",
+      bg: "bg-teal-50",
+      border: "border-teal-100",
+      sub: "Cam kết chuẩn dịch vụ",
+    },
+    {
+      label: "Đang tạm dừng (Hold)",
+      value: htktTickets.filter(t => t.tt_status === "On Hold").length,
+      icon: Clock,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+      border: "border-purple-100",
+      sub: "Đang chờ thông tin đối tác",
+    },
+  ];
+
+  // Chart 1: SLA Status Pie Data
+  const slaStatusData = [
+    { name: "Đạt SLA (Met)", value: slaMetCount, color: "#10B981" },
+    { name: "Trễ SLA (Breached)", value: slaBreached, color: "#EF4444" }
+  ];
+
+  // Chart 2: Category Distribution
+  const catMap: Record<string, number> = {};
+  htktTickets.forEach(t => {
+    const cat = t.category || "Chưa phân loại";
+    catMap[cat] = (catMap[cat] || 0) + 1;
+  });
+  const catColors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6B7280"];
+  const catChartData = Object.entries(catMap).map(([name, value], idx) => ({
+    name, value, color: catColors[idx % catColors.length]
+  }));
+
+  // Chart 3: Type Distribution
+  const typeMap: Record<string, number> = {};
+  htktTickets.forEach(t => {
+    const type = t.tt_type || "Khác";
+    typeMap[type] = (typeMap[type] || 0) + 1;
+  });
+  const typeColorsMap = {
+    "Incident": "#EF4444",
+    "Request": "#3B82F6",
+    "Question": "#10B981",
+    "Maintenance": "#8B5CF6",
+    "Khác": "#6B7280"
+  };
+  const typeChartData = Object.entries(typeMap).map(([name, value]) => ({
+    name, value, color: typeColorsMap[name as keyof typeof typeColorsMap] || "#6B7280"
+  }));
+
+
+  // 2. Calculate Maintenance Tab Stats & Chart Data
   const maintTickets = tickets.filter(t => t.tt_type === "Maintenance");
   const activeMaint = maintTickets.filter(t => t.tt_status !== "Resolved" && t.tt_status !== "Closed");
   const completedMaint = maintTickets.filter(t => t.tt_status === "Resolved" || t.tt_status === "Closed");
@@ -115,7 +214,8 @@ export default function DashboardPage() {
     "Tổng kỳ": parseInt(t.hold_time) || 12
   }));
 
-  // Calculate Projects Tab Stats
+
+  // 3. Calculate Projects Tab Stats & Chart Data
   const totalProjects = projects.length;
   const activeProjects = projects.filter(p => p.status === "Active" || p.status === "Delayed").length;
   const completedProjects = projects.filter(p => p.status === "Completed").length;
@@ -150,63 +250,6 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
   };
 
-  const kpisGeneral = [
-    {
-      label: "Tổng Ticket",
-      value: data?.totalTickets ?? 0,
-      icon: Ticket,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
-      border: "border-blue-100",
-      sub: `${data?.newToday ?? 0} mới hôm nay`,
-    },
-    {
-      label: "Đang xử lý",
-      value: data?.openTickets ?? 0,
-      icon: Activity,
-      color: "text-orange-600",
-      bg: "bg-orange-50",
-      border: "border-orange-100",
-      sub: `${data?.totalTickets ? Math.round(((data.openTickets) / data.totalTickets) * 100) : 0}% tổng số`,
-    },
-    {
-      label: "Đã giải quyết",
-      value: data?.resolvedTickets ?? 0,
-      icon: CheckCircle2,
-      color: "text-green-600",
-      bg: "bg-green-50",
-      border: "border-green-100",
-      sub: `${data?.totalTickets ? Math.round(((data.resolvedTickets) / data.totalTickets) * 100) : 0}% hoàn thành`,
-    },
-    {
-      label: "Vi phạm SLA",
-      value: data?.slaBreached ?? 0,
-      icon: AlertTriangle,
-      color: "text-red-600",
-      bg: "bg-red-50",
-      border: "border-red-100",
-      sub: "Cần xử lý ngay",
-    },
-    {
-      label: "Khách hàng",
-      value: data?.totalCustomers ?? 0,
-      icon: Users,
-      color: "text-purple-600",
-      bg: "bg-purple-50",
-      border: "border-purple-100",
-      sub: "Đang quản lý",
-    },
-    {
-      label: "Hợp đồng",
-      value: data?.totalContracts ?? 0,
-      icon: FileText,
-      color: "text-teal-600",
-      bg: "bg-teal-50",
-      border: "border-teal-100",
-      sub: "Hiện có",
-    },
-  ];
-
   return (
     <MainLayout>
       <Header title="Bảng Điều Khiển (Dashboard)" description={today} />
@@ -222,7 +265,7 @@ export default function DashboardPage() {
           }`}
         >
           <TrendingUp size={15} />
-          <span>Dashboard Tổng thể</span>
+          <span>Dashboard HTKT</span>
         </button>
         <button
           onClick={() => setActiveTab("maintenance")}
@@ -257,12 +300,12 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* TAB 1: GENERAL DASHBOARD */}
+          {/* TAB 1: DASHBOARD HTKT (TICKET FOCUS) */}
           {activeTab === "general" && (
             <div className="space-y-6 animate-fade-in">
               {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                {kpisGeneral.map((kpi, i) => {
+                {kpisHTKT.map((kpi, i) => {
                   const Icon = kpi.icon;
                   return (
                     <div
@@ -282,11 +325,11 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* Charts Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Status Pie */}
+              {/* 6 Charts Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* 1. Status Pie Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Trạng thái ticket</h3>
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Trạng thái xử lý Ticket</h3>
                   {data?.ticketsByStatus && data.ticketsByStatus.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
@@ -294,7 +337,7 @@ export default function DashboardPage() {
                           data={data.ticketsByStatus}
                           cx="50%"
                           cy="45%"
-                          outerRadius={70}
+                          outerRadius={65}
                           dataKey="value"
                         >
                           {data.ticketsByStatus.map((entry, index) => (
@@ -302,7 +345,7 @@ export default function DashboardPage() {
                           ))}
                         </Pie>
                         <Tooltip />
-                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -313,9 +356,9 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Priority Bar */}
+                {/* 2. Priority Bar Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Độ ưu tiên xử lý</h3>
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Mức độ ưu tiên (Priority)</h3>
                   {data?.ticketsByPriority && data.ticketsByPriority.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart
@@ -323,10 +366,10 @@ export default function DashboardPage() {
                         margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                        <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                         <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip />
-                        <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Tickets">
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Tickets">
                           {data.ticketsByPriority.map((entry, index) => (
                             <Cell key={index} fill={entry.color} />
                           ))}
@@ -341,9 +384,9 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Trend Line */}
+                {/* 3. Trend Line Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Xu hướng sự cố 7 ngày qua</h3>
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Xu hướng sự cố 7 ngày</h3>
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart
                       data={data?.ticketTrend || []}
@@ -364,81 +407,84 @@ export default function DashboardPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
 
-              {/* Recent Tickets */}
-              <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock size={15} className="text-slate-400" />
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Danh sách Ticket gần đây</h3>
-                  </div>
-                  <a href="/tickets" className="text-xs text-blue-600 hover:underline font-bold">
-                    Xem tất cả →
-                  </a>
+                {/* 4. SLA Met vs Breached Pie Chart */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Trạng thái cam kết SLA</h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={slaStatusData}
+                        cx="50%"
+                        cy="45%"
+                        outerRadius={65}
+                        dataKey="value"
+                      >
+                        {slaStatusData.map((entry, index) => (
+                          <Cell key={index} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr className="text-xs text-slate-500 font-semibold text-left">
-                        <th className="px-6 py-3.5">Ticket ID</th>
-                        <th className="px-4 py-3.5">Tiêu đề</th>
-                        <th className="px-4 py-3.5">Loại</th>
-                        <th className="px-4 py-3.5">Danh mục</th>
-                        <th className="px-4 py-3.5">Ưu tiên</th>
-                        <th className="px-4 py-3.5">Trạng thái</th>
-                        <th className="px-4 py-3.5">Ngày tạo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(data?.recentTickets || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                            <Ticket size={32} className="mx-auto mb-2 opacity-30" />
-                            <p className="text-xs">Chưa có ticket nào đăng ký</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        data?.recentTickets.map((t: any, i: number) => (
-                          <tr key={i} className="hover:bg-slate-50/50 transition">
-                            <td className="px-6 py-4 font-bold text-blue-600 whitespace-nowrap">
-                              {t.ticket_id}
-                            </td>
-                            <td className="px-4 py-4 text-slate-700 max-w-xs truncate font-medium">{t.title}</td>
-                            <td className="px-4 py-4">
-                              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold border border-blue-150">
-                                {t.tt_type || "—"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-slate-500 text-xs font-normal">{t.category || "—"}</td>
-                            <td className="px-4 py-4">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  PRIORITY_BADGE[t.priority] || "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {t.priority || "—"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  STATUS_BADGE[t.tt_status] || "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {t.tt_status || "New"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-slate-400 text-xs whitespace-nowrap">
-                              {t.created_at
-                                ? new Date(t.created_at).toLocaleDateString("vi-VN")
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+
+                {/* 5. Category Distribution Bar Chart */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Phân bổ theo Danh mục sự cố</h3>
+                  {catChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart
+                        data={catChartData}
+                        margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Số lượng">
+                          {catChartData.map((entry, index) => (
+                            <Cell key={index} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-52 flex flex-col items-center justify-center text-slate-350 gap-2">
+                      <TrendingUp size={32} />
+                      <p className="text-xs font-semibold">Chưa có danh mục nào</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 6. Type Distribution Pie Chart */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Phân bổ theo Phân loại Ticket</h3>
+                  {typeChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={typeChartData}
+                          cx="50%"
+                          cy="45%"
+                          outerRadius={65}
+                          dataKey="value"
+                        >
+                          {typeChartData.map((entry, index) => (
+                            <Cell key={index} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-52 flex flex-col items-center justify-center text-slate-350 gap-2">
+                      <TrendingUp size={32} />
+                      <p className="text-xs font-semibold">Chưa có phân loại nào</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
