@@ -20,6 +20,17 @@ interface Task {
   orderIndex: number;
 }
 
+const getWeekOfYear = (dateStr: string): number => {
+  if (!dateStr) return 0;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return 0;
+  const startOfYear = new Date(date.getFullYear(), 0, 1);
+  const diff = date.getTime() - startOfYear.getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+  const dayOfYear = Math.floor(diff / oneDay);
+  return Math.min(51, Math.floor(dayOfYear / 7));
+};
+
 const addMonths = (dateStr: string, months: number): string => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -81,6 +92,7 @@ export default function MaintenancePage() {
   const [activeTab, setActiveTab] = useState<"list" | "timeline">("list");
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
+  const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("month");
   
   const [form, setForm] = useState({
     customerId: "",
@@ -292,16 +304,32 @@ export default function MaintenancePage() {
   const getTodayLinePercent = () => {
     const today = new Date();
     const year = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const currentDate = today.getDate();
-    const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
-    const positionPercent = (currentMonth + currentDate / daysInMonth) / 12;
-    return 35 + 65 * positionPercent;
+    if (timeScale === "month") {
+      const currentMonth = today.getMonth();
+      const currentDate = today.getDate();
+      const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
+      const positionPercent = (currentMonth + currentDate / daysInMonth) / 12;
+      return 35 + 65 * positionPercent;
+    } else if (timeScale === "week") {
+      const currentDayOfYear = Math.floor((today.getTime() - new Date(year, 0, 1).getTime()) / (24 * 60 * 60 * 1000));
+      const positionPercent = currentDayOfYear / 365;
+      return 35 + 65 * positionPercent;
+    } else {
+      // Day scale for July 2026 (month index 6)
+      const currentMonth = 6;
+      const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
+      const positionPercent = (today.getDate() - 1 + today.getHours() / 24) / daysInMonth;
+      return 35 + 65 * positionPercent;
+    }
   };
   const todayLinePercent = getTodayLinePercent();
 
   const renderTimelineRows = () => {
     const year = 2026;
+    const month = 6; // July (0-indexed)
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const limit = timeScale === "month" ? 12 : timeScale === "week" ? 52 : daysInMonth;
+
     return filtered.map((t: any, idx: number) => {
       const segments: { type: "empty" | "cycle"; startMonth: number; span: number; cycleNum?: string; cycle?: any }[] = [];
       let currentMonthIdx = 0;
@@ -325,14 +353,14 @@ export default function MaintenancePage() {
       }
 
       const cycleRanges: any[] = [];
-      for (let i = 1; i <= totalCycles; i++) {
-        const cycleNum = String(i);
-        const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
-        const date = new Date(plannedDate);
-        if (!isNaN(date.getTime())) {
-          const startYr = date.getFullYear();
-          const startMn = date.getMonth();
-          if (startYr === year) {
+
+      if (timeScale === "month") {
+        for (let i = 1; i <= totalCycles; i++) {
+          const cycleNum = String(i);
+          const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
+          const date = new Date(plannedDate);
+          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
+            const startMn = date.getMonth();
             const span = parsedConfig.interval === "yearly" ? 12 : parsedConfig.interval === "quarterly" ? 3 : 1;
             cycleRanges.push({
               cycleNum,
@@ -345,11 +373,59 @@ export default function MaintenancePage() {
             });
           }
         }
+      } else if (timeScale === "week") {
+        for (let i = 1; i <= totalCycles; i++) {
+          const cycleNum = String(i);
+          const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
+          const date = new Date(plannedDate);
+          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
+            const startWk = getWeekOfYear(plannedDate);
+            const spanWeeks = parsedConfig.interval === "yearly" ? 52 : parsedConfig.interval === "quarterly" ? 13 : 4;
+            cycleRanges.push({
+              cycleNum,
+              startMonth: startWk,
+              endMonth: Math.min(51, startWk + spanWeeks - 1),
+              span: Math.min(52 - startWk, spanWeeks),
+              plannedDate,
+              tasks: parsedTasks[cycleNum] || [],
+              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+            });
+          }
+        }
+      } else {
+        // day scale
+        const monthStart = new Date(year, month, 1);
+        const monthEnd = new Date(year, month, daysInMonth);
+        for (let i = 1; i <= totalCycles; i++) {
+          const cycleNum = String(i);
+          const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
+          const cycleStart = new Date(plannedDate);
+          if (!isNaN(cycleStart.getTime())) {
+            const spanDaysConfig = parsedConfig.interval === "yearly" ? 365 : parsedConfig.interval === "quarterly" ? 90 : 30;
+            const cycleEnd = new Date(cycleStart.getTime());
+            cycleEnd.setDate(cycleEnd.getDate() + spanDaysConfig);
+            
+            if (cycleStart <= monthEnd && cycleEnd >= monthStart) {
+              const startDay = cycleStart < monthStart ? 0 : cycleStart.getDate() - 1;
+              const endDay = cycleEnd > monthEnd ? daysInMonth - 1 : cycleEnd.getDate() - 1;
+              
+              cycleRanges.push({
+                cycleNum,
+                startMonth: startDay,
+                endMonth: endDay,
+                span: endDay - startDay + 1,
+                plannedDate,
+                tasks: parsedTasks[cycleNum] || [],
+                progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+              });
+            }
+          }
+        }
       }
 
       cycleRanges.sort((a, b) => a.startMonth - b.startMonth);
 
-      while (currentMonthIdx < 12) {
+      while (currentMonthIdx < limit) {
         const coveringCycle = cycleRanges.find(r => currentMonthIdx >= r.startMonth && currentMonthIdx <= r.endMonth);
         if (coveringCycle) {
           const actualSpan = coveringCycle.endMonth - currentMonthIdx + 1;
@@ -373,7 +449,7 @@ export default function MaintenancePage() {
           currentMonthIdx += actualSpan;
         } else {
           const nextCycle = cycleRanges.find(r => r.startMonth > currentMonthIdx);
-          const nextStart = nextCycle ? nextCycle.startMonth : 12;
+          const nextStart = nextCycle ? nextCycle.startMonth : limit;
           const emptySpan = nextStart - currentMonthIdx;
           segments.push({
             type: "empty",
@@ -427,7 +503,7 @@ export default function MaintenancePage() {
                 className="p-1 border-r border-slate-200 last:border-r-0"
               >
                 <Link href={`/maintenance/${t.id}`}>
-                  <div className={`h-8 w-full rounded flex items-center justify-center text-xs shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
+                  <div className={`h-8 w-full rounded flex items-center justify-center text-[10px] shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
                     Lần {seg.cycleNum}
                   </div>
                 </Link>
@@ -624,8 +700,32 @@ export default function MaintenancePage() {
       {activeTab === "timeline" && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden flex flex-col gap-4">
           {/* Legend and header toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-800 text-base">Timeline Kế Hoạch Bảo Trì</h3>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <h3 className="font-bold text-slate-800 text-base">Timeline Kế Hoạch Bảo Trì</h3>
+              
+              {/* Scale switch */}
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 gap-0.5">
+                {[
+                  { id: "day", label: "Ngày" },
+                  { id: "week", label: "Tuần" },
+                  { id: "month", label: "Tháng" },
+                ].map((scale) => (
+                  <button
+                    key={scale.id}
+                    onClick={() => setTimeScale(scale.id as any)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                      timeScale === scale.id
+                        ? "bg-white text-slate-800 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                    }`}
+                  >
+                    {scale.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Chú thích */}
             <div className="flex flex-wrap items-center gap-4 text-xs">
               <span className="font-semibold text-slate-500">Chú thích:</span>
@@ -649,22 +749,43 @@ export default function MaintenancePage() {
           </div>
 
           <div className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
-            <div className="relative min-w-[1000px] w-full">
+            <div className={`relative w-full ${
+              timeScale === "month" ? "min-w-[1000px]" : 
+              timeScale === "week" ? "min-w-[2200px]" : 
+              "min-w-[1500px]"
+            }`}>
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  {/* Year header */}
+                  {/* Year/Scale header */}
                   <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200">
-                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left">Năm 2026</th>
-                    <th colSpan={12} className="px-4 py-2 text-center text-sm font-semibold">Lịch trình bảo trì định kỳ</th>
+                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left">
+                      {timeScale === "day" ? "Tháng 07/2026" : "Năm 2026"}
+                    </th>
+                    <th 
+                      colSpan={timeScale === "month" ? 12 : timeScale === "week" ? 52 : 31} 
+                      className="px-4 py-2 text-center text-sm font-semibold"
+                    >
+                      Lịch trình bảo trì định kỳ ({timeScale === "day" ? "Theo Ngày" : timeScale === "week" ? "Theo Tuần" : "Theo Tháng"})
+                    </th>
                   </tr>
                   {/* Column names */}
                   <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
                     <th className="px-4 py-3 border-r border-slate-200" style={{ width: "5%" }}>No</th>
                     <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Khách hàng</th>
                     <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Dự án / Hợp đồng</th>
-                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                    {timeScale === "month" && ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
                       <th key={idx} className="px-2 py-3 text-center border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 12}%` }}>
                         {m}
+                      </th>
+                    ))}
+                    {timeScale === "week" && Array.from({ length: 52 }, (_, i) => `W${i + 1}`).map((w, idx) => (
+                      <th key={idx} className="px-1 py-3 text-center text-[9px] border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 52}%` }}>
+                        {w}
+                      </th>
+                    ))}
+                    {timeScale === "day" && Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d, idx) => (
+                      <th key={idx} className="px-1 py-3 text-center text-[10px] border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 31}%` }}>
+                        {d}
                       </th>
                     ))}
                   </tr>
