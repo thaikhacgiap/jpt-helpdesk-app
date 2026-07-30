@@ -289,105 +289,155 @@ export default function MaintenancePage() {
     return matchesSearch && matchesStatus && matchesCustomer;
   });
 
-  const timelineItems = tickets.flatMap(ticket => {
-    let parsedConfig = { 
-      interval: "monthly", 
-      startDate: ticket.start_time ? ticket.start_time.substring(0, 10) : new Date().toISOString().substring(0, 10) 
-    };
-    let parsedMeta: any = {};
-    let parsedTasks: any = {};
-    if (ticket.remark) {
-      try {
-        const parsed = JSON.parse(ticket.remark);
-        if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
-          parsedConfig = parsed.config || parsedConfig;
-          parsedMeta = parsed.cycleMeta || {};
-          parsedTasks = parsed.tasks || {};
+  const getTodayLinePercent = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const currentDate = today.getDate();
+    const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
+    const positionPercent = (currentMonth + currentDate / daysInMonth) / 12;
+    return 35 + 65 * positionPercent;
+  };
+  const todayLinePercent = getTodayLinePercent();
+
+  const renderTimelineRows = () => {
+    const year = 2026;
+    return filtered.map((t: any, idx: number) => {
+      const segments: { type: "empty" | "cycle"; startMonth: number; span: number; cycleNum?: string; cycle?: any }[] = [];
+      let currentMonthIdx = 0;
+
+      const totalCycles = parseInt(t.hold_time) || 1;
+      let parsedConfig = { 
+        interval: "monthly", 
+        startDate: t.start_time ? t.start_time.substring(0, 10) : new Date().toISOString().substring(0, 10) 
+      };
+      let parsedMeta: any = {};
+      let parsedTasks: any = {};
+      if (t.remark) {
+        try {
+          const parsed = JSON.parse(t.remark);
+          if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
+            parsedConfig = parsed.config || parsedConfig;
+            parsedMeta = parsed.cycleMeta || {};
+            parsedTasks = parsed.tasks || {};
+          }
+        } catch (e) {}
+      }
+
+      const cycleRanges: any[] = [];
+      for (let i = 1; i <= totalCycles; i++) {
+        const cycleNum = String(i);
+        const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
+        const date = new Date(plannedDate);
+        if (!isNaN(date.getTime())) {
+          const startYr = date.getFullYear();
+          const startMn = date.getMonth();
+          if (startYr === year) {
+            const span = parsedConfig.interval === "yearly" ? 12 : parsedConfig.interval === "quarterly" ? 3 : 1;
+            cycleRanges.push({
+              cycleNum,
+              startMonth: startMn,
+              endMonth: Math.min(11, startMn + span - 1),
+              span: Math.min(12 - startMn, span),
+              plannedDate,
+              tasks: parsedTasks[cycleNum] || [],
+              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+            });
+          }
         }
-      } catch (e) {
-        // ignore JSON parsing errors
-      }
-    }
-
-    const totalCycles = parseInt(ticket.hold_time) || 1;
-    const items = [];
-    for (let i = 1; i <= totalCycles; i++) {
-      const cycleNum = String(i);
-      const plannedDate = getCycleStartDate(cycleNum, ticket.start_time, parsedConfig, parsedMeta);
-      const tasks = parsedTasks[cycleNum] || [];
-      const progress = calculateCycleProgress(tasks);
-      
-      let status = "Planned";
-      if (progress === 100) {
-        status = "Completed";
-      } else if (progress > 0 || (cycleNum === ticket.sla_time && ticket.tt_status === "In Progress")) {
-        status = "In Progress";
       }
 
-      items.push({
-        id: `${ticket.id}-${cycleNum}`,
-        ticketId: ticket.id,
-        displayId: (ticket.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-'),
-        customerName: ticket.customer?.name || ticket.customer_name || "Khách hàng",
-        contractName: ticket.contract?.name || ticket.contract_no || "Hợp đồng",
-        cycleNum,
-        totalCycles,
-        plannedDate,
-        progress,
-        status,
-        ticketCustomerId: ticket.customer_id,
-        description: ticket.description || ""
-      });
-    }
-    return items;
-  });
+      cycleRanges.sort((a, b) => a.startMonth - b.startMonth);
 
-  const filteredTimeline = timelineItems.filter(item => {
-    const term = search.toLowerCase();
-    const matchesSearch = item.displayId.toLowerCase().includes(term) ||
-                          item.customerName.toLowerCase().includes(term) ||
-                          item.contractName.toLowerCase().includes(term);
-    
-    const matchesCustomer = customerFilter === "All" || item.ticketCustomerId === customerFilter;
-    
-    let matchesStatus = true;
-    if (statusFilter !== "All") {
-      if (statusFilter === "New" || statusFilter === "On Hold") {
-        matchesStatus = item.status === "Planned";
-      } else if (statusFilter === "In Progress") {
-        matchesStatus = item.status === "In Progress";
-      } else if (statusFilter === "Resolved" || statusFilter === "Closed") {
-        matchesStatus = item.status === "Completed";
+      while (currentMonthIdx < 12) {
+        const coveringCycle = cycleRanges.find(r => currentMonthIdx >= r.startMonth && currentMonthIdx <= r.endMonth);
+        if (coveringCycle) {
+          const actualSpan = coveringCycle.endMonth - currentMonthIdx + 1;
+          let status = "Planned";
+          if (coveringCycle.progress === 100) {
+            status = "Completed";
+          } else if (coveringCycle.progress > 0 || (coveringCycle.cycleNum === t.sla_time && t.tt_status === "In Progress")) {
+            status = "In Progress";
+          }
+
+          segments.push({
+            type: "cycle",
+            startMonth: currentMonthIdx,
+            span: actualSpan,
+            cycleNum: coveringCycle.cycleNum,
+            cycle: {
+              ...coveringCycle,
+              status
+            }
+          });
+          currentMonthIdx += actualSpan;
+        } else {
+          const nextCycle = cycleRanges.find(r => r.startMonth > currentMonthIdx);
+          const nextStart = nextCycle ? nextCycle.startMonth : 12;
+          const emptySpan = nextStart - currentMonthIdx;
+          segments.push({
+            type: "empty",
+            startMonth: currentMonthIdx,
+            span: emptySpan
+          });
+          currentMonthIdx += emptySpan;
+        }
       }
-    }
-    
-    return matchesSearch && matchesCustomer && matchesStatus;
-  });
 
-  // Group and sort timeline items
-  const groupedTimeline = filteredTimeline.reduce((groups: { [key: string]: any[] }, item) => {
-    const date = new Date(item.plannedDate);
-    let monthYear = "Chưa xác định";
-    if (!isNaN(date.getTime())) {
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      monthYear = `Tháng ${month}/${year}`;
-    }
-    if (!groups[monthYear]) {
-      groups[monthYear] = [];
-    }
-    groups[monthYear].push(item);
-    return groups;
-  }, {});
+      return (
+        <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
+          <td className="px-4 py-3.5 border-r border-slate-200 text-center font-medium text-slate-700">{idx + 1}</td>
+          <td className="px-4 py-3.5 border-r border-slate-200 font-semibold text-slate-800 max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
+            {t.customer?.name || t.customer_name || "—"}
+          </td>
+          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-600 max-w-[200px] truncate" title={t.contract?.name || t.contract_no}>
+            <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline">
+              {t.contract?.name || t.contract_no || "—"}
+            </Link>
+          </td>
+          
+          {segments.map((seg, sIdx) => {
+            if (seg.type === "empty") {
+              return (
+                <td 
+                  key={sIdx} 
+                  colSpan={seg.span} 
+                  className="border-r border-slate-200 last:border-r-0 bg-slate-50/30" 
+                />
+              );
+            }
 
-  const sortedGroupKeys = Object.keys(groupedTimeline).sort((a, b) => {
-    if (a === "Chưa xác định") return 1;
-    if (b === "Chưa xác định") return -1;
-    const [monthA, yearA] = a.replace("Tháng ", "").split("/").map(Number);
-    const [monthB, yearB] = b.replace("Tháng ", "").split("/").map(Number);
-    if (yearA !== yearB) return yearA - yearB;
-    return monthA - monthB;
-  });
+            const c = seg.cycle;
+            const isHold = t.tt_status === "On Hold";
+            
+            // Choose background color based on status
+            let bgClass = "bg-slate-100 text-slate-600 border-slate-200"; // Planning
+            if (isHold && c.status !== "Completed") {
+              bgClass = "bg-amber-400 text-amber-950 border-amber-500 font-medium"; // Hold
+            } else if (c.status === "Completed") {
+              bgClass = "bg-emerald-100 text-emerald-800 border-emerald-200 font-medium"; // Done
+            } else if (c.status === "In Progress") {
+              bgClass = "bg-orange-100 text-orange-800 border-orange-200 font-medium"; // On-going
+            }
+
+            return (
+              <td 
+                key={sIdx} 
+                colSpan={seg.span} 
+                className="p-1 border-r border-slate-200 last:border-r-0"
+              >
+                <Link href={`/maintenance/${t.id}`}>
+                  <div className={`h-8 w-full rounded flex items-center justify-center text-xs shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
+                    Lần {seg.cycleNum}
+                  </div>
+                </Link>
+              </td>
+            );
+          })}
+        </tr>
+      );
+    });
+  };
 
   const total = tickets.length;
   const pending = tickets.filter(t => t.tt_status === "New").length;
@@ -572,116 +622,79 @@ export default function MaintenancePage() {
 
       {/* Timeline View */}
       {activeTab === "timeline" && (
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
-          {filteredTimeline.length === 0 ? (
-            <div className="py-14 text-center text-slate-400">
-              <Clock size={36} className="mx-auto mb-2 opacity-20" />
-              <p className="text-sm">Không có đợt bảo trì nào được lên kế hoạch phù hợp với bộ lọc</p>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden flex flex-col gap-4">
+          {/* Legend and header toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800 text-base">Timeline Kế Hoạch Bảo Trì</h3>
+            {/* Chú thích */}
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <span className="font-semibold text-slate-500">Chú thích:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-emerald-100 border border-emerald-200" />
+                <span className="text-slate-600">Done (Hoàn thành)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-orange-100 border border-orange-200" />
+                <span className="text-slate-600">On-going (Đang chạy)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-200" />
+                <span className="text-slate-600">Planing (Kế hoạch)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-amber-400 border border-amber-500" />
+                <span className="text-slate-600">Hold (Tạm ngưng)</span>
+              </div>
             </div>
-          ) : (
-            <div className="relative border-l border-slate-200 ml-4 pl-8 space-y-8 py-2">
-              {sortedGroupKeys.map((groupKey) => (
-                <div key={groupKey} className="relative">
-                  {/* Group header (Month/Year) */}
-                  <div className="absolute -left-12 -top-1 px-3 py-1 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold rounded-full z-10 shadow-xs">
-                    {groupKey}
-                  </div>
-                  
-                  <div className="space-y-6 pt-8">
-                    {groupedTimeline[groupKey].map((item: any) => {
-                      const isCompleted = item.status === "Completed";
-                      const isInProgress = item.status === "In Progress";
-                      const isOverdue = !isCompleted && new Date(item.plannedDate) < new Date();
-                      
-                      return (
-                        <div key={item.id} className="relative group">
-                          {/* Timeline dot */}
-                          <span className={`absolute -left-12 top-0.5 w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white shadow-sm z-10 transition-transform group-hover:scale-110 ${
-                            isCompleted 
-                              ? 'border-emerald-500 text-emerald-500' 
-                              : isInProgress
-                              ? 'border-blue-500 text-blue-500'
-                              : isOverdue 
-                              ? 'border-rose-500 text-rose-500 animate-pulse'
-                              : 'border-slate-300 text-slate-400'
-                          }`}>
-                            {isCompleted ? <CheckCircle2 size={16} /> : isInProgress ? <RotateCcw size={16} className="animate-spin-slow" /> : <Clock size={16} />}
-                          </span>
+          </div>
 
-                          {/* Timeline Content Card */}
-                          <div className="bg-slate-50 hover:bg-slate-100/60 border border-slate-200/60 p-4 rounded-xl transition shadow-sm max-w-2xl">
-                            <div className="flex items-center justify-between gap-4 mb-2 flex-wrap">
-                              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                <span className="text-blue-600 hover:underline">
-                                  <Link href={`/maintenance/${item.ticketId}`}>
-                                    {item.displayId} - Lần {item.cycleNum}/{item.totalCycles}
-                                  </Link>
-                                </span>
-                              </h4>
+          <div className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
+            <div className="relative min-w-[1000px] w-full">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  {/* Year header */}
+                  <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200">
+                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left">Năm 2026</th>
+                    <th colSpan={12} className="px-4 py-2 text-center text-sm font-semibold">Lịch trình bảo trì định kỳ</th>
+                  </tr>
+                  {/* Column names */}
+                  <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "5%" }}>No</th>
+                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Khách hàng</th>
+                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Dự án / Hợp đồng</th>
+                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                      <th key={idx} className="px-2 py-3 text-center border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 12}%` }}>
+                        {m}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={15} className="py-14 text-center text-slate-400">
+                        Chưa có kế hoạch bảo trì nào phù hợp bộ lọc
+                      </td>
+                    </tr>
+                  ) : (
+                    renderTimelineRows()
+                  )}
+                </tbody>
+              </table>
 
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isCompleted 
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' 
-                                  : isInProgress
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200/50'
-                                  : isOverdue 
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200/50'
-                                  : 'bg-slate-100 text-slate-700 border-slate-200'
-                              }`}>
-                                {isCompleted ? 'Hoàn thành' : isInProgress ? 'Đang thực hiện' : isOverdue ? 'Quá hạn' : 'Chưa bắt đầu'}
-                              </span>
-                            </div>
-
-                            {/* Customer and Contract Info */}
-                            <div className="grid grid-cols-2 gap-2 text-xs mb-3 text-slate-600">
-                              <div>
-                                <span className="font-semibold text-slate-500">Khách hàng:</span> {item.customerName}
-                              </div>
-                              <div>
-                                <span className="font-semibold text-slate-500">Hợp đồng:</span> {item.contractName}
-                              </div>
-                            </div>
-
-                            {item.description && (
-                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-3">
-                                {item.description}
-                              </p>
-                            )}
-
-                            {/* Progress bar and date */}
-                            <div className="flex items-center justify-between border-t border-slate-200/50 pt-2.5 text-[11px] text-slate-400">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">Tiến độ đợt:</span>
-                                <div className="w-24 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full transition-all duration-300 ${
-                                      isCompleted ? 'bg-emerald-500' : isInProgress ? 'bg-blue-500' : 'bg-slate-400'
-                                    }`}
-                                    style={{ width: `${item.progress}%` }}
-                                  />
-                                </div>
-                                <span className="font-bold text-slate-600">{item.progress}%</span>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <span>Ngày dự kiến: <strong className="text-slate-600 font-semibold">{formatDateVN(item.plannedDate)}</strong></span>
-                                <Link 
-                                  href={`/maintenance/${item.ticketId}`}
-                                  className="px-2 py-1 bg-white hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-200 rounded font-semibold transition cursor-pointer"
-                                >
-                                  Chi tiết
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* Blue line for current point in time */}
+              {filtered.length > 0 && (
+                <div 
+                  className="absolute top-0 bottom-0 w-[3px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
+                  style={{ left: `${todayLinePercent}%` }}
+                >
+                  <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
+                    Hiện tại
                   </div>
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
