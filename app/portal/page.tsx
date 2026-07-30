@@ -321,8 +321,8 @@ export default function PortalPage() {
               A
             </div>
             <div>
-              <h1 className="text-base font-extrabold text-white tracking-wide uppercase">ABC SERVICES</h1>
-              <p className="text-[9px] text-slate-400 font-medium">Customer Portal</p>
+              <h1 className="text-[16px] font-bold text-white tracking-wide uppercase">ABC SERVICES</h1>
+              <p className="text-sm text-slate-400 font-normal">Customer Portal</p>
             </div>
           </div>
 
@@ -335,7 +335,7 @@ export default function PortalPage() {
                 setPriorityFilter("All");
                 setSearchQuery("");
               }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-600/10 text-blue-400 hover:text-white hover:bg-blue-600/20 transition text-sm font-bold text-left cursor-pointer"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-600/10 text-blue-400 hover:text-white hover:bg-blue-600/20 transition text-sm font-normal text-left cursor-pointer"
             >
               <LayoutDashboard size={15} />
               <span>Dashboard</span>
@@ -345,7 +345,7 @@ export default function PortalPage() {
             <div className="space-y-0.5">
               <button 
                 onClick={() => setIsYêuCầuOpen(!isYêuCầuOpen)}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer"
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   <Inbox size={15} />
@@ -361,8 +361,8 @@ export default function PortalPage() {
                       setTypeFilter("All");
                       setCurrentPage(1);
                     }}
-                    className={`w-full text-left py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer ${
-                      typeFilter === "All" ? "text-blue-400 font-bold bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
+                    className={`w-full text-left py-1.5 px-3 rounded-lg text-sm transition cursor-pointer ${
+                      typeFilter === "All" ? "text-blue-400 font-normal bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     Tất cả yêu cầu
@@ -372,8 +372,8 @@ export default function PortalPage() {
                       setTypeFilter("Technical");
                       setCurrentPage(1);
                     }}
-                    className={`w-full text-left py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer ${
-                      typeFilter === "Technical" ? "text-blue-400 font-bold bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
+                    className={`w-full text-left py-1.5 px-3 rounded-lg text-sm transition cursor-pointer ${
+                      typeFilter === "Technical" ? "text-blue-400 font-normal bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     Yêu cầu hỗ trợ kỹ thuật
@@ -383,8 +383,8 @@ export default function PortalPage() {
                       setTypeFilter("Consultant");
                       setCurrentPage(1);
                     }}
-                    className={`w-full text-left py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer ${
-                      typeFilter === "Consultant" ? "text-blue-400 font-bold bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
+                    className={`w-full text-left py-1.5 px-3 rounded-lg text-sm transition cursor-pointer ${
+                      typeFilter === "Consultant" ? "text-blue-400 font-normal bg-white/5" : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     Yêu cầu tư vấn
@@ -395,41 +395,41 @@ export default function PortalPage() {
 
             <button 
               onClick={() => openCreateModal("Request", "General")}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer"
             >
               <Plus size={15} />
               <span>Tạo yêu cầu mới</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <FileQuestion size={15} />
               <span>Kiến thức</span>
             </button>
 
-            <button className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <div className="flex items-center gap-3">
                 <Bell size={15} />
                 <span>Thông báo</span>
               </div>
-              <span className="bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">3</span>
+              <span className="bg-red-500 text-white text-[9px] font-normal rounded-full w-4 h-4 flex items-center justify-center">3</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <FileText size={15} />
               <span>Tài liệu</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <CheckSquare size={15} />
               <span>Hợp đồng & SLA</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <FileText size={15} />
               <span>Hóa đơn</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-semibold text-left cursor-pointer">
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-800/40 hover:text-white transition text-sm font-normal text-left cursor-pointer">
               <User size={15} />
               <span>Tài khoản</span>
             </button>
@@ -439,19 +439,19 @@ export default function PortalPage() {
         <div className="p-4 flex flex-col gap-4 shrink-0">
           {/* Urgent Help Card */}
           <div className="bg-[#0C1E46] border border-slate-800/60 rounded-2xl p-4 space-y-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left">Cần hỗ trợ ngay?</p>
-            <p className="text-[9px] text-slate-500 leading-snug text-left">Liên hệ trực tiếp với tổng đài hỗ trợ của chúng tôi:</p>
+            <p className="text-[16px] font-bold text-slate-400 uppercase tracking-wider text-left">Cần hỗ trợ ngay?</p>
+            <p className="text-sm text-slate-500 leading-snug text-left">Liên hệ trực tiếp với tổng đài hỗ trợ của chúng tôi:</p>
             <div className="space-y-2">
-              <a href="tel:19001234" className="flex items-center gap-2 text-sm font-bold text-white hover:text-blue-400 transition">
+              <a href="tel:19001234" className="flex items-center gap-2 text-sm font-normal text-white hover:text-blue-400 transition">
                 <Phone size={12} className="text-blue-500" />
                 <span>1900 1234</span>
               </a>
-              <a href="mailto:support@abc.com" className="flex items-center gap-2 text-[10px] font-medium text-slate-400 hover:text-blue-400 transition truncate">
+              <a href="mailto:support@abc.com" className="flex items-center gap-2 text-sm font-normal text-slate-400 hover:text-blue-400 transition truncate">
                 <Mail size={12} className="text-blue-500" />
                 <span>support@abc.com</span>
               </a>
             </div>
-            <p className="text-[8px] text-slate-500 font-medium text-left">Giờ làm việc: 8:00 - 17:30 (Thứ 2 - Thứ 6)</p>
+            <p className="text-sm text-slate-500 font-normal text-left">Giờ làm việc: 8:00 - 17:30 (Thứ 2 - Thứ 6)</p>
           </div>
 
           {/* Logout Button */}
@@ -472,10 +472,10 @@ export default function PortalPage() {
         <header className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between z-10 shrink-0">
           <div className="flex items-center gap-4 flex-1">
             <div className="flex flex-col text-left">
-              <h2 className="text-lg font-extrabold text-slate-900 leading-tight">
+              <h1 className="text-[20px] font-bold text-slate-900 leading-tight">
                 Xin chào, {customerName || user?.name || "Khách hàng"}! 👋
-              </h2>
-              <p className="text-[10px] text-slate-400 font-semibold tracking-wide">
+              </h1>
+              <p className="text-sm text-slate-400 font-normal tracking-wide mt-0.5">
                 Chào mừng bạn đến với Cổng thông tin Khách hàng ABC SERVICES
               </p>
             </div>
@@ -485,19 +485,19 @@ export default function PortalPage() {
             {/* Notification Bell */}
             <div className="relative cursor-pointer hover:bg-slate-50 p-1.5 rounded-xl transition">
               <Bell size={18} className="text-slate-650" />
-              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
+              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-normal">
                 3
               </div>
             </div>
 
             {/* Profile Avatar Card */}
             <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-extrabold text-sm">
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-normal text-sm">
                 {customerName ? customerName.substring(0, 2).toUpperCase() : "AT"}
               </div>
               <div className="text-left hidden md:block">
-                <p className="text-sm font-bold text-slate-800 leading-tight">{customerName || "An Phát Co., Ltd"}</p>
-                <p className="text-[10px] text-slate-500 font-medium">{user?.name || "Customer"}</p>
+                <p className="text-sm font-normal text-slate-800 leading-tight">{customerName || "An Phát Co., Ltd"}</p>
+                <p className="text-sm text-slate-500 font-normal mt-0.5">{user?.name || "Customer"}</p>
               </div>
               <ChevronDown size={14} className="text-slate-400" />
             </div>
@@ -515,9 +515,9 @@ export default function PortalPage() {
               {/* Total */}
               <div className="bg-white rounded-xl border border-slate-200/50 p-3 shadow-sm flex items-center justify-between gap-3">
                 <div className="space-y-0.5 text-left">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Tổng yêu cầu</span>
-                  <p className="text-2xl font-extrabold text-slate-800 leading-none">{totalTickets}</p>
-                  <span className="text-[8px] font-bold text-emerald-600">↑ 12% <span className="text-slate-400 font-normal">tháng trước</span></span>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider block">Tổng yêu cầu</span>
+                  <p className="text-2xl font-semibold text-slate-800 leading-none mt-1">{totalTickets}</p>
+                  <span className="text-sm font-normal text-emerald-600 block mt-1">↑ 12% <span className="text-slate-400">tháng trước</span></span>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
                   <FileText size={15} />
@@ -527,9 +527,9 @@ export default function PortalPage() {
               {/* Processing */}
               <div className="bg-white rounded-xl border border-slate-200/50 p-3 shadow-sm flex items-center justify-between gap-3">
                 <div className="space-y-0.5 text-left">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Đang xử lý</span>
-                  <p className="text-2xl font-extrabold text-slate-800 leading-none">{processingCount}</p>
-                  <span className="text-[8px] font-bold text-emerald-600">↑ 5% <span className="text-slate-400 font-normal">tháng trước</span></span>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider block">Đang xử lý</span>
+                  <p className="text-2xl font-semibold text-slate-800 leading-none mt-1">{processingCount}</p>
+                  <span className="text-sm font-normal text-emerald-600 block mt-1">↑ 5% <span className="text-slate-400">tháng trước</span></span>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shrink-0">
                   <Clock size={15} />
@@ -539,9 +539,9 @@ export default function PortalPage() {
               {/* Waiting Feedback */}
               <div className="bg-white rounded-xl border border-slate-200/50 p-3 shadow-sm flex items-center justify-between gap-3">
                 <div className="space-y-0.5 text-left">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Chờ phản hồi</span>
-                  <p className="text-2xl font-extrabold text-slate-800 leading-none">{holdCount}</p>
-                  <span className="text-[8px] font-bold text-rose-500">↓ 25% <span className="text-slate-400 font-normal">tháng trước</span></span>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider block">Chờ phản hồi</span>
+                  <p className="text-2xl font-semibold text-slate-800 leading-none mt-1">{holdCount}</p>
+                  <span className="text-sm font-normal text-rose-500 block mt-1">↓ 25% <span className="text-slate-400">tháng trước</span></span>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-500 shrink-0">
                   <Inbox size={15} />
@@ -551,9 +551,9 @@ export default function PortalPage() {
               {/* Completed */}
               <div className="bg-white rounded-xl border border-slate-200/50 p-3 shadow-sm flex items-center justify-between gap-3">
                 <div className="space-y-0.5 text-left">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Đã hoàn thành</span>
-                  <p className="text-2xl font-extrabold text-slate-800 leading-none">{completedCount}</p>
-                  <span className="text-[8px] font-bold text-emerald-600">↑ 21% <span className="text-slate-400 font-normal">tháng trước</span></span>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider block">Đã hoàn thành</span>
+                  <p className="text-2xl font-semibold text-slate-800 leading-none mt-1">{completedCount}</p>
+                  <span className="text-sm font-normal text-emerald-600 block mt-1">↑ 21% <span className="text-slate-400">tháng trước</span></span>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-green-500 shrink-0">
                   <CheckCircle2 size={15} />
@@ -566,8 +566,8 @@ export default function PortalPage() {
               {/* Trend Chart */}
               <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex flex-col justify-between">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">Xu hướng yêu cầu</h3>
-                  <span className="text-[9px] text-slate-400 font-medium">6 tháng gần nhất</span>
+                  <h3 className="text-[16px] font-bold text-slate-800 uppercase tracking-wider">Xu hướng yêu cầu</h3>
+                  <span className="text-sm text-slate-400 font-normal">6 tháng gần nhất</span>
                 </div>
                 <div className="h-[120px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -579,9 +579,9 @@ export default function PortalPage() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
-                      <Tooltip contentStyle={{ fontSize: '10px', borderRadius: '6px' }} />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '6px' }} />
                       <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={1.5} fillOpacity={1} fill="url(#colorCount)" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -590,7 +590,7 @@ export default function PortalPage() {
 
               {/* Categories Donut Chart */}
               <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex flex-col justify-between">
-                <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wider mb-2">Phân loại yêu cầu</h3>
+                <h3 className="text-[16px] font-bold text-slate-800 uppercase tracking-wider mb-2">Phân loại yêu cầu</h3>
                 <div className="flex items-center justify-between flex-1 gap-2">
                   <div className="w-[100px] h-[100px] relative shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
@@ -611,8 +611,8 @@ export default function PortalPage() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-                      <span className="text-base font-extrabold text-slate-800">{totalCatVal}</span>
-                      <span className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">Tổng</span>
+                      <span className="text-base font-semibold text-slate-800">{totalCatVal}</span>
+                      <span className="text-sm text-slate-400 font-normal uppercase mt-0.5">Tổng</span>
                     </div>
                   </div>
 
@@ -621,12 +621,12 @@ export default function PortalPage() {
                       const pct = totalCatVal > 0 ? ((item.value / totalCatVal) * 100).toFixed(1) : "0.0";
                       const isPlaceholder = item.name === "Chưa có dữ liệu";
                       return (
-                        <div key={index} className="flex items-center justify-between text-[9px] font-medium min-w-0 gap-1.5">
+                        <div key={index} className="flex items-center justify-between text-sm font-normal min-w-0 gap-1.5">
                           <div className="flex items-center gap-1 min-w-0">
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: isPlaceholder ? "#e2e8f0" : DONUT_COLORS[index % DONUT_COLORS.length] }} />
                             <span className="text-slate-500 truncate">{item.name}</span>
                           </div>
-                          <span className="text-slate-800 font-bold shrink-0">
+                          <span className="text-slate-855 shrink-0">
                             {isPlaceholder ? "0" : item.value} ({isPlaceholder ? "0.0" : pct}%)
                           </span>
                         </div>
@@ -643,7 +643,7 @@ export default function PortalPage() {
               {/* Filters Toolbar */}
               <div className="flex flex-wrap gap-2 items-center mb-3 shrink-0">
                 <div className="relative flex-1 min-w-[150px]">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     placeholder="Tìm kiếm theo mã, tiêu đề..."
@@ -652,7 +652,7 @@ export default function PortalPage() {
                       setSearchQuery(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
@@ -662,7 +662,7 @@ export default function PortalPage() {
                     setTypeFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="border border-slate-200 rounded-lg py-1.5 px-2 bg-white text-[10px] outline-none cursor-pointer"
+                  className="border border-slate-200 rounded-lg py-1.5 px-2 bg-white text-sm font-normal outline-none cursor-pointer"
                 >
                   <option value="All">Loại yêu cầu: Tất cả</option>
                   <option value="Xử lý lỗi">Xử lý lỗi</option>
@@ -677,7 +677,7 @@ export default function PortalPage() {
                     setStatusFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="border border-slate-200 rounded-lg py-1.5 px-2 bg-white text-[10px] outline-none cursor-pointer"
+                  className="border border-slate-200 rounded-lg py-1.5 px-2 bg-white text-sm font-normal outline-none cursor-pointer"
                 >
                   <option value="All">Trạng thái: Tất cả</option>
                   <option value="New">Mới tạo</option>
@@ -687,8 +687,8 @@ export default function PortalPage() {
                   <option value="Closed">Đã đóng</option>
                 </select>
 
-                <div className="border border-slate-200 rounded-lg py-1.5 px-3 bg-white text-[10px] text-slate-500 flex items-center gap-1.5 cursor-pointer">
-                  <Calendar size={11} />
+                <div className="border border-slate-200 rounded-lg py-1.5 px-3 bg-white text-sm font-normal text-slate-500 flex items-center gap-1.5 cursor-pointer">
+                  <Calendar size={13} />
                   <span>01/04/2024 - 30/04/2024</span>
                 </div>
 
@@ -700,9 +700,9 @@ export default function PortalPage() {
                     setPriorityFilter("All");
                     setCurrentPage(1);
                   }}
-                  className="p-1.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition text-[10px] flex items-center gap-1 cursor-pointer"
+                  className="p-1.5 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition text-sm font-normal flex items-center gap-1 cursor-pointer"
                 >
-                  <Filter size={11} />
+                  <Filter size={13} />
                   <span>Bộ lọc</span>
                 </button>
               </div>
@@ -710,7 +710,7 @@ export default function PortalPage() {
               {/* TABLE CONTAINER: SCROLLABLE TABLE BODY */}
               <div className="flex-1 overflow-auto border border-slate-100 rounded-lg">
                 <table className="w-full text-sm text-left" style={{minWidth:'1280px'}}>
-                  <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-150 text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                  <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-150 text-sm text-slate-500 font-normal uppercase tracking-wider">
                     <tr>
                       <th className="px-3 py-2.5 w-32 whitespace-nowrap">Mã yêu cầu</th>
                       <th className="px-3 py-2.5 w-28 whitespace-nowrap">Trạng thái</th>
@@ -730,7 +730,7 @@ export default function PortalPage() {
                       <tr>
                         <td colSpan={11} className="py-10 text-center text-slate-400">
                           <Inbox size={20} className="mx-auto mb-1 opacity-35" />
-                          <p className="text-[10px]">Không tìm thấy yêu cầu nào.</p>
+                          <p className="text-sm font-normal">Không tìm thấy yêu cầu nào.</p>
                         </td>
                       </tr>
                     ) : (
@@ -740,32 +740,32 @@ export default function PortalPage() {
                           ? t.remark.replace(/^Hợp đồng:\s*/i, "").split(" | ")[0]
                           : null;
                         return (
-                          <tr key={t.id} className="hover:bg-blue-50/20 transition text-[10px]">
+                          <tr key={t.id} className="hover:bg-blue-50/20 transition text-sm font-normal text-slate-650">
                             {/* Mã yêu cầu */}
-                            <td className="px-3 py-2.5 font-bold text-blue-600 font-mono whitespace-nowrap">{t.ticket_id}</td>
+                            <td className="px-3 py-2.5 font-normal text-blue-600 font-mono whitespace-nowrap">{t.ticket_id}</td>
 
                             {/* Trạng thái */}
                             <td className="px-3 py-2.5">
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${getStatusBadge(t.tt_status)}`}>
+                              <span className={`px-2 py-0.5 rounded text-sm font-normal ${getStatusBadge(t.tt_status)}`}>
                                 {getStatusLabel(t.tt_status)}
                               </span>
                             </td>
 
                             {/* Tiêu đề */}
                             <td className="px-3 py-2.5">
-                              <p className="font-bold text-slate-800 line-clamp-2 max-w-[150px]">{t.title}</p>
+                              <p className="font-normal text-slate-800 line-clamp-2 max-w-[150px]">{t.title}</p>
                             </td>
 
                             {/* Mô tả */}
                             <td className="px-3 py-2.5">
-                              <p className="text-slate-500 line-clamp-2 max-w-[160px] text-[9px]">
+                              <p className="text-slate-500 line-clamp-2 max-w-[160px]">
                                 {t.description || "—"}
                               </p>
                             </td>
 
                             {/* Loại yêu cầu */}
                             <td className="px-3 py-2.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border whitespace-nowrap ${
+                              <span className={`px-2 py-0.5 rounded-full text-sm font-normal border whitespace-nowrap ${
                                 t.tt_type === "Xử lý lỗi" ? "bg-red-50 text-red-700 border-red-200" :
                                 t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
                                 t.tt_type === "Cài đặt - Nâng cấp" ? "bg-violet-50 text-violet-700 border-violet-200" :
@@ -774,7 +774,7 @@ export default function PortalPage() {
                             </td>
 
                             {/* Danh mục */}
-                            <td className="px-3 py-2.5 text-slate-600 font-medium whitespace-nowrap">{t.category || "—"}</td>
+                            <td className="px-3 py-2.5 text-slate-600 font-normal whitespace-nowrap">{t.category || "—"}</td>
 
                             {/* Thời gian sự cố - chỉ hiện khi loại là Xử lý lỗi */}
                             <td className="px-3 py-2.5 font-mono text-slate-500 whitespace-nowrap">
@@ -785,7 +785,7 @@ export default function PortalPage() {
 
                             {/* Dịch vụ ảnh hưởng */}
                             <td className="px-3 py-2.5 text-slate-500">
-                              <p className="line-clamp-2 max-w-[140px] text-[9px]">
+                              <p className="line-clamp-2 max-w-[140px] text-sm font-normal">
                                 {t.hold_reason || <span className="text-slate-300">—</span>}
                               </p>
                             </td>
@@ -793,7 +793,7 @@ export default function PortalPage() {
                             {/* Hợp đồng */}
                             <td className="px-3 py-2.5">
                               {contractName
-                                ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold whitespace-nowrap">{contractName}</span>
+                                ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-sm font-normal whitespace-nowrap">{contractName}</span>
                                 : <span className="text-slate-300">—</span>}
                             </td>
 
@@ -802,13 +802,13 @@ export default function PortalPage() {
                               {t.document_link && t.document_link.startsWith("TK-") ? (
                                 <span
                                   title="Ticket hỗ trợ đã được tạo"
-                                  className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold font-mono whitespace-nowrap flex items-center gap-1 w-fit"
+                                  className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm font-normal font-mono whitespace-nowrap flex items-center gap-1 w-fit"
                                 >
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                                   {t.document_link}
                                 </span>
                               ) : (
-                                <span className="text-[9px] text-slate-300 italic">Chưa xử lý</span>
+                                <span className="text-sm text-slate-300 italic font-normal">Chưa xử lý</span>
                               )}
                             </td>
 
@@ -831,8 +831,8 @@ export default function PortalPage() {
               </div>
 
               {/* PAGINATION: FIXED AT BOTTOM */}
-              <div className="shrink-0 pt-3 border-t mt-3 flex items-center justify-between text-[10px]">
-                <span className="text-slate-500 font-medium">Hiển thị {paginatedTickets.length} / {filteredTickets.length} kết quả</span>
+              <div className="shrink-0 pt-3 border-t mt-3 flex items-center justify-between text-sm font-normal">
+                <span className="text-slate-500">Hiển thị {paginatedTickets.length} / {filteredTickets.length} kết quả</span>
                 <div className="flex items-center gap-4">
                   <select
                     value={pageSize}
@@ -840,7 +840,7 @@ export default function PortalPage() {
                       setPageSize(Number(e.target.value));
                       setCurrentPage(1);
                     }}
-                    className="border border-slate-200 rounded p-1 bg-white outline-none cursor-pointer text-[10px]"
+                    className="border border-slate-200 rounded p-1 bg-white outline-none cursor-pointer text-sm font-normal"
                   >
                     <option value={5}>5 / trang</option>
                     <option value={10}>10 / trang</option>
@@ -855,7 +855,7 @@ export default function PortalPage() {
                     >
                       <ChevronLeft size={12} />
                     </button>
-                    <span className="font-bold text-slate-700 px-1">{currentPage} / {totalPages}</span>
+                    <span className="text-slate-700 px-1 font-normal">{currentPage} / {totalPages}</span>
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
@@ -876,7 +876,7 @@ export default function PortalPage() {
             
             {/* Quick request creation */}
             <div className="space-y-2 shrink-0">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider text-left">Tạo yêu cầu mới</h3>
+              <h3 className="text-[16px] font-bold text-slate-500 uppercase tracking-wider text-left">Tạo yêu cầu mới</h3>
               <button
                 onClick={() => openCreateModal("Request", "Technical")}
                 className="w-full text-left p-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition flex items-center justify-between group shadow-xs cursor-pointer"
@@ -886,8 +886,8 @@ export default function PortalPage() {
                     <Wrench size={13} />
                   </div>
                   <div>
-                    <h4 className="text-[11px] font-extrabold leading-tight">Hỗ trợ kỹ thuật</h4>
-                    <p className="text-[8px] text-blue-200 leading-none mt-0.5">Sự cố, lỗi, cấu hình hệ thống...</p>
+                    <h4 className="text-sm font-normal leading-tight">Hỗ trợ kỹ thuật</h4>
+                    <p className="text-sm text-blue-200 leading-none mt-1">Sự cố, lỗi, cấu hình hệ thống...</p>
                   </div>
                 </div>
                 <ChevronRight size={13} className="text-blue-200 group-hover:translate-x-0.5 transition-transform" />
@@ -902,8 +902,8 @@ export default function PortalPage() {
                     <Inbox size={13} />
                   </div>
                   <div>
-                    <h4 className="text-[11px] font-extrabold leading-tight">Yêu cầu tư vấn</h4>
-                    <p className="text-[8px] text-emerald-200 leading-none mt-0.5">Tư vấn giải pháp, dịch vụ, báo giá...</p>
+                    <h4 className="text-sm font-normal leading-tight">Yêu cầu tư vấn</h4>
+                    <p className="text-sm text-emerald-200 leading-none mt-1">Tư vấn giải pháp, dịch vụ, báo giá...</p>
                   </div>
                 </div>
                 <ChevronRight size={13} className="text-emerald-200 group-hover:translate-x-0.5 transition-transform" />
@@ -912,13 +912,13 @@ export default function PortalPage() {
 
             {/* SLA package */}
             <div className="bg-white rounded-xl border border-slate-200/50 p-4 shadow-sm space-y-2.5 shrink-0">
-              <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wider text-left">SLA của bạn</h3>
+              <h3 className="text-[16px] font-bold text-slate-800 uppercase tracking-wider text-left">SLA của bạn</h3>
               <div className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 space-y-2">
-                <p className="text-[10px] font-bold text-slate-700 leading-none">Premium Support</p>
-                <div className="space-y-1 text-[9px] text-slate-500 font-medium">
-                  <div className="flex justify-between"><span>Phản hồi đầu tiên</span><span className="font-bold text-emerald-600">2 giờ (95%)</span></div>
-                  <div className="flex justify-between"><span>Thời gian giải quyết</span><span className="font-bold text-emerald-600">8 giờ (90%)</span></div>
-                  <div className="flex justify-between"><span>Uptime hệ thống</span><span className="font-bold text-slate-700">99.9%</span></div>
+                <p className="text-sm font-bold text-slate-700 leading-none">Premium Support</p>
+                <div className="space-y-1 text-sm text-slate-500 font-normal">
+                  <div className="flex justify-between"><span>Phản hồi đầu tiên</span><span className="text-emerald-600">2 giờ (95%)</span></div>
+                  <div className="flex justify-between"><span>Thời gian giải quyết</span><span className="text-emerald-600">8 giờ (90%)</span></div>
+                  <div className="flex justify-between"><span>Uptime hệ thống</span><span className="text-slate-700">99.9%</span></div>
                 </div>
               </div>
             </div>
@@ -926,36 +926,36 @@ export default function PortalPage() {
             {/* Dynamic notifications card (Only scroll list here) */}
             <div className="flex-1 bg-white rounded-xl border border-slate-200/60 p-4 flex flex-col overflow-hidden min-h-0 shadow-sm">
               <div className="flex justify-between items-center shrink-0 border-b pb-2 mb-2.5">
-                <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">Thông báo mới</h3>
-                <span className="text-[9px] font-bold text-blue-600 cursor-pointer">Xem tất cả</span>
+                <h3 className="text-[16px] font-bold text-slate-800 uppercase tracking-wider">Thông báo mới</h3>
+                <span className="text-sm font-bold text-blue-600 cursor-pointer">Xem tất cả</span>
               </div>
 
               {/* SCROLLABLE NOTIFICATIONS LIST */}
               <div className="flex-1 overflow-y-auto space-y-3.5 pr-0.5 scrollbar-thin">
-                <div className="flex items-start gap-2 text-[11px] leading-snug">
+                <div className="flex items-start gap-2 text-sm leading-snug">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
                   <div>
-                    <p className="font-bold text-slate-700">Yêu cầu #REQ-2024-0028 đã được cập nhật</p>
-                    <p className="text-[10px] text-slate-400">Trạng thái đổi sang &ldquo;Đang xử lý&rdquo;</p>
-                    <p className="text-[8px] text-slate-400 font-semibold mt-0.5">10 phút trước</p>
+                    <p className="font-normal text-slate-700">Yêu cầu #REQ-2024-0028 đã được cập nhật</p>
+                    <p className="text-slate-400">Trạng thái đổi sang &ldquo;Đang xử lý&rdquo;</p>
+                    <p className="text-sm text-slate-400 font-normal mt-0.5">10 phút trước</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-[11px] leading-snug">
+                <div className="flex items-start gap-2 text-sm leading-snug">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
                   <div>
-                    <p className="font-bold text-slate-700">Yêu cầu #REQ-2024-0021 đã giải quyết</p>
-                    <p className="text-[10px] text-slate-400">Cảm ơn đã phản hồi. Yêu cầu đã đóng.</p>
-                    <p className="text-[8px] text-slate-400 font-semibold mt-0.5">2 giờ trước</p>
+                    <p className="font-normal text-slate-700">Yêu cầu #REQ-2024-0021 đã giải quyết</p>
+                    <p className="text-slate-400">Cảm ơn đã phản hồi. Yêu cầu đã đóng.</p>
+                    <p className="text-sm text-slate-400 font-normal mt-0.5">2 giờ trước</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-[11px] leading-snug">
+                <div className="flex items-start gap-2 text-sm leading-snug">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0 mt-1.5" />
                   <div>
-                    <p className="font-bold text-slate-700">Khảo sát mức độ hài lòng</p>
-                    <p className="text-[10px] text-slate-400">Vui lòng đánh giá trải nghiệm hỗ trợ.</p>
-                    <p className="text-[8px] text-slate-400 font-semibold mt-0.5">1 ngày trước</p>
+                    <p className="font-normal text-slate-700">Khảo sát mức độ hài lòng</p>
+                    <p className="text-slate-400">Vui lòng đánh giá trải nghiệm hỗ trợ.</p>
+                    <p className="text-sm text-slate-400 font-normal mt-0.5">1 ngày trước</p>
                   </div>
                 </div>
               </div>
@@ -987,10 +987,10 @@ export default function PortalPage() {
                   <Inbox size={16} />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">
+                  <h2 className="text-[16px] font-bold text-slate-900">
                     Chi Tiết Yêu Cầu Dịch Vụ
                   </h2>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  <p className="text-sm text-slate-500 font-mono mt-0.5">
                     Mã số: {selectedRequest.ticket_id}
                   </p>
                 </div>
@@ -1004,16 +1004,16 @@ export default function PortalPage() {
             </div>
 
             {/* Content Body */}
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 text-sm font-normal">
               {/* Title */}
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Tiêu đề yêu cầu</span>
-                <p className="text-base font-bold text-slate-900">{selectedRequest.title}</p>
+                <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tiêu đề yêu cầu</span>
+                <p className="text-sm font-normal text-slate-900">{selectedRequest.title}</p>
               </div>
 
               {/* Description */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-2">Mô tả chi tiết</span>
+                <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Mô tả chi tiết</span>
                 <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                   {selectedRequest.description}
                 </p>
@@ -1022,15 +1022,15 @@ export default function PortalPage() {
               {/* Grid 2-cols: Type & Category */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-1">
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Loại yêu cầu</span>
-                  <span className="text-sm font-bold text-slate-750 flex items-center gap-1.5 mt-0.5">
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider">Loại yêu cầu</span>
+                  <span className="text-sm font-normal text-slate-750 flex items-center gap-1.5 mt-0.5">
                     <CheckSquare size={13} className="text-slate-450" />
                     {selectedRequest.tt_type === "Bug" ? "Lỗi kỹ thuật (Bug)" : "Yêu cầu dịch vụ (Request)"}
                   </span>
                 </div>
                 <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-1">
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Danh mục hỗ trợ</span>
-                  <span className="text-sm font-bold text-slate-750 flex items-center gap-1.5 mt-0.5">
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider">Danh mục hỗ trợ</span>
+                  <span className="text-sm font-normal text-slate-750 flex items-center gap-1.5 mt-0.5">
                     <Tag size={13} className="text-slate-450" />
                     {selectedRequest.category === "Technical" ? "Hỗ trợ kỹ thuật" : "Tư vấn giải pháp"}
                   </span>
@@ -1040,24 +1040,24 @@ export default function PortalPage() {
               {/* Grid 2-cols: Priority & Status */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-1.5">
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Mức độ ưu tiên</span>
-                  <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border max-w-max ${getPriorityStyle(selectedRequest.priority)}`}>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider">Mức độ ưu tiên</span>
+                  <span className={`inline-flex px-2 py-0.5 rounded text-sm font-normal border max-w-max ${getPriorityStyle(selectedRequest.priority)}`}>
                     {getPriorityLabel(selectedRequest.priority)}
                   </span>
                 </div>
                 <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-1.5">
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Tình trạng xử lý</span>
-                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold border max-w-max ${getStatusBadge(selectedRequest.tt_status)}`}>
+                  <span className="text-sm font-normal text-slate-400 uppercase tracking-wider">Tình trạng xử lý</span>
+                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-normal border max-w-max ${getStatusBadge(selectedRequest.tt_status)}`}>
                     {getStatusLabel(selectedRequest.tt_status)}
                   </span>
                 </div>
               </div>
 
               {/* Footer timeline info */}
-              <div className="border-t border-slate-100 pt-4 flex items-center gap-1.5 text-[10px] text-slate-400">
+              <div className="border-t border-slate-100 pt-4 flex items-center gap-1.5 text-sm text-slate-400 font-normal">
                 <Calendar size={12} className="text-slate-400" />
                 <span>Ghi nhận hệ thống ngày:</span>
-                <strong className="text-slate-650">
+                <strong className="text-slate-650 font-normal">
                   {new Date(selectedRequest.created_at).toLocaleDateString(
                     "vi-VN",
                     {

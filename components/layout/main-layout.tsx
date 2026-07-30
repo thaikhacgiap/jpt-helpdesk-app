@@ -51,7 +51,7 @@ export default function MainLayout({
       <Sidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-2.5 pt-2 pb-3">
           {isAuthorized ? (
             children
           ) : (

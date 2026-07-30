@@ -5,7 +5,68 @@ import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter } from "lucide-react";
+
+interface Task {
+  id: string;
+  parentId: string | null;
+  name: string;
+  assignees: string[];
+  department: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  notes: string;
+  orderIndex: number;
+}
+
+const addMonths = (dateStr: string, months: number): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().substring(0, 10);
+};
+
+const getCycleStartDate = (cycleNum: string, ticketStart: string, config: any, cycleMeta: any) => {
+  if (cycleMeta?.[cycleNum]?.startDate) {
+    return cycleMeta[cycleNum].startDate;
+  }
+  const baseDate = config?.startDate || ticketStart?.substring(0, 10) || new Date().toISOString().substring(0, 10);
+  const monthsToAdd = config?.interval === "yearly"
+    ? (parseInt(cycleNum) - 1) * 12
+    : config?.interval === "quarterly" 
+    ? (parseInt(cycleNum) - 1) * 3 
+    : (parseInt(cycleNum) - 1);
+  return addMonths(baseDate, monthsToAdd);
+};
+
+const formatDateVN = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const calculateCycleProgress = (tasks: Task[]) => {
+  if (!tasks || tasks.length === 0) return 0;
+  
+  // Find parent tasks with subtasks
+  const parentIdsWithChildren = new Set(
+    tasks.map(t => t.parentId).filter(Boolean) as string[]
+  );
+  
+  // Leaf tasks are subtasks OR parent tasks with no subtasks
+  const leafTasks = tasks.filter(t => !parentIdsWithChildren.has(t.id));
+  
+  if (leafTasks.length === 0) return 0;
+  
+  const completed = leafTasks.filter(t => t.status === "Hoàn thành").length;
+  return Math.round((completed / leafTasks.length) * 100);
+};
 
 export default function MaintenancePage() {
   const [tickets, setTickets] = useState<any[]>([]);
@@ -17,6 +78,9 @@ export default function MaintenancePage() {
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"list" | "timeline">("list");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [customerFilter, setCustomerFilter] = useState("All");
   
   const [form, setForm] = useState({
     customerId: "",
@@ -217,7 +281,112 @@ export default function MaintenancePage() {
     const idMatch = displayId.includes(term);
     const custMatch = (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
     const contrMatch = (t.contract?.name || t.contract_no || "")?.toLowerCase().includes(term);
-    return idMatch || custMatch || contrMatch;
+    
+    const matchesSearch = idMatch || custMatch || contrMatch;
+    const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
+    const matchesCustomer = customerFilter === "All" || t.customer_id === customerFilter;
+
+    return matchesSearch && matchesStatus && matchesCustomer;
+  });
+
+  const timelineItems = tickets.flatMap(ticket => {
+    let parsedConfig = { 
+      interval: "monthly", 
+      startDate: ticket.start_time ? ticket.start_time.substring(0, 10) : new Date().toISOString().substring(0, 10) 
+    };
+    let parsedMeta: any = {};
+    let parsedTasks: any = {};
+    if (ticket.remark) {
+      try {
+        const parsed = JSON.parse(ticket.remark);
+        if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
+          parsedConfig = parsed.config || parsedConfig;
+          parsedMeta = parsed.cycleMeta || {};
+          parsedTasks = parsed.tasks || {};
+        }
+      } catch (e) {
+        // ignore JSON parsing errors
+      }
+    }
+
+    const totalCycles = parseInt(ticket.hold_time) || 1;
+    const items = [];
+    for (let i = 1; i <= totalCycles; i++) {
+      const cycleNum = String(i);
+      const plannedDate = getCycleStartDate(cycleNum, ticket.start_time, parsedConfig, parsedMeta);
+      const tasks = parsedTasks[cycleNum] || [];
+      const progress = calculateCycleProgress(tasks);
+      
+      let status = "Planned";
+      if (progress === 100) {
+        status = "Completed";
+      } else if (progress > 0 || (cycleNum === ticket.sla_time && ticket.tt_status === "In Progress")) {
+        status = "In Progress";
+      }
+
+      items.push({
+        id: `${ticket.id}-${cycleNum}`,
+        ticketId: ticket.id,
+        displayId: (ticket.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-'),
+        customerName: ticket.customer?.name || ticket.customer_name || "Khách hàng",
+        contractName: ticket.contract?.name || ticket.contract_no || "Hợp đồng",
+        cycleNum,
+        totalCycles,
+        plannedDate,
+        progress,
+        status,
+        ticketCustomerId: ticket.customer_id,
+        description: ticket.description || ""
+      });
+    }
+    return items;
+  });
+
+  const filteredTimeline = timelineItems.filter(item => {
+    const term = search.toLowerCase();
+    const matchesSearch = item.displayId.toLowerCase().includes(term) ||
+                          item.customerName.toLowerCase().includes(term) ||
+                          item.contractName.toLowerCase().includes(term);
+    
+    const matchesCustomer = customerFilter === "All" || item.ticketCustomerId === customerFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter !== "All") {
+      if (statusFilter === "New" || statusFilter === "On Hold") {
+        matchesStatus = item.status === "Planned";
+      } else if (statusFilter === "In Progress") {
+        matchesStatus = item.status === "In Progress";
+      } else if (statusFilter === "Resolved" || statusFilter === "Closed") {
+        matchesStatus = item.status === "Completed";
+      }
+    }
+    
+    return matchesSearch && matchesCustomer && matchesStatus;
+  });
+
+  // Group and sort timeline items
+  const groupedTimeline = filteredTimeline.reduce((groups: { [key: string]: any[] }, item) => {
+    const date = new Date(item.plannedDate);
+    let monthYear = "Chưa xác định";
+    if (!isNaN(date.getTime())) {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      monthYear = `Tháng ${month}/${year}`;
+    }
+    if (!groups[monthYear]) {
+      groups[monthYear] = [];
+    }
+    groups[monthYear].push(item);
+    return groups;
+  }, {});
+
+  const sortedGroupKeys = Object.keys(groupedTimeline).sort((a, b) => {
+    if (a === "Chưa xác định") return 1;
+    if (b === "Chưa xác định") return -1;
+    const [monthA, yearA] = a.replace("Tháng ", "").split("/").map(Number);
+    const [monthB, yearB] = b.replace("Tháng ", "").split("/").map(Number);
+    if (yearA !== yearB) return yearA - yearB;
+    return monthA - monthB;
   });
 
   const total = tickets.length;
@@ -227,37 +396,23 @@ export default function MaintenancePage() {
 
   return (
     <MainLayout>
-      <Header title="Kế Hoạch Bảo Trì" description="Quản lý kế hoạch bảo trì định kỳ và hợp đồng dịch vụ" />
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Tổng kế hoạch", value: total, icon: Wrench, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Mới tạo", value: pending, icon: Clock, color: "text-orange-600", bg: "bg-orange-50" },
-          { label: "Đang chạy", value: inProgress, icon: RotateCcw, color: "text-yellow-600", bg: "bg-yellow-50" },
-          { label: "Hoàn thành", value: completed, icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50" },
-        ].map((s, i) => {
-          const Icon = s.icon;
-          return (
-            <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 shadow-sm">
-              <div className={`w-11 h-11 ${s.bg} rounded-xl flex items-center justify-center shrink-0`}>
-                <Icon size={20} className={s.color} />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">{s.label}</p>
-                <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <Header 
+        title="Kế Hoạch Bảo Trì" 
+        description="Quản lý kế hoạch bảo trì định kỳ và hợp đồng dịch vụ" 
+        tabs={[
+          { id: "list", label: "Danh sách", icon: ClipboardList },
+          { id: "timeline", label: "Timeline", icon: Clock },
+        ]}
+        activeTab={activeTab}
+        setActiveTab={(id: any) => setActiveTab(id)}
+      />
 
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <button
             onClick={handleCreateOpen}
-            className="h-10 flex items-center gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition shadow-sm cursor-pointer"
+            className="h-10 flex items-center gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition shadow-sm cursor-pointer shrink-0"
           >
             <Plus size={16} />
             Thêm kế hoạch
@@ -271,11 +426,40 @@ export default function MaintenancePage() {
             />
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
+
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
+          >
+            <option value="All">Tất cả tình trạng</option>
+            <option value="New">Mới tạo</option>
+            <option value="In Progress">Đang chạy</option>
+            <option value="On Hold">Tạm ngưng</option>
+            <option value="Resolved">Hoàn thành</option>
+            <option value="Closed">Đã đóng</option>
+          </select>
+
+          {/* Customer Filter */}
+          <select
+            value={customerFilter}
+            onChange={e => setCustomerFilter(e.target.value)}
+            className="h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer max-w-[200px]"
+          >
+            <option value="All">Tất cả khách hàng</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {activeTab === "list" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-xs text-slate-500 font-medium text-left">
@@ -384,6 +568,122 @@ export default function MaintenancePage() {
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* Timeline View */}
+      {activeTab === "timeline" && (
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
+          {filteredTimeline.length === 0 ? (
+            <div className="py-14 text-center text-slate-400">
+              <Clock size={36} className="mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Không có đợt bảo trì nào được lên kế hoạch phù hợp với bộ lọc</p>
+            </div>
+          ) : (
+            <div className="relative border-l border-slate-200 ml-4 pl-8 space-y-8 py-2">
+              {sortedGroupKeys.map((groupKey) => (
+                <div key={groupKey} className="relative">
+                  {/* Group header (Month/Year) */}
+                  <div className="absolute -left-12 -top-1 px-3 py-1 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold rounded-full z-10 shadow-xs">
+                    {groupKey}
+                  </div>
+                  
+                  <div className="space-y-6 pt-8">
+                    {groupedTimeline[groupKey].map((item: any) => {
+                      const isCompleted = item.status === "Completed";
+                      const isInProgress = item.status === "In Progress";
+                      const isOverdue = !isCompleted && new Date(item.plannedDate) < new Date();
+                      
+                      return (
+                        <div key={item.id} className="relative group">
+                          {/* Timeline dot */}
+                          <span className={`absolute -left-12 top-0.5 w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white shadow-sm z-10 transition-transform group-hover:scale-110 ${
+                            isCompleted 
+                              ? 'border-emerald-500 text-emerald-500' 
+                              : isInProgress
+                              ? 'border-blue-500 text-blue-500'
+                              : isOverdue 
+                              ? 'border-rose-500 text-rose-500 animate-pulse'
+                              : 'border-slate-300 text-slate-400'
+                          }`}>
+                            {isCompleted ? <CheckCircle2 size={16} /> : isInProgress ? <RotateCcw size={16} className="animate-spin-slow" /> : <Clock size={16} />}
+                          </span>
+
+                          {/* Timeline Content Card */}
+                          <div className="bg-slate-50 hover:bg-slate-100/60 border border-slate-200/60 p-4 rounded-xl transition shadow-sm max-w-2xl">
+                            <div className="flex items-center justify-between gap-4 mb-2 flex-wrap">
+                              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <span className="text-blue-600 hover:underline">
+                                  <Link href={`/maintenance/${item.ticketId}`}>
+                                    {item.displayId} - Lần {item.cycleNum}/{item.totalCycles}
+                                  </Link>
+                                </span>
+                              </h4>
+
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isCompleted 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' 
+                                  : isInProgress
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200/50'
+                                  : isOverdue 
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200/50'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {isCompleted ? 'Hoàn thành' : isInProgress ? 'Đang thực hiện' : isOverdue ? 'Quá hạn' : 'Chưa bắt đầu'}
+                              </span>
+                            </div>
+
+                            {/* Customer and Contract Info */}
+                            <div className="grid grid-cols-2 gap-2 text-xs mb-3 text-slate-600">
+                              <div>
+                                <span className="font-semibold text-slate-500">Khách hàng:</span> {item.customerName}
+                              </div>
+                              <div>
+                                <span className="font-semibold text-slate-500">Hợp đồng:</span> {item.contractName}
+                              </div>
+                            </div>
+
+                            {item.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-3">
+                                {item.description}
+                              </p>
+                            )}
+
+                            {/* Progress bar and date */}
+                            <div className="flex items-center justify-between border-t border-slate-200/50 pt-2.5 text-[11px] text-slate-400">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Tiến độ đợt:</span>
+                                <div className="w-24 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      isCompleted ? 'bg-emerald-500' : isInProgress ? 'bg-blue-500' : 'bg-slate-400'
+                                    }`}
+                                    style={{ width: `${item.progress}%` }}
+                                  />
+                                </div>
+                                <span className="font-bold text-slate-600">{item.progress}%</span>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <span>Ngày dự kiến: <strong className="text-slate-600 font-semibold">{formatDateVN(item.plannedDate)}</strong></span>
+                                <Link 
+                                  href={`/maintenance/${item.ticketId}`}
+                                  className="px-2 py-1 bg-white hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-200 rounded font-semibold transition cursor-pointer"
+                                >
+                                  Chi tiết
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal */}
       {isModalOpen && (

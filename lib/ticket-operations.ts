@@ -31,20 +31,21 @@ export async function generateNextTicketId(): Promise<string> {
   return `${prefix}${nextSeq}`
 }
 
-// Generate next Portal request ticket ID — format: TH-YYYYMMDD-NNN
+// Generate next Portal request ticket ID — format: CR-YYYYMMDD-NNN
 export async function generateNextPortalTicketId(): Promise<string> {
   const today = new Date()
   const dateStr = today.getFullYear().toString()
     + String(today.getMonth() + 1).padStart(2, '0')
     + String(today.getDate()).padStart(2, '0')
 
-  const prefix = `TH-${dateStr}-`
+  const prefix = `CR-${dateStr}-`
+  const fallbackPrefix = `TH-${dateStr}-`
 
-  // Find highest sequence number for today starting with TH-YYYYMMDD-
+  // Find highest sequence number for today starting with CR-YYYYMMDD- or TH-YYYYMMDD-
   const { data, error } = await supabase
     .from('tickets')
     .select('ticket_id')
-    .like('ticket_id', `${prefix}%`)
+    .or(`ticket_id.like.${prefix}%,ticket_id.like.${fallbackPrefix}%`)
     .order('ticket_id', { ascending: false })
     .limit(1)
 

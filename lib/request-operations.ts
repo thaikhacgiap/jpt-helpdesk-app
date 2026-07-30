@@ -14,7 +14,7 @@ export interface RequestTask {
 const DEFAULT_REQUESTS: RequestTask[] = [
   {
     id: "req-1",
-    code: "YC-2026-001",
+    code: "SR-20260701-001",
     title: "Cài đặt VPN client cho chi nhánh Quận 3",
     type: "Yêu cầu hỗ trợ kỹ thuật",
     description: "Cần cấu hình tài liệu hướng dẫn và tài khoản VPN FortiClient cho 5 nhân viên mới của phòng Kế toán tại chi nhánh Quận 3 để làm việc từ xa.",
@@ -26,7 +26,7 @@ const DEFAULT_REQUESTS: RequestTask[] = [
   },
   {
     id: "req-2",
-    code: "YC-2026-002",
+    code: "SR-20260705-001",
     title: "Khảo sát và tư vấn giải pháp WiFi Aruba cho kho bãi",
     type: "Yêu cầu tư vấn",
     description: "Khảo sát vị trí và lập giải pháp sơ đồ phủ sóng WiFi Aruba AP-303 cho khu vực kho chứa nguyên liệu mới diện tích 2000m2 tại Bình Dương.",
@@ -38,7 +38,7 @@ const DEFAULT_REQUESTS: RequestTask[] = [
   },
   {
     id: "req-3",
-    code: "YC-2026-003",
+    code: "SR-20260710-001",
     title: "Triển khai phần mềm Antivirus Kaspersky tập trung",
     type: "Yêu cầu triển khai",
     description: "Cài đặt đại lý Kaspersky Endpoint Security và kết nối về máy chủ Kaspersky Security Center cho toàn bộ 50 máy trạm văn phòng đại diện.",
@@ -50,7 +50,7 @@ const DEFAULT_REQUESTS: RequestTask[] = [
   },
   {
     id: "req-4",
-    code: "YC-2026-004",
+    code: "TR-20260706-001",
     title: "Cấp phát bản quyền và tạo tài khoản Microsoft 365",
     type: "Yêu cầu công việc",
     description: "Tạo tài khoản email tên miền công ty và phân quyền bản quyền Microsoft 365 Business Premium cho 3 kỹ sư thuộc ban quản lý dự án mới.",
@@ -98,9 +98,28 @@ export function getRequestById(id: string): RequestTask | undefined {
 export function createRequest(formData: Omit<RequestTask, 'id' | 'code'> & { code?: string }): RequestTask {
   const requests = getStoredRequests();
   
-  // Auto-generate code: YC-2026-001, YC-2026-002...
-  const nextSeq = requests.length + 1;
-  const code = formData.code || `YC-${new Date().getFullYear()}-${String(nextSeq).padStart(3, '0')}`;
+  const today = new Date();
+  const dateStr = today.getFullYear().toString()
+    + String(today.getMonth() + 1).padStart(2, '0')
+    + String(today.getDate()).padStart(2, '0');
+
+  const prefix = formData.type === 'Yêu cầu công việc' ? `TR-${dateStr}-` : `SR-${dateStr}-`;
+  
+  // Find highest sequence number for today with this prefix
+  const todayRequests = requests.filter(r => r.code && r.code.startsWith(prefix));
+  let maxSeq = 0;
+  todayRequests.forEach(r => {
+    const seqPart = r.code.split('-').pop();
+    if (seqPart) {
+      const seqNum = parseInt(seqPart, 10);
+      if (!isNaN(seqNum) && seqNum > maxSeq) {
+        maxSeq = seqNum;
+      }
+    }
+  });
+  
+  const nextSeq = maxSeq + 1;
+  const code = formData.code || `${prefix}${String(nextSeq).padStart(3, '0')}`;
   
   const newRequest: RequestTask = {
     ...formData,

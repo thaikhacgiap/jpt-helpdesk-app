@@ -394,15 +394,15 @@ export default function ProjectDetailPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-xs font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
+              <span className="text-xs font-mono font-normal text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
                 {project.code}
               </span>
-              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+              <span className="text-xs font-normal text-slate-500 flex items-center gap-1">
                 <Building2 size={13} className="text-slate-400" />
                 {project.customer}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-2">{project.name}</h1>
+            <h1 className="text-[18px] font-normal text-slate-900 mt-2">{project.name}</h1>
             <p className="text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">{project.description}</p>
           </div>
 

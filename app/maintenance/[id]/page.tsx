@@ -24,6 +24,17 @@ interface Task {
   orderIndex: number;
 }
 
+interface Recommendation {
+  id: string;
+  category: string;       // Hardware, Database, Software, Network, Security, Khác
+  systemName: string;     // Tên hệ thống
+  nodeName: string;       // Tên node
+  issue: string;          // Vấn đề
+  recommendation: string; // Khuyến nghị
+  customerOpinion: string; // Ý kiến khách hàng
+  status: string;         // Chưa xử lý, Đang xử lý, Đã xử lý, Bỏ qua
+}
+
 export default function MaintenanceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -34,6 +45,9 @@ export default function MaintenanceDetailPage() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [activeCycle, setActiveCycle] = useState<string>("1");
   const [cycleTasks, setCycleTasks] = useState<{ [key: string]: Task[] }>({});
+  const [cycleRecs, setCycleRecs] = useState<{ [key: string]: Recommendation[] }>({});
+  
+  const [activeTab, setActiveTab] = useState<"tasks" | "recommendations">("tasks");
   
   const [config, setConfig] = useState({
     interval: "monthly",
@@ -46,6 +60,20 @@ export default function MaintenanceDetailPage() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Recommendations Modal states
+  const [isRecModalOpen, setIsRecModalOpen] = useState(false);
+  const [editingRec, setEditingRec] = useState<Recommendation | null>(null);
+  const [recSubmitting, setRecSubmitting] = useState(false);
+  const [recForm, setRecForm] = useState({
+    category: "Hardware",
+    systemName: "",
+    nodeName: "",
+    issue: "",
+    recommendation: "",
+    customerOpinion: "",
+    status: "Chưa xử lý",
+  });
 
   // Form states
   const [form, setForm] = useState({
@@ -80,8 +108,9 @@ export default function MaintenanceDetailPage() {
 
       setPlan(data);
 
-      // Parse tasks and config from the remark column
+      // Parse tasks, config, and recommendations from the remark column
       let tasksData: { [key: string]: Task[] } = {};
+      let recommendationsData: { [key: string]: Recommendation[] } = {};
       let parsedConfig = { 
         interval: "monthly", 
         startDate: data.start_time ? data.start_time.substring(0, 10) : new Date().toISOString().substring(0, 10) 
@@ -91,8 +120,9 @@ export default function MaintenanceDetailPage() {
       if (data.remark) {
         try {
           const parsed = JSON.parse(data.remark);
-          if (parsed && parsed.tasks !== undefined) {
+          if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
             tasksData = parsed.tasks || {};
+            recommendationsData = parsed.recommendations || {};
             parsedConfig = parsed.config || parsedConfig;
             parsedMeta = parsed.cycleMeta || {};
           } else {
@@ -109,6 +139,7 @@ export default function MaintenanceDetailPage() {
       }
 
       setCycleTasks(tasksData);
+      setCycleRecs(recommendationsData);
       setConfig(parsedConfig);
       setCycleMeta(parsedMeta);
     } catch (err) {
@@ -179,18 +210,6 @@ export default function MaintenanceDetailPage() {
 
   const sortedTasks = getSortedTasks(currentTasks);
 
-  // Parent progress calculation helper
-  const getParentProgress = (parentId: string, tasks: Task[]) => {
-    const subs = tasks.filter(t => t.parentId === parentId);
-    if (subs.length === 0) return { percent: 0, completed: 0, total: 0 };
-    const completed = subs.filter(t => t.status === "Hoàn thành").length;
-    return {
-      percent: Math.round((completed / subs.length) * 100),
-      completed,
-      total: subs.length,
-    };
-  };
-
   // Helper to add months to a YYYY-MM-DD date string
   const addMonths = (dateStr: string, months: number): string => {
     if (!dateStr) return "";
@@ -238,35 +257,132 @@ export default function MaintenanceDetailPage() {
     return "Chưa bắt đầu";
   };
 
-  // Save all cycles tasks to supabase as stringified JSON in the tickets.remark column
-  const saveTasksToDB = async (updatedTasks: { [key: string]: Task[] }) => {
+  // Helper to calculate progress of a specific cycle
+  const calculateCycleProgress = (tasks: Task[]) => {
+    if (!tasks || tasks.length === 0) return 0;
+    
+    // Find parent tasks with subtasks
+    const parentIdsWithChildren = new Set(
+      tasks.map(t => t.parentId).filter(Boolean) as string[]
+    );
+    
+    // Leaf tasks are subtasks OR parent tasks with no subtasks
+    const leafTasks = tasks.filter(t => !parentIdsWithChildren.has(t.id));
+    
+    if (leafTasks.length === 0) return 0;
+    
+    const completed = leafTasks.filter(t => t.status === "Hoàn thành").length;
+    return Math.round((completed / leafTasks.length) * 100);
+  };
+
+  // Helper to calculate overall plan progress
+  const calculateOverallProgress = (tasksData: { [key: string]: Task[] }, total: number) => {
+    if (total <= 0) return 0;
+    let totalPercent = 0;
+    for (let i = 1; i <= total; i++) {
+      const cycleNum = String(i);
+      const cycleTaskList = tasksData[cycleNum] || [];
+      totalPercent += calculateCycleProgress(cycleTaskList);
+    }
+    return Math.min(100, Math.round(totalPercent / total));
+  };
+
+  // Helper to determine the current period based on completed cycles
+  const determineCurrentPeriod = (tasksData: { [key: string]: Task[] }, total: number) => {
+    for (let i = 1; i <= total; i++) {
+      const cycleNum = String(i);
+      const cycleTaskList = tasksData[cycleNum] || [];
+      const percent = calculateCycleProgress(cycleTaskList);
+      if (percent < 100) {
+        return i;
+      }
+    }
+    return total; // If all completed, return last period
+  };
+
+  // Parent progress calculation helper
+  const getParentProgress = (parentId: string, tasks: Task[]) => {
+    const subs = tasks.filter(t => t.parentId === parentId);
+    if (subs.length === 0) {
+      // If a parent has no subtasks, check its own status
+      const parentTask = tasks.find(t => t.id === parentId);
+      const isCompleted = parentTask?.status === "Hoàn thành";
+      return {
+        percent: isCompleted ? 100 : 0,
+        completed: isCompleted ? 1 : 0,
+        total: 1,
+        hasSubtasks: false
+      };
+    }
+    const completed = subs.filter(t => t.status === "Hoàn thành").length;
+    return {
+      percent: Math.round((completed / subs.length) * 100),
+      completed,
+      total: subs.length,
+      hasSubtasks: true
+    };
+  };
+
+  // Save all plan data to Supabase (remark, progress, sla_time, tt_status)
+  const savePlanData = async (
+    updatedTasks: { [key: string]: Task[] },
+    updatedRecs: { [key: string]: Recommendation[] },
+    updatedConfig = config,
+    updatedMeta = cycleMeta
+  ) => {
     try {
       const payload = {
-        config,
-        cycleMeta,
-        tasks: updatedTasks
+        config: updatedConfig,
+        cycleMeta: updatedMeta,
+        tasks: updatedTasks,
+        recommendations: updatedRecs
       };
       const remarkJSON = JSON.stringify(payload);
-      await supabase
+      
+      const overallProgress = calculateOverallProgress(updatedTasks, totalCycles);
+      const currentPeriodVal = determineCurrentPeriod(updatedTasks, totalCycles);
+      
+      const updateData: any = {
+        remark: remarkJSON,
+        progress: `${overallProgress}%`,
+        sla_time: String(currentPeriodVal)
+      };
+      
+      if (plan) {
+        if (overallProgress === 100 && plan.tt_status !== "Closed") {
+          updateData.tt_status = "Resolved";
+        } else if (overallProgress > 0 && overallProgress < 100 && plan.tt_status === "New") {
+          updateData.tt_status = "In Progress";
+        }
+      }
+      
+      const { error } = await supabase
         .from("tickets")
-        .update({ remark: remarkJSON })
+        .update(updateData)
         .eq("id", planId);
+
+      if (error) {
+        console.error("Error updating ticket in DB:", error);
+      } else {
+        setPlan((prev: any) => prev ? { ...prev, ...updateData } : null);
+      }
     } catch (e) {
-      console.error("Error saving tasks to db:", e);
+      console.error("Error saving plan data:", e);
     }
+  };
+
+  // Save all cycles tasks to supabase
+  const saveTasksToDB = async (updatedTasks: { [key: string]: Task[] }) => {
+    await savePlanData(updatedTasks, cycleRecs);
   };
 
   // Save changes to database with explicit config/meta payload
   const saveTasksToDBWrapper = async (payload: { config: any; cycleMeta: any; tasks: any }) => {
-    try {
-      const remarkJSON = JSON.stringify(payload);
-      await supabase
-        .from("tickets")
-        .update({ remark: remarkJSON })
-        .eq("id", planId);
-    } catch (e) {
-      console.error("Error saving payload to db:", e);
-    }
+    await savePlanData(payload.tasks, cycleRecs, payload.config, payload.cycleMeta);
+  };
+
+  const saveRecsToDB = async (updatedRecs: { [key: string]: Recommendation[] }) => {
+    await savePlanData(cycleTasks, updatedRecs);
   };
 
   // Handle cycle date manual overrides
@@ -359,11 +475,11 @@ export default function MaintenanceDetailPage() {
             ...editingTask,
             name: form.name,
             parentId: form.isSubtask ? form.parentId : null,
-            assignees: form.isSubtask ? form.assignees : [],
+            assignees: form.assignees || [],
             department: form.department,
             startDate: form.startDate,
             endDate: form.endDate,
-            status: form.isSubtask ? form.status : "Chưa bắt đầu",
+            status: form.status || "Chưa bắt đầu",
             notes: form.notes,
           };
         }
@@ -373,11 +489,11 @@ export default function MaintenanceDetailPage() {
           id: crypto.randomUUID(),
           parentId: form.isSubtask ? form.parentId : null,
           name: form.name,
-          assignees: form.isSubtask ? form.assignees : [],
+          assignees: form.assignees || [],
           department: form.department,
           startDate: form.startDate,
           endDate: form.endDate,
-          status: form.isSubtask ? form.status : "Chưa bắt đầu",
+          status: form.status || "Chưa bắt đầu",
           notes: form.notes,
           orderIndex: currentList.length,
         };
@@ -413,6 +529,117 @@ export default function MaintenanceDetailPage() {
       await saveTasksToDB(updatedCycleTasks);
     } catch (err) {
       console.error("Error deleting task:", err);
+    }
+  };
+
+  // Open modal for adding recommendation
+  const handleRecCreateOpen = () => {
+    setEditingRec(null);
+    setRecForm({
+      category: "Hardware",
+      systemName: "",
+      nodeName: "",
+      issue: "",
+      recommendation: "",
+      customerOpinion: "",
+      status: "Chưa xử lý",
+    });
+    setIsRecModalOpen(true);
+  };
+
+  // Open modal for editing recommendation
+  const handleRecEditOpen = (rec: Recommendation) => {
+    setEditingRec(rec);
+    setRecForm({
+      category: rec.category || "Hardware",
+      systemName: rec.systemName || "",
+      nodeName: rec.nodeName || "",
+      issue: rec.issue || "",
+      recommendation: rec.recommendation || "",
+      customerOpinion: rec.customerOpinion || "",
+      status: rec.status || "Chưa xử lý",
+    });
+    setIsRecModalOpen(true);
+  };
+
+  // Delete recommendation
+  const handleRecDelete = async (recId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa khuyến nghị này không?")) return;
+    try {
+      const updatedRecs = { ...cycleRecs };
+      const currentList = updatedRecs[activeCycle] ? [...updatedRecs[activeCycle]] : [];
+      const newList = currentList.filter(r => r.id !== recId);
+      
+      updatedRecs[activeCycle] = newList;
+      setCycleRecs(updatedRecs);
+      
+      await saveRecsToDB(updatedRecs);
+    } catch (err) {
+      console.error("Error deleting recommendation:", err);
+    }
+  };
+
+  // Form submit handler for recommendation
+  const handleRecFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecSubmitting(true);
+    try {
+      const updatedRecs = { ...cycleRecs };
+      const currentList = updatedRecs[activeCycle] ? [...updatedRecs[activeCycle]] : [];
+
+      if (editingRec) {
+        // Edit flow
+        const idx = currentList.findIndex(r => r.id === editingRec.id);
+        if (idx !== -1) {
+          currentList[idx] = {
+            ...editingRec,
+            category: recForm.category,
+            systemName: recForm.systemName,
+            nodeName: recForm.nodeName,
+            issue: recForm.issue,
+            recommendation: recForm.recommendation,
+            customerOpinion: recForm.customerOpinion,
+            status: recForm.status,
+          };
+        }
+      } else {
+        // Add new flow
+        const newRec: Recommendation = {
+          id: crypto.randomUUID(),
+          category: recForm.category,
+          systemName: recForm.systemName,
+          nodeName: recForm.nodeName,
+          issue: recForm.issue,
+          recommendation: recForm.recommendation,
+          customerOpinion: recForm.customerOpinion,
+          status: recForm.status,
+        };
+        currentList.push(newRec);
+      }
+
+      updatedRecs[activeCycle] = currentList;
+      setCycleRecs(updatedRecs);
+
+      await saveRecsToDB(updatedRecs);
+      setIsRecModalOpen(false);
+    } catch (err) {
+      console.error("Error submitting recommendation:", err);
+    } finally {
+      setRecSubmitting(false);
+    }
+  };
+
+  const getRecStatusBadge = (status: string) => {
+    switch (status) {
+      case "Đã xử lý":
+        return "bg-green-50 text-green-700 border border-green-200";
+      case "Đang xử lý":
+        return "bg-blue-50 text-blue-700 border border-blue-200";
+      case "Bỏ qua":
+        return "bg-slate-50 text-slate-500 border border-slate-200";
+      case "Chưa xử lý":
+      default:
+        return "bg-amber-50 text-amber-700 border border-amber-200";
     }
   };
 
@@ -547,6 +774,10 @@ export default function MaintenanceDetailPage() {
     }
   };
 
+  const showAssigneeAndStatusFields = 
+    form.isSubtask || 
+    (!form.isSubtask && (!editingTask || !currentTasks.some(t => t.parentId === editingTask.id)));
+
   return (
     <MainLayout>
       <div className="flex flex-col h-[calc(100vh-48px)] overflow-hidden">
@@ -570,14 +801,14 @@ export default function MaintenanceDetailPage() {
         {/* Breadcrumbs and Title Subheader */}
         <div className="flex items-center justify-between mb-6 shrink-0">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 text-sm text-slate-400 font-normal uppercase tracking-wider">
               <span className="hover:text-blue-600 cursor-pointer" onClick={() => router.push("/dashboard")}>Trang chủ</span>
               <span>&gt;</span>
               <span className="hover:text-blue-600 cursor-pointer" onClick={() => router.push("/maintenance")}>Bảo trì</span>
               <span>&gt;</span>
               <span className="text-slate-500">Kế hoạch chi tiết</span>
             </div>
-            <h1 className="text-3xl font-extrabold text-slate-900 leading-tight">
+            <h1 className="text-[18px] font-normal text-slate-900 leading-tight">
               {plan?.customer?.name || plan?.customer_name || "Hợp đồng bảo trì"}
             </h1>
           </div>
@@ -620,10 +851,7 @@ export default function MaintenanceDetailPage() {
               
               // Get tasks stats for cycle
               const cycleTaskList = cycleTasks[cycleNum] || [];
-              const subtasks = cycleTaskList.filter(t => t.parentId);
-              const totalSubs = subtasks.length;
-              const completedSubs = subtasks.filter(t => t.status === "Hoàn thành").length;
-              const percent = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
+              const percent = calculateCycleProgress(cycleTaskList);
               const cycleStartDate = getCycleStartDate(cycleNum);
 
               const label = getCycleLabel(cycleNum, percent);
@@ -691,39 +919,50 @@ export default function MaintenanceDetailPage() {
           </div>
         </section>
 
-        {/* Column 2: CHI TIẾT CÔNG VIỆC — LẦN X */}
+        {/* Column 2: CHI TIẾT CÔNG VIỆC/KHUYẾN NGHỊ — LẦN X */}
         <section className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden p-6 space-y-4">
           <div className="pb-3 border-b border-slate-100 flex justify-between items-center shrink-0">
             <div>
-              <h2 className="text-base font-bold text-slate-900 uppercase">CHI TIẾT CÔNG VIỆC — LẦN {activeCycle}</h2>
+              <h2 className="text-base font-bold text-slate-900 uppercase">
+                {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle}` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
+              </h2>
             </div>
             
             <div className="flex items-center gap-4">
-              {/* Thao tác dữ liệu group */}
-              <div className="flex items-center border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 gap-2">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mr-1">Thao tác dữ liệu</span>
+              {activeTab === "tasks" ? (
+                <div className="flex items-center border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 gap-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mr-1">Thao tác dữ liệu</span>
+                  <button 
+                    onClick={handleAddTaskOpen}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                  >
+                    <Plus size={10} />
+                    <span>Thêm công việc</span>
+                  </button>
+                  <button 
+                    onClick={handleExportCSV}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                  >
+                    <Download size={10} />
+                    <span>Export</span>
+                  </button>
+                  <button 
+                    onClick={triggerImportCSV}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                  >
+                    <Upload size={10} />
+                    <span>Import</span>
+                  </button>
+                </div>
+              ) : (
                 <button 
-                  onClick={handleAddTaskOpen}
+                  onClick={handleRecCreateOpen}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-3xs cursor-pointer"
                 >
                   <Plus size={10} />
-                  <span>Thêm công việc</span>
+                  <span>Tạo khuyến nghị</span>
                 </button>
-                <button 
-                  onClick={handleExportCSV}
-                  className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
-                >
-                  <Download size={10} />
-                  <span>Export</span>
-                </button>
-                <button 
-                  onClick={triggerImportCSV}
-                  className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
-                >
-                  <Upload size={10} />
-                  <span>Import</span>
-                </button>
-              </div>
+              )}
 
               {/* Ngày bắt đầu của kỳ */}
               <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 bg-slate-50/50">
@@ -738,150 +977,276 @@ export default function MaintenanceDetailPage() {
             </div>
           </div>
 
+          {/* Tabs switcher */}
+          <div className="flex border-b border-slate-100 shrink-0 gap-1">
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`pb-2.5 px-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
+                activeTab === "tasks"
+                  ? "border-blue-600 text-blue-600 font-extrabold"
+                  : "border-transparent text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              Danh sách công việc ({currentTasks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("recommendations")}
+              className={`pb-2.5 px-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
+                activeTab === "recommendations"
+                  ? "border-blue-600 text-blue-600 font-extrabold"
+                  : "border-transparent text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              Khuyến nghị kỹ thuật ({(cycleRecs[activeCycle] || []).length})
+            </button>
+          </div>
+
           {loading ? (
             <div className="flex-1 flex flex-col justify-center items-center text-slate-400">
               <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-              <span>Đang tải dữ liệu kế hoạch...</span>
+              <span>Đang tải dữ liệu...</span>
             </div>
-          ) : sortedTasks.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-12 text-center bg-white shadow-3xs">
-              <div className="w-48 h-36 flex items-center justify-center relative mb-4">
-                <svg width="150" height="120" viewBox="0 0 150 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
-                  <path d="M120 15H30C21.7 15 15 21.7 15 30V90C15 98.3 21.7 105 30 105H120C128.3 105 135 98.3 135 90V30C135 21.7 128.3 15 120 15Z" fill="#F1F5F9"/>
-                  <rect x="35" y="35" width="80" height="8" rx="4" fill="#CBD5E1"/>
-                  <rect x="35" y="55" width="60" height="8" rx="4" fill="#CBD5E1"/>
-                  <rect x="35" y="75" width="70" height="8" rx="4" fill="#CBD5E1"/>
-                  <circle cx="115" cy="55" r="15" fill="#3B82F6" className="animate-pulse"/>
-                  <path d="M111 55L114 58L119 52" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+          ) : activeTab === "tasks" ? (
+            sortedTasks.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-12 text-center bg-white shadow-3xs">
+                <div className="w-48 h-36 flex items-center justify-center relative mb-4">
+                  <svg width="150" height="120" viewBox="0 0 150 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
+                    <path d="M120 15H30C21.7 15 15 21.7 15 30V90C15 98.3 21.7 105 30 105H120C128.3 105 135 98.3 135 90V30C135 21.7 128.3 15 120 15Z" fill="#F1F5F9"/>
+                    <rect x="35" y="35" width="80" height="8" rx="4" fill="#CBD5E1"/>
+                    <rect x="35" y="55" width="60" height="8" rx="4" fill="#CBD5E1"/>
+                    <rect x="35" y="75" width="70" height="8" rx="4" fill="#CBD5E1"/>
+                    <circle cx="115" cy="55" r="15" fill="#3B82F6" className="animate-pulse"/>
+                    <path d="M111 55L114 58L119 52" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG LẦN BẢO TRÌ NÀY</p>
+                <p className="text-xs text-slate-400 mt-1 mb-6">Bắt đầu bằng cách thêm mới kế hoạch bảo trì.</p>
+                
+                <button 
+                  onClick={handleAddTaskOpen}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  + Thêm công việc đầu tiên
+                </button>
               </div>
-              <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG LẦN BẢO TRÌ NÀY</p>
-              <p className="text-xs text-slate-400 mt-1 mb-6">Bắt đầu bằng cách thêm mới kế hoạch bảo trì.</p>
-              
-              <button 
-                onClick={handleAddTaskOpen}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
-              >
-                + Thêm công việc đầu tiên
-              </button>
-            </div>
+            ) : (
+              <div className="flex-1 overflow-auto border border-slate-100 rounded-lg shadow-2xs custom-scrollbar">
+                <table className="w-full text-sm border-collapse text-left">
+                  <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200/60 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 w-16 text-center">STT</th>
+                      <th className="px-4 py-3">Công việc</th>
+                      <th className="px-4 py-3">Người thực hiện</th>
+                      <th className="px-4 py-3">Bộ phận</th>
+                      <th className="px-4 py-3">Bắt đầu</th>
+                      <th className="px-4 py-3">Hoàn thành</th>
+                      <th className="px-4 py-3 w-48">Tình trạng</th>
+                      <th className="px-4 py-3">Ghi chú</th>
+                      <th className="px-4 py-3 w-24 text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedTasks.map((t) => {
+                      if (t.isParent) {
+                        const progress = getParentProgress(t.id, currentTasks);
+                        return (
+                          <tr key={t.id} className="bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100">
+                            <td className="px-4 py-3.5 text-center font-bold text-slate-700">{t.stt}</td>
+                            <td className="px-4 py-3.5 font-bold text-slate-800 text-base">{t.name}</td>
+                            <td className="px-4 py-3.5 text-slate-600 font-medium">
+                              {!progress.hasSubtasks && t.assignees && t.assignees.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {t.assignees.map((a, aIdx) => (
+                                    <span key={aIdx} className="text-blue-600 hover:underline cursor-pointer">
+                                      {a}{aIdx < t.assignees.length - 1 ? "," : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs">
+                              {(!progress.hasSubtasks && t.department) || "—"}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
+                              {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
+                              {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {progress.hasSubtasks ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300/30">
+                                    <div 
+                                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                                      style={{ width: `${progress.percent}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-bold text-blue-600 min-w-[32px]">{progress.percent}%</span>
+                                  <span className="text-[10px] text-slate-400">({progress.completed}/{progress.total})</span>
+                                </div>
+                              ) : (
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadge(t.status || "Chưa bắt đầu")}`}>
+                                  {(t.status || "Chưa bắt đầu").toUpperCase()}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs italic">{t.notes || "—"}</td>
+                            <td className="px-4 py-3.5 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleEditTaskOpen(t)}
+                                  className="p-1 hover:bg-white text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteTask(t.id)}
+                                  className="p-1 hover:bg-white text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      } else {
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-50/40 transition">
+                            <td className="px-4 py-3 text-center text-slate-400 pl-6">{t.stt}</td>
+                            <td className="px-4 py-3 text-slate-700 pl-6">{t.name}</td>
+                            <td className="px-4 py-3 text-slate-600 font-medium">
+                              {t.assignees && t.assignees.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {t.assignees.map((a, aIdx) => (
+                                    <span key={aIdx} className="text-blue-600 hover:underline cursor-pointer">
+                                      {a}{aIdx < t.assignees.length - 1 ? "," : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 text-xs">{t.department || "—"}</td>
+                            <td className="px-4 py-3 text-slate-500 text-xs">
+                              {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 text-xs">
+                              {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadge(t.status)}`}>
+                                {t.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 text-xs">{t.notes || "—"}</td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleEditTaskOpen(t)}
+                                  className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteTask(t.id)}
+                                  className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : (
-            <div className="flex-1 overflow-auto border border-slate-100 rounded-lg shadow-2xs custom-scrollbar">
-              <table className="w-full text-sm border-collapse text-left">
-                <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200/60 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-4 py-3 w-16 text-center">STT</th>
-                    <th className="px-4 py-3">Công việc</th>
-                    <th className="px-4 py-3">Người thực hiện</th>
-                    <th className="px-4 py-3">Bộ phận</th>
-                    <th className="px-4 py-3">Bắt đầu</th>
-                    <th className="px-4 py-3">Hoàn thành</th>
-                    <th className="px-4 py-3 w-48">Tình trạng</th>
-                    <th className="px-4 py-3">Ghi chú</th>
-                    <th className="px-4 py-3 w-24 text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {sortedTasks.map((t) => {
-                    if (t.isParent) {
-                      const progress = getParentProgress(t.id, currentTasks);
-                      return (
-                        <tr key={t.id} className="bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100">
-                          <td className="px-4 py-3.5 text-center font-bold text-slate-700">{t.stt}</td>
-                          <td className="px-4 py-3.5 font-bold text-slate-800 text-base">{t.name}</td>
-                          <td className="px-4 py-3.5 text-slate-400">—</td>
-                          <td className="px-4 py-3.5 text-slate-400">—</td>
-                          <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
-                            {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
-                          </td>
-                          <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
-                            {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300/30">
-                                <div 
-                                  className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                                  style={{ width: `${progress.percent}%` }}
-                                />
-                              </div>
-                              <span className="text-xs font-bold text-blue-600 min-w-[32px]">{progress.percent}%</span>
-                              <span className="text-[10px] text-slate-400">({progress.completed}/{progress.total})</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5 text-slate-500 text-xs italic">{t.notes || "—"}</td>
-                          <td className="px-4 py-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button 
-                                onClick={() => handleEditTaskOpen(t)}
-                                className="p-1 hover:bg-white text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteTask(t.id)}
-                                className="p-1 hover:bg-white text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    } else {
-                      return (
-                        <tr key={t.id} className="hover:bg-slate-50/40 transition">
-                          <td className="px-4 py-3 text-center text-slate-400 pl-6">{t.stt}</td>
-                          <td className="px-4 py-3 text-slate-700 pl-6">{t.name}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium">
-                            {t.assignees && t.assignees.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {t.assignees.map((a, aIdx) => (
-                                  <span key={aIdx} className="text-blue-600 hover:underline cursor-pointer">
-                                    {a}{aIdx < t.assignees.length - 1 ? "," : ""}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-slate-400">— nhập</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">{t.department || "—"}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">
-                            {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">
-                            {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadge(t.status)}`}>
-                              {t.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">{t.notes || "—"}</td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button 
-                                onClick={() => handleEditTaskOpen(t)}
-                                className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteTask(t.id)}
-                                className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-                  })}
-                </tbody>
-              </table>
-            </div>
+            // RECOMMENDATIONS TAB VIEW
+            !(cycleRecs[activeCycle] || []).length ? (
+              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-12 text-center bg-white shadow-3xs">
+                <div className="w-48 h-36 flex items-center justify-center relative mb-4">
+                  <svg width="150" height="120" viewBox="0 0 150 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
+                    <path d="M120 15H30C21.7 15 15 21.7 15 30V90C15 98.3 21.7 105 30 105H120C128.3 105 135 98.3 135 90V30C135 21.7 128.3 15 120 15Z" fill="#F1F5F9"/>
+                    <path d="M45 45H105" stroke="#CBD5E1" strokeWidth="6" strokeLinecap="round"/>
+                    <path d="M45 65H90" stroke="#CBD5E1" strokeWidth="6" strokeLinecap="round"/>
+                    <circle cx="115" cy="80" r="15" fill="#3B82F6" className="animate-pulse"/>
+                    <path d="M115 72V82M115 86H115.01" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ KHUYẾN NGHỊ NÀO</p>
+                <p className="text-xs text-slate-400 mt-1 mb-6">Tạo khuyến nghị kỹ thuật (hardware, database...) cho lần bảo trì này.</p>
+                
+                <button 
+                  onClick={handleRecCreateOpen}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  + Tạo khuyến nghị đầu tiên
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-auto border border-slate-100 rounded-lg shadow-2xs custom-scrollbar">
+                <table className="w-full text-sm border-collapse text-left">
+                  <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200/60 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 w-16 text-center">STT</th>
+                      <th className="px-4 py-3 w-28">Danh mục</th>
+                      <th className="px-4 py-3">Hệ thống</th>
+                      <th className="px-4 py-3">Node</th>
+                      <th className="px-4 py-3">Vấn đề</th>
+                      <th className="px-4 py-3">Khuyến nghị</th>
+                      <th className="px-4 py-3">Ý kiến khách hàng</th>
+                      <th className="px-4 py-3 w-32">Tình trạng</th>
+                      <th className="px-4 py-3 w-24 text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(cycleRecs[activeCycle] || []).map((r, rIdx) => (
+                      <tr key={r.id} className="hover:bg-slate-50/40 transition border-b border-slate-100/50">
+                        <td className="px-4 py-3.5 text-center text-slate-400 font-medium">{rIdx + 1}</td>
+                        <td className="px-4 py-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase">
+                            {r.category}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-800 font-bold text-xs">{r.systemName || "—"}</td>
+                        <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">{r.nodeName || "—"}</td>
+                        <td className="px-4 py-3.5 text-slate-700 text-xs whitespace-pre-line max-w-[200px]">{r.issue || "—"}</td>
+                        <td className="px-4 py-3.5 text-slate-700 text-xs whitespace-pre-line max-w-[200px]">{r.recommendation || "—"}</td>
+                        <td className="px-4 py-3.5 text-slate-600 text-xs italic whitespace-pre-line max-w-[200px]">{r.customerOpinion || "—"}</td>
+                        <td className="px-4 py-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getRecStatusBadge(r.status)}`}>
+                            {r.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={() => handleRecEditOpen(r)}
+                              className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button 
+                              onClick={() => handleRecDelete(r.id)}
+                              className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           )}
         </section>
       </div>
@@ -969,7 +1334,7 @@ export default function MaintenanceDetailPage() {
               )}
 
               {/* Assignees (Multi-select) */}
-              {form.isSubtask && (
+              {showAssigneeAndStatusFields && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Người thực hiện</label>
                   <select
@@ -1025,8 +1390,8 @@ export default function MaintenanceDetailPage() {
                 </div>
               </div>
 
-              {/* Status Select for Subtasks */}
-              {form.isSubtask && (
+              {/* Status Select */}
+              {showAssigneeAndStatusFields && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng</label>
                   <select
@@ -1069,6 +1434,149 @@ export default function MaintenanceDetailPage() {
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer shadow-2xs"
                 >
                   {submitting ? "Đang lưu..." : (editingTask ? "Cập nhật" : "Tạo công việc")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Recommendation Creation/Editing Modal */}
+      {isRecModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-fade-in max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50 shrink-0">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingRec ? "Cập nhật khuyến nghị" : "Tạo khuyến nghị mới"}
+              </h2>
+              <button onClick={() => setIsRecModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-lg cursor-pointer">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRecFormSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Danh mục <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={recForm.category}
+                  onChange={e => setRecForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                  required
+                >
+                  <option value="Hardware">Hardware (Phần cứng)</option>
+                  <option value="Database">Database (Cơ sở dữ liệu)</option>
+                  <option value="OS / Software">OS / Software (Hệ điều hành / Phần mềm)</option>
+                  <option value="Network / Security">Network / Security (Mạng / Bảo mật)</option>
+                  <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              {/* System Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Tên hệ thống <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={recForm.systemName}
+                  onChange={e => setRecForm(f => ({ ...f, systemName: e.target.value }))}
+                  placeholder="Nhập tên hệ thống..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              {/* Node Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Tên Node / Máy chủ
+                </label>
+                <input
+                  type="text"
+                  value={recForm.nodeName}
+                  onChange={e => setRecForm(f => ({ ...f, nodeName: e.target.value }))}
+                  placeholder="Nhập tên node / IP máy chủ..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Issue */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Vấn đề phát hiện <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={recForm.issue}
+                  onChange={e => setRecForm(f => ({ ...f, issue: e.target.value }))}
+                  rows={3}
+                  placeholder="Mô tả vấn đề kỹ thuật phát hiện được..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  required
+                />
+              </div>
+
+              {/* Recommendation */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Khuyến nghị đề xuất <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={recForm.recommendation}
+                  onChange={e => setRecForm(f => ({ ...f, recommendation: e.target.value }))}
+                  rows={3}
+                  placeholder="Giải pháp hoặc khuyến nghị kỹ thuật đề xuất..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  required
+                />
+              </div>
+
+              {/* Customer Opinion */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Ý kiến khách hàng
+                </label>
+                <textarea
+                  value={recForm.customerOpinion}
+                  onChange={e => setRecForm(f => ({ ...f, customerOpinion: e.target.value }))}
+                  rows={2}
+                  placeholder="Ý kiến, phản hồi từ phía khách hàng..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng xử lý</label>
+                <select
+                  value={recForm.status}
+                  onChange={e => setRecForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                >
+                  <option value="Chưa xử lý">CHƯA XỬ LÝ</option>
+                  <option value="Đang xử lý">ĐANG XỬ LÝ</option>
+                  <option value="Đã xử lý">ĐÃ XỬ LÝ</option>
+                  <option value="Bỏ qua">BỎ QUA / KHÔNG XỬ LÝ</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRecModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={recSubmitting}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 cursor-pointer shadow-2xs"
+                >
+                  {recSubmitting ? "Đang lưu..." : (editingRec ? "Cập nhật" : "Tạo khuyến nghị")}
                 </button>
               </div>
             </form>

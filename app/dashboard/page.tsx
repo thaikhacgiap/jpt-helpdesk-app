@@ -475,9 +475,9 @@ export default function DashboardPage() {
         <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
           <button
             onClick={() => setActiveTab("synthesis")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-normal border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "synthesis"
-                ? "border-blue-600 text-blue-600 font-extrabold"
+                ? "border-blue-600 text-blue-600 font-normal"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -486,9 +486,9 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("general")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-normal border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "general"
-                ? "border-blue-600 text-blue-600 font-extrabold"
+                ? "border-blue-600 text-blue-600 font-normal"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -497,9 +497,9 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("maintenance")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-normal border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "maintenance"
-                ? "border-blue-600 text-blue-600 font-extrabold"
+                ? "border-blue-600 text-blue-600 font-normal"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -508,9 +508,9 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("deployment")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-normal border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "deployment"
-                ? "border-blue-600 text-blue-600 font-extrabold"
+                ? "border-blue-600 text-blue-600 font-normal"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -523,7 +523,7 @@ export default function DashboardPage() {
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200/50 shrink-0 self-start md:self-auto mb-1.5 shadow-2xs">
           <button
             onClick={() => setTimeFilter("week")}
-            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 text-sm font-normal rounded-lg transition-all cursor-pointer ${
               timeFilter === "week" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -531,7 +531,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setTimeFilter("month")}
-            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 text-sm font-normal rounded-lg transition-all cursor-pointer ${
               timeFilter === "month" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
             }`}
           >
@@ -539,7 +539,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setTimeFilter("year")}
-            className={`px-3.5 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 text-sm font-normal rounded-lg transition-all cursor-pointer ${
               timeFilter === "year" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
             }`}
           >

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   X, ChevronDown, Save, Edit2, CheckCircle,
   Search, Building2, FileText, Check, Maximize2,
@@ -56,8 +57,8 @@ export interface TicketData {
 interface TicketFormModalProps {
   mode: "create" | "view";
   ticket?: TicketData | null;
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
   onSuccess?: () => void;
 }
 
@@ -440,7 +441,7 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
 
   const label = loading ? "Đang tải..." : disabled ? "Chọn KH trước" : value
     ? (value.contract_no || value.code)
-    : contracts.length === 0 ? "Không có HĐ" : "Chọn số HĐ...";
+    : "Chọn số HĐ...";
 
   return (
     <div ref={ref} className="relative w-full">
@@ -453,7 +454,7 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
       >
         <FileText size={13} className="shrink-0" />
         <span className="flex-1 text-left truncate">{label}</span>
-        {!disabled && contracts.length > 0 && (
+        {!disabled && (
           <ChevronDown size={13} className={`shrink-0 text-[#0099cc] transition ${open ? "rotate-180" : ""}`} />
         )}
       </button>
@@ -463,15 +464,18 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
           <X size={11} />
         </button>
       )}
-      {open && !disabled && contracts.length > 0 && rect && (
+      {open && !disabled && rect && (
         <div style={{ position: "fixed", top: rect.bottom + 2, left: rect.left, width: rect.width, zIndex: 9999 }}
           className="bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden">
           <div className="max-h-48 overflow-y-auto">
-            {contracts.map((c) => (
+            {[
+              { id: "no-contract", contract_no: "No Contract", code: "No Contract", name: "Không hợp đồng" },
+              ...contracts
+            ].map((c) => (
               <button key={c.id} type="button"
-                onClick={() => { onChange(c); setOpen(false); }}
+                onClick={() => { onChange(c as any); setOpen(false); }}
                 className={`w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-[#f0faff] border-b border-slate-50 last:border-0 transition ${value?.id === c.id ? "bg-[#e6f6fc]" : ""}`}>
-                <FileText size={11} className="text-emerald-500 shrink-0" />
+                <FileText size={11} className={c.id === "no-contract" ? "text-slate-400 shrink-0" : "text-emerald-500 shrink-0"} />
                 <div className="flex-1 min-w-0">
                   <span className="font-bold text-slate-800 text-sm">{c.contract_no || c.code}</span>
                   <p className="text-[10px] text-slate-400 truncate">{c.name}</p>
@@ -891,17 +895,33 @@ function CheckContractForm({
         setContracts(list);
         /* Re-select contract if we have a contractId and propagate all auto-fill fields */
         if (data.contractId) {
-          const found = list.find((c) => c.id === data.contractId);
-          if (found) {
-            setSelectedContract(found);
-            /* Propagate auto-filled fields to parent so they display */
+          if (data.contractId === "no-contract") {
+            setSelectedContract({
+              id: "no-contract",
+              contract_no: "No Contract",
+              code: "No Contract",
+              name: "Không hợp đồng"
+            } as any);
             onChange({
-              contractName:   found.name           || "",
-              saleResp:       found.owner_name      || "",
-              contractStart:  found.start_date      || "",
-              contractEnd:    found.end_date        || "",
-              contractStatus: found.status          || "",
+              contractName:   "Không hợp đồng",
+              saleResp:       "",
+              contractStart:  "",
+              contractEnd:    "",
+              contractStatus: "",
             });
+          } else {
+            const found = list.find((c) => c.id === data.contractId);
+            if (found) {
+              setSelectedContract(found);
+              /* Propagate auto-filled fields to parent so they display */
+              onChange({
+                contractName:   found.name           || "",
+                saleResp:       found.owner_name      || "",
+                contractStart:  found.start_date      || "",
+                contractEnd:    found.end_date        || "",
+                contractStatus: found.status          || "",
+              });
+            }
           }
         }
       })
@@ -3479,7 +3499,17 @@ function PlaceholderForm({ title }: { title: string }) {
 /* ═══════════════════════════════════════════════════════════ */
 /* MAIN MODAL — all state lifted here                          */
 /* ═══════════════════════════════════════════════════════════ */
-export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSuccess }: TicketFormModalProps) {
+export default function TicketFormModal({ 
+  mode, ticket, isOpen, onClose, onSuccess, isPage = false 
+}: TicketFormModalProps & { isPage?: boolean }) {
+  const router = useRouter();
+  const handleClose = () => {
+    if (isPage) {
+      router.push("/tickets");
+    } else {
+      onClose?.();
+    }
+  };
 
   /* Navigation */
   const [currentStep,    setCurrentStep]    = useState<StepKey>("create");
@@ -3584,7 +3614,7 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
 
   /* ── Initialise on open ── */
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && !isPage) return;
     setSavedTicketId("");
     if (mode === "create") {
       setCurrentStep("create");
@@ -3592,28 +3622,85 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
       setSavedSteps(new Set());
       setEditing(true);
       setTtStatus("In progress");
+
+      let initialTitle = ticket?.title || "";
+      let initialDescription = ticket?.description || "";
+      let initialTtType = ticket?.tt_type || "";
+      let initialCategory = ticket?.category || "";
+      let initialStartTime = ticket?.start_time || new Date().toISOString().split("T")[0];
+      let initialPriority = ticket?.priority || "";
+      let initialCustomerId = ticket?.customer_id || "";
+      let initialCustomerName = ticket?.customer_name || "";
+      let initialContractId = ticket?.contract_id || "";
+      let initialContractNo = ticket?.contract_no || "";
+      let initialContractScope = ticket?.contract_scope || "";
+      let initialRemark = ticket?.remark || "";
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const requestTicketId = params.get("requestTicketId");
+        if (requestTicketId) {
+          initialTitle = params.get("title") || initialTitle;
+          initialDescription = params.get("description") || initialDescription;
+          initialCustomerId = params.get("customerId") || initialCustomerId;
+          
+          const priority = params.get("priority") || "";
+          initialPriority = priority === "Critical" ? "L1(Critical)" : 
+                            priority === "High" ? "L2(Major)" : 
+                            priority === "Medium" ? "L3(Minor)" : "L4(Warning)";
+          
+          const category = params.get("category") || "";
+          initialCategory = category === "Technical" ? "Software" : "Other";
+          initialRemark = `Tạo từ yêu cầu: ${requestTicketId}`;
+
+          const requestDbId = params.get("requestDbId");
+          if (requestDbId) {
+            sessionStorage.setItem("jpt_linked_request_db_id", requestDbId);
+            sessionStorage.setItem("jpt_linked_customer_id", initialCustomerId);
+          }
+
+          // Dynamically load customer details to get name
+          import("@/lib/customer-operations").then(async ({ fetchCustomerById }) => {
+            if (initialCustomerId) {
+              try {
+                const cust = await fetchCustomerById(initialCustomerId);
+                if (cust) {
+                  setCheckData(prev => ({
+                    ...prev,
+                    customerName: cust.name
+                  }));
+                }
+              } catch (err) {
+                console.error(err);
+              }
+            }
+          });
+        }
+      }
+
       setCreateData({
-        title: ticket?.title || "",
-        description: ticket?.description || "",
-        ttType: ticket?.tt_type || "",
-        category: ticket?.category || "",
-        startTime: ticket?.start_time || new Date().toISOString().split("T")[0],
-        priority: ticket?.priority || "",
+        title: initialTitle,
+        description: initialDescription,
+        ttType: initialTtType,
+        category: initialCategory,
+        startTime: initialStartTime,
+        priority: initialPriority,
       });
+
       setCheckData({
-        customerId: ticket?.customer_id || "",
-        customerName: ticket?.customer_name || "",
-        contractId: ticket?.contract_id || "",
-        contractNo: ticket?.contract_no || "",
+        customerId: initialCustomerId,
+        customerName: initialCustomerName,
+        contractId: initialContractId,
+        contractNo: initialContractNo,
         contractName: "",
-        scope: ticket?.contract_scope || "",
+        scope: initialContractScope,
         saleResp: "",
         contractStart: "",
         contractEnd: "",
         contractStatus: (ticket as any)?.contract_status || "",
         saleName: "",
         confirmStatus: "",
-        saleRemark: "",
+        saleRemark: initialRemark,
         healthCheckRound: "",
       });      setArrangeData({ assigned: [], following: [] });
       setTroubleshootData({ holdTime: "", unholdTime: "", holdReason: "", runbook: "", newUpdate: "" });
@@ -3740,7 +3827,7 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
       setCheckData({
         customerId:     ticket.customer_id    || "",
         customerName:   ticket.customer_name  || "",
-        contractId:     ticket.contract_id    || "",
+        contractId:     ticket.contract_id    || (ticket.contract_no === "No Contract" ? "no-contract" : ""),
         contractNo:     ticket.contract_no    || "",
         contractName:   "",   // filled when contract loads
         scope:          ticket.contract_scope || "",
@@ -4016,12 +4103,12 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
 
   // Fetch nhan_su list when modal opens
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen && !isPage) return;
     setLoadingNhanSu(true);
     fetchNhanSu()
       .then(setNhanSuList)
       .finally(() => setLoadingNhanSu(false));
-  }, [isOpen]);
+  }, [isOpen, isPage]);
 
   // Sync auto-fill fields in reportingData if they are empty
   useEffect(() => {
@@ -4063,7 +4150,7 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
     });
   }, [checkData.customerName, checkData.contractName, finishedData.resolveTime, createData.description, createData.startTime]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isPage) return null;
 
   /* ── Step navigation ── */
   const handleStepClick = (key: StepKey) => {
@@ -4118,7 +4205,7 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
           .update({
             customer_id:    checkData.customerId    || null,
             customer_name:  checkData.customerName  || null,
-            contract_id:    checkData.contractId    || null,
+            contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
             contract_no:    checkData.contractNo    || null,
             contract_scope: checkData.scope         || null,
             remark: JSON.stringify({
@@ -4299,6 +4386,23 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
           });
           if (!res.success) { alert("Lỗi tạo ticket: " + res.error); return; }
           setSavedTicketId(res.dbId || "");
+
+          if (typeof window !== "undefined") {
+            const linkedRequestDbId = sessionStorage.getItem("jpt_linked_request_db_id");
+            if (linkedRequestDbId) {
+              import("@/lib/portal-operations").then(async ({ updateServiceTicket }) => {
+                try {
+                  await updateServiceTicket(linkedRequestDbId, { document_link: res.ticketId });
+                  console.log("Linked new ticket ID", res.ticketId, "to request", linkedRequestDbId);
+                } catch (err) {
+                  console.error("Failed to link ticket automatically:", err);
+                } finally {
+                  sessionStorage.removeItem("jpt_linked_request_db_id");
+                  sessionStorage.removeItem("jpt_linked_customer_id");
+                }
+              });
+            }
+          }
         } else {
           /* Update existing ticket */
           if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
@@ -4326,7 +4430,7 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
           .update({
             customer_id:    checkData.customerId    || null,
             customer_name:  checkData.customerName  || null,
-            contract_id:    checkData.contractId    || null,
+            contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
             contract_no:    checkData.contractNo    || null,
             contract_scope: checkData.scope         || null,
             remark: JSON.stringify({
@@ -4779,177 +4883,177 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
   /* Extra buttons for Check Contract */
   // Removed unused checkExtra helper to avoid unused variable warnings.
 
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-      <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 flex overflow-hidden"
-        style={{ width: "min(1250px, 95vw)", height: "min(800px, 92vh)" }}
-      >
-        {/* LEFT */}
-        <ProcessPanel
-          currentStep={currentStep}
-          completedSteps={completedSteps}
-          savedSteps={savedSteps}
-          editing={editing}
-          onStepClick={handleStepClick}
-        />
+  const outerContainer = (
+    <div
+      className={isPage 
+        ? "bg-white rounded-xl border border-slate-200 flex overflow-hidden w-full h-[calc(100vh-28px)] shadow-xs animate-in fade-in duration-200" 
+        : "bg-white rounded-2xl shadow-2xl border border-slate-200 flex overflow-hidden"}
+      style={isPage ? undefined : { width: "min(1250px, 95vw)", height: "min(800px, 92vh)" }}
+    >
+      {/* LEFT */}
+      <ProcessPanel
+        currentStep={currentStep}
+        completedSteps={completedSteps}
+        savedSteps={savedSteps}
+        editing={editing}
+        onStepClick={handleStepClick}
+      />
 
-        {/* RIGHT */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-8 py-4 border-b border-slate-100 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-xs">
-                {getHeaderStepIcon(currentStep)}
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-900 leading-tight">{stepLabel}</h2>
-                {savedTicketId && mode === "view" && ticket?.ticket_id && (
-                  <p className="text-[11px] text-slate-500 font-mono font-medium mt-0.5">{ticket.ticket_id}</p>
-                )}
-              </div>
+      {/* RIGHT */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-xs">
+              {getHeaderStepIcon(currentStep)}
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 transition cursor-pointer">
-              <X size={20} className="text-slate-400" />
-            </button>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">{stepLabel}</h2>
+              {savedTicketId && mode === "view" && ticket?.ticket_id && (
+                <p className="text-[11px] text-slate-500 font-mono font-medium mt-0.5">{ticket.ticket_id}</p>
+              )}
+            </div>
           </div>
-
-          {/* Active form */}
-          {currentStep === "create" && (
-            <CreateTicketForm
-              editing={editing}
-              data={createData}
-              onChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
-            />
-          )}
-          {currentStep === "check" && (
-            <CheckContractForm
-              editing={editing}
-              data={checkData}
-              onChange={(patch) => setCheckData((p) => ({ ...p, ...patch }))}
-              customers={customers}
-              loadingCustomers={loadingCustomers}
-              ticketType={createData.ttType}
-            />
-          )}
-          {currentStep === "arrange" && (
-            <ArrangeResourceForm
-              editing={editing}
-              data={arrangeData}
-              onChange={(patch) => setArrangeData((p) => ({ ...p, ...patch }))}
-            />
-          )}
-          {currentStep === "troubleshoot" && (
-            <TroubleshootForm
-              editing={editing}
-              data={troubleshootData}
-              onChange={(patch) => setTroubleshootData((p) => ({ ...p, ...patch }))}
-              updatesLog={updatesLog}
-              ttStatus={ttStatus}
-              runbookSteps={runbookSteps}
-              setRunbookSteps={setRunbookSteps}
-              runbooksList={runbooksList}
-              setRunbooksList={setRunbooksList}
-              activeRunbookName={activeRunbookName}
-              setActiveRunbookName={setActiveRunbookName}
-              activeSubTab={activeSubTab}
-              setActiveSubTab={setActiveSubTab}
-              onSave={handleSave}
-              onEdit={handleEditClick}
-              submitting={submitting}
-              holdsList={holdsList}
-              setHoldsList={setHoldsList}
-            />
-          )}
-          {currentStep === "finished" && (
-            <FinishedForm
-              editing={editing}
-              data={finishedData}
-              onChange={(patch) => setFinishedData((p) => ({ ...p, ...patch }))}
-            />
-          )}
-          {currentStep === "reporting" && (
-            <ReportingForm
-              editing={editing}
-              data={reportingData}
-              onChange={(patch) => setReportingData((p) => ({ ...p, ...patch }))}
-              contacts={contacts}
-              nhanSuList={nhanSuList}
-            />
-          )}
-          {currentStep === "closed" && (
-            <ClosedForm
-              editing={editing}
-              createData={createData}
-              finishedData={finishedData}
-              closeTime={closeTime}
-              onCloseTimeChange={setCloseTime}
-              holdsList={holdsList}
-            />
-          )}
-          {currentStep !== "create" && currentStep !== "check" && currentStep !== "arrange" && currentStep !== "troubleshoot" && currentStep !== "finished" && currentStep !== "reporting" && currentStep !== "closed" && (
-            <PlaceholderForm title={stepLabel} />
-          )}
-
-          {/* Footer */}
-          <FooterBar
-            currentStep={currentStep}
-            ttStatus={ttStatus}
-            setTtStatus={setTtStatus}
-            onsite={onsite}
-            setOnsite={setOnsite}
-            showStatus={currentStep !== "troubleshoot" || activeSubTab !== "runbook"}
-            showOnsite={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
-            editing={editing}
-            isStepDone={isStepDone}
-            onEdit={handleEditClick}
-            onSave={handleSave}
-            onConfirm={handleConfirm}
-            submitting={submitting}
-            showFullScreen={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
-            onFullScreen={() => setIsFullScreenUpdate(true)}
-            extraLeftButtons={
-              currentStep === "reporting" ? (
-                <button
-                  type="button"
-                  onClick={handlePrintReport}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition font-medium shadow-sm cursor-pointer"
-                >
-                  <FileText size={15} />
-                  In Biên bản
-                </button>
-              ) : currentStep === "check" ? (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer"
-                >
-                  <Send size={13} className="text-slate-400" />
-                  Request sale
-                </button>
-              ) : (currentStep === "troubleshoot" && activeSubTab === "runbook") ? (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer"
-                >
-                  <Send size={13} className="text-slate-400" />
-                  Request approve
-                </button>
-              ) : null
-            }
-            extraRightButtons={
-              (currentStep === "troubleshoot" && activeSubTab === "runbook") ? (
-                <>
-                  <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition font-medium">
-                    Import
-                  </button>
-                  <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition font-medium">
-                    Export
-                  </button>
-                </>
-              ) : null
-            }
-          />
+          <button onClick={handleClose} className="p-2 rounded-lg hover:bg-slate-100 transition cursor-pointer">
+            <X size={20} className="text-slate-400" />
+          </button>
         </div>
+
+        {/* Active form */}
+        {currentStep === "create" && (
+          <CreateTicketForm
+            editing={editing}
+            data={createData}
+            onChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
+          />
+        )}
+        {currentStep === "check" && (
+          <CheckContractForm
+            editing={editing}
+            data={checkData}
+            onChange={(patch) => setCheckData((p) => ({ ...p, ...patch }))}
+            customers={customers}
+            loadingCustomers={loadingCustomers}
+            ticketType={createData.ttType}
+          />
+        )}
+        {currentStep === "arrange" && (
+          <ArrangeResourceForm
+            editing={editing}
+            data={arrangeData}
+            onChange={(patch) => setArrangeData((p) => ({ ...p, ...patch }))}
+          />
+        )}
+        {currentStep === "troubleshoot" && (
+          <TroubleshootForm
+            editing={editing}
+            data={troubleshootData}
+            onChange={(patch) => setTroubleshootData((p) => ({ ...p, ...patch }))}
+            updatesLog={updatesLog}
+            ttStatus={ttStatus}
+            runbookSteps={runbookSteps}
+            setRunbookSteps={setRunbookSteps}
+            runbooksList={runbooksList}
+            setRunbooksList={setRunbooksList}
+            activeRunbookName={activeRunbookName}
+            setActiveRunbookName={setActiveRunbookName}
+            activeSubTab={activeSubTab}
+            setActiveSubTab={setActiveSubTab}
+            onSave={handleSave}
+            onEdit={handleEditClick}
+            submitting={submitting}
+            holdsList={holdsList}
+            setHoldsList={setHoldsList}
+          />
+        )}
+        {currentStep === "finished" && (
+          <FinishedForm
+            editing={editing}
+            data={finishedData}
+            onChange={(patch) => setFinishedData((p) => ({ ...p, ...patch }))}
+          />
+        )}
+        {currentStep === "reporting" && (
+          <ReportingForm
+            editing={editing}
+            data={reportingData}
+            onChange={(patch) => setReportingData((p) => ({ ...p, ...patch }))}
+            contacts={contacts}
+            nhanSuList={nhanSuList}
+          />
+        )}
+        {currentStep === "closed" && (
+          <ClosedForm
+            editing={editing}
+            createData={createData}
+            finishedData={finishedData}
+            closeTime={closeTime}
+            onCloseTimeChange={setCloseTime}
+            holdsList={holdsList}
+          />
+        )}
+        {currentStep !== "create" && currentStep !== "check" && currentStep !== "arrange" && currentStep !== "troubleshoot" && currentStep !== "finished" && currentStep !== "reporting" && currentStep !== "closed" && (
+          <PlaceholderForm title={stepLabel} />
+        )}
+
+        {/* Footer */}
+        <FooterBar
+          currentStep={currentStep}
+          ttStatus={ttStatus}
+          setTtStatus={setTtStatus}
+          onsite={onsite}
+          setOnsite={setOnsite}
+          showStatus={currentStep !== "troubleshoot" || activeSubTab !== "runbook"}
+          showOnsite={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
+          editing={editing}
+          isStepDone={isStepDone}
+          onEdit={handleEditClick}
+          onSave={handleSave}
+          onConfirm={handleConfirm}
+          submitting={submitting}
+          showFullScreen={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
+          onFullScreen={() => setIsFullScreenUpdate(true)}
+          extraLeftButtons={
+            currentStep === "reporting" ? (
+              <button
+                type="button"
+                onClick={handlePrintReport}
+                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition font-medium shadow-sm cursor-pointer"
+              >
+                <FileText size={15} />
+                In Biên bản
+              </button>
+            ) : currentStep === "check" ? (
+              <button
+                type="button"
+                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer"
+              >
+                <Send size={13} className="text-slate-400" />
+                Request sale
+              </button>
+            ) : (currentStep === "troubleshoot" && activeSubTab === "runbook") ? (
+              <button
+                type="button"
+                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer"
+              >
+                <Send size={13} className="text-slate-400" />
+                Request approve
+              </button>
+            ) : null
+          }
+          extraRightButtons={
+            (currentStep === "troubleshoot" && activeSubTab === "runbook") ? (
+              <>
+                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition font-medium">
+                  Import
+                </button>
+                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition font-medium">
+                  Export
+                </button>
+              </>
+            ) : null
+          }
+        />
       </div>
 
       {/* Full screen update overlay */}
@@ -5094,6 +5198,16 @@ export default function TicketFormModal({ mode, ticket, isOpen, onClose, onSucce
           </div>
         </div>
       )}
+    </div>
+  );
+
+  if (isPage) {
+    return outerContainer;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+      {outerContainer}
     </div>
   );
 }

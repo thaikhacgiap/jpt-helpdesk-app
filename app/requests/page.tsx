@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import MainLayout from "@/components/layout/main-layout";
-import Header from "@/components/layout/header";
 import { 
   fetchRequests, 
   createRequest, 
@@ -32,7 +31,7 @@ import {
 } from "lucide-react";
 
 export default function RequestsPage() {
-  const [activeTab, setActiveTab] = useState<"customer" | "internal">("customer");
+  const [activeTab, setActiveTab] = useState<"customer" | "service" | "task">("customer");
   
   // Data States
   const [requests, setRequests] = useState<RequestTask[]>([]);
@@ -48,6 +47,7 @@ export default function RequestsPage() {
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<RequestTask | null>(null);
+  const [editingCustomerTicket, setEditingCustomerTicket] = useState<ServiceTicket | null>(null);
   const [error, setError] = useState("");
   
   const [formData, setFormData] = useState({
@@ -95,7 +95,41 @@ export default function RequestsPage() {
     }));
   };
 
+  const handleCustomerEditOpen = (ticket: ServiceTicket) => {
+    setEditingCustomerTicket(ticket);
+    
+    // Extract contract no from remark
+    let contractNo = "";
+    if (ticket.remark && ticket.remark.startsWith("Hợp đồng: ")) {
+      contractNo = ticket.remark.replace(/^Hợp đồng:\s*/i, "").split(" | ")[0];
+    }
+    
+    // Split description and incident information if present
+    let desc = ticket.description || "";
+    const incidentInfoIndex = desc.indexOf("\n\n[Thông tin sự cố]");
+    if (incidentInfoIndex !== -1) {
+      desc = desc.substring(0, incidentInfoIndex);
+    }
+
+    setCustomerFormData({
+      customerId: ticket.customer_id || "",
+      title: ticket.title || "",
+      description: desc,
+      tt_type: ticket.tt_type || "",
+      category: ticket.category || "",
+      priority: ticket.priority || "Medium",
+      contract_no: contractNo,
+      incident_start_time: ticket.start_time 
+        ? new Date(ticket.start_time).toISOString().substring(0, 16) 
+        : new Date().toISOString().substring(0, 16),
+      affected_service: ticket.hold_reason || ""
+    });
+    setError("");
+    setIsCustomerModalOpen(true);
+  };
+
   const handleCustomerCreateOpen = () => {
+    setEditingCustomerTicket(null);
     setCustomerFormData({
       customerId: dbCustomers[0]?.id || "",
       title: "",
@@ -138,21 +172,44 @@ export default function RequestsPage() {
         finalDescription += `\n\n[Thông tin sự cố]\n- Thời gian bắt đầu sự cố: ${customerFormData.incident_start_time.replace("T", " ")}\n- Dịch vụ bị ảnh hưởng: ${customerFormData.affected_service}`;
       }
 
-      await createServiceRequest(customerFormData.customerId, {
+      const remarkParts: string[] = [];
+      if (customerFormData.contract_no) remarkParts.push(`Hợp đồng: ${customerFormData.contract_no}`);
+
+      const updateData = {
         title: customerFormData.title.trim(),
         description: finalDescription,
         tt_type: customerFormData.tt_type,
         category: customerFormData.category,
-        priority: "Medium", // Default
-        contract_no: customerFormData.contract_no,
+        priority: customerFormData.priority,
+        remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
+        hold_reason: customerFormData.affected_service || null,
         start_time: customerFormData.tt_type === "Xử lý lỗi"
           ? new Date(customerFormData.incident_start_time).toISOString()
           : new Date().toISOString()
-      });
+      };
+
+      if (editingCustomerTicket) {
+        await updateServiceTicket(editingCustomerTicket.id, {
+          ...updateData,
+          customer_id: customerFormData.customerId
+        });
+      } else {
+        await createServiceRequest(customerFormData.customerId, {
+          title: customerFormData.title.trim(),
+          description: finalDescription,
+          tt_type: customerFormData.tt_type,
+          category: customerFormData.category,
+          priority: customerFormData.priority,
+          contract_no: customerFormData.contract_no,
+          affected_service: customerFormData.affected_service,
+          start_time: updateData.start_time
+        });
+      }
       setIsCustomerModalOpen(false);
+      setEditingCustomerTicket(null);
       loadCustomerTicketsList();
     } catch (err) {
-      setError("Không thể tạo yêu cầu hộ khách hàng: " + String(err));
+      setError("Không thể lưu yêu cầu: " + String(err));
     }
   };
 
@@ -167,8 +224,39 @@ export default function RequestsPage() {
   };
 
   useEffect(() => {
-    // Internal requests and staff
-    setRequests(fetchRequests());
+    // Migrate old YC- codes to SR-/TR- in local storage
+    const stored = localStorage.getItem('jpt_requests');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as RequestTask[];
+        let changed = false;
+        const migrated = parsed.map(r => {
+          if (r.code && r.code.startsWith("YC-")) {
+            changed = true;
+            const prefix = r.type === "Yêu cầu công việc" ? "TR" : "SR";
+            const datePart = r.startTime ? r.startTime.replace(/-/g, "") : "20260720";
+            const seqPart = r.code.split('-').pop() || "001";
+            return {
+              ...r,
+              code: `${prefix}-${datePart}-${seqPart}`
+            };
+          }
+          return r;
+        });
+        if (changed) {
+          localStorage.setItem('jpt_requests', JSON.stringify(migrated));
+          setRequests(migrated);
+        } else {
+          setRequests(parsed);
+        }
+      } catch(e) {
+        console.error(e);
+        setRequests(fetchRequests());
+      }
+    } else {
+      setRequests(fetchRequests());
+    }
+
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
     
     // Customer tickets and customers
@@ -192,8 +280,8 @@ export default function RequestsPage() {
           const oldTicket = payload.old as ServiceTicket;
           const ticketId = (newTicket?.ticket_id || oldTicket?.ticket_id || "");
           
-          // Only react if the ticket starts with TH- (customer portal requests)
-          if (!ticketId.startsWith("TH-")) return;
+          // Only react if the ticket starts with TH- or CR- (customer portal requests)
+          if (!ticketId.startsWith("TH-") && !ticketId.startsWith("CR-")) return;
 
           if (payload.eventType === "INSERT") {
             setCustomerTickets((prev) => [newTicket, ...prev]);
@@ -225,12 +313,12 @@ export default function RequestsPage() {
     }));
   };
 
-  const handleCreateOpen = () => {
+  const handleCreateOpen = (defaultType?: RequestTask["type"]) => {
     setEditingRequest(null);
     setFormData({
       code: "",
       title: "",
-      type: "Yêu cầu công việc",
+      type: defaultType || "Yêu cầu công việc",
       description: "",
       requester: "",
       assignee: "",
@@ -393,12 +481,14 @@ export default function RequestsPage() {
 
   // 1. FILTER & SPLIT FOR CUSTOMER TAB
   const filteredCustomerTickets = customerTickets.filter(t => {
-    // Only show customer requests from portal (which start with 'TH-')
-    if (!t.ticket_id.startsWith("TH-")) return false;
+    // Only show customer requests from portal (which start with 'TH-' or 'CR-')
+    if (!t.ticket_id.startsWith("TH-") && !t.ticket_id.startsWith("CR-")) return false;
 
     const query = searchQuery.toLowerCase();
+    const formattedId = t.ticket_id.replace(/^TH-/, "CR-").toLowerCase();
     const matchesSearch = 
       t.ticket_id.toLowerCase().includes(query) ||
+      formattedId.includes(query) ||
       t.title.toLowerCase().includes(query) ||
       (t.description || "").toLowerCase().includes(query);
 
@@ -411,8 +501,9 @@ export default function RequestsPage() {
   const pendingCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status === "New");
   const processedCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status !== "New");
 
-  // 2. FILTER & SPLIT FOR INTERNAL TAB
-  const filteredInternalRequests = requests.filter(req => {
+  // 2. FILTER & SPLIT FOR SERVICE REQUESTS (Tab 2)
+  const serviceRequests = requests.filter(req => req.type !== "Yêu cầu công việc");
+  const filteredServiceRequests = serviceRequests.filter(req => {
     const term = searchQuery.toLowerCase();
     const matchesSearch = 
       req.title.toLowerCase().includes(term) || 
@@ -427,47 +518,66 @@ export default function RequestsPage() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const pendingInternalRequests = filteredInternalRequests.filter(r => r.status === "New");
-  const processedInternalRequests = filteredInternalRequests.filter(r => r.status !== "New");
+  const pendingServiceRequests = filteredServiceRequests.filter(r => r.status === "New");
+  const processedServiceRequests = filteredServiceRequests.filter(r => r.status !== "New");
+
+  // 3. FILTER & SPLIT FOR TASK REQUESTS (Tab 3)
+  const taskRequests = requests.filter(req => req.type === "Yêu cầu công việc");
+  const filteredTaskRequests = taskRequests.filter(req => {
+    const term = searchQuery.toLowerCase();
+    const matchesSearch = 
+      req.title.toLowerCase().includes(term) || 
+      req.code.toLowerCase().includes(term) ||
+      (req.description || "").toLowerCase().includes(term) ||
+      (req.requester || "").toLowerCase().includes(term) ||
+      (req.assignee || "").toLowerCase().includes(term);
+
+    const matchesStatus = statusFilter === "All" || req.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const pendingTaskRequests = filteredTaskRequests.filter(r => r.status === "New");
+  const processedTaskRequests = filteredTaskRequests.filter(r => r.status !== "New");
 
   // 3. RENDER CUSTOMER TICKETS TABLE (Tab 1)
   const renderCustomerTicketsTable = (title: string, list: ServiceTicket[], emptyMsg: string, isPending: boolean) => {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs overflow-hidden mb-6">
-        <div className="bg-slate-50 px-6 py-3.5 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[250px] shrink-0' : 'flex-1'}`}>
+        <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200 flex justify-between items-center shrink-0">
+          <h3 className="text-sm font-normal text-slate-700 tracking-wide uppercase flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${isPending ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
             <span>{title}</span>
-            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-sm font-normal ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
               {list.length}
             </span>
           </h3>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="table-scroll flex-1 min-h-0 overflow-auto">
           <table className="w-full text-sm" style={{minWidth:'1200px'}}>
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr className="text-xs text-slate-500 font-semibold text-left">
-                <th className="px-4 py-3 w-32 whitespace-nowrap">Mã yêu cầu</th>
-                <th className="px-4 py-3 w-28 whitespace-nowrap">Trạng thái</th>
-                <th className="px-4 py-3 min-w-[160px]">Tiêu đề</th>
-                <th className="px-4 py-3 min-w-[180px]">Mô tả</th>
-                <th className="px-4 py-3 w-36 whitespace-nowrap">Loại yêu cầu</th>
-                <th className="px-4 py-3 w-28 whitespace-nowrap">Danh mục</th>
-                <th className="px-4 py-3 w-36 whitespace-nowrap">Thời gian sự cố</th>
-                <th className="px-4 py-3 min-w-[140px]">Dịch vụ ảnh hưởng</th>
-                <th className="px-4 py-3 min-w-[130px]">Hợp đồng</th>
-                <th className="px-4 py-3 whitespace-nowrap">Khách hàng</th>
-                <th className="px-4 py-3 w-28 whitespace-nowrap">Ticket liên kết</th>
-                <th className="px-4 py-3 text-center w-24 whitespace-nowrap">Thao tác</th>
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+              <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
+                <th className="px-4 py-1.5 w-44 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mã yêu cầu</th>
+                <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Trạng thái</th>
+                <th className="px-4 py-1.5 min-w-[300px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Tiêu đề</th>
+                <th className="px-4 py-1.5 min-w-[180px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Loại yêu cầu</th>
+                <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Danh mục</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian sự cố</th>
+                <th className="px-4 py-1.5 min-w-[140px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Dịch vụ ảnh hưởng</th>
+                <th className="px-4 py-1.5 min-w-[130px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Hợp đồng</th>
+                <th className="px-4 py-1.5 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Khách hàng</th>
+                <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Ticket liên kết</th>
+                <th className="px-4 py-1.5 text-center w-24 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400">
+                  <td colSpan={12} className="py-20 text-center text-slate-400 text-sm font-normal">
                     <Inbox size={28} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-xs">{emptyMsg}</p>
+                    <p className="text-sm font-normal">{emptyMsg}</p>
                   </td>
                 </tr>
               ) : (
@@ -481,19 +591,24 @@ export default function RequestsPage() {
                     : null;
 
                   return (
-                    <tr key={t.id} className="hover:bg-blue-50/20 transition">
+                    <tr key={t.id} className="hover:bg-blue-50/20 transition text-sm font-normal">
                       {/* Mã yêu cầu */}
-                      <td className="px-4 py-3.5 font-bold text-blue-600 font-mono text-xs whitespace-nowrap">
-                        {t.ticket_id}
+                      <td className="px-4 py-1 text-blue-600 font-mono text-sm whitespace-nowrap font-normal">
+                        <span
+                          onClick={() => handleCustomerEditOpen(t)}
+                          className="cursor-pointer hover:underline text-blue-600 font-normal"
+                        >
+                          {t.ticket_id.replace(/^TH-/, "CR-")}
+                        </span>
                       </td>
 
                       {/* Trạng thái - dropdown đổi ngược lên đầu */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-1">
                         <div className="relative">
                           <select
                             value={t.tt_status}
                             onChange={(e) => handleCustomerStatusChange(t.id, e.target.value)}
-                            className={`text-[10px] font-bold px-2.5 py-1 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(t.tt_status)}`}
+                            className={`text-sm font-normal px-2 py-0.5 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(t.tt_status)}`}
                           >
                             <option value="New">Mới tạo</option>
                             <option value="In Progress">Đang xử lý</option>
@@ -506,20 +621,20 @@ export default function RequestsPage() {
                       </td>
 
                       {/* Tiêu đề */}
-                      <td className="px-4 py-3.5">
-                        <p className="font-bold text-slate-800 text-xs line-clamp-2 max-w-[160px]">{t.title}</p>
+                      <td className="px-4 py-1">
+                        <p className="text-slate-800 text-sm font-normal truncate max-w-[300px]" title={t.title}>{t.title}</p>
                       </td>
 
                       {/* Mô tả */}
-                      <td className="px-4 py-3.5">
-                        <p className="text-[11px] text-slate-500 line-clamp-2 max-w-[180px]">
+                      <td className="px-4 py-1">
+                        <p className="text-slate-500 text-sm font-normal truncate max-w-[180px]" title={t.description}>
                           {t.description || "—"}
                         </p>
                       </td>
 
                       {/* Loại yêu cầu */}
-                      <td className="px-4 py-3.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                      <td className="px-4 py-1">
+                        <span className={`px-2 py-0.5 rounded-full text-sm font-normal border whitespace-nowrap ${
                           t.tt_type === "Xử lý lỗi" ? "bg-red-50 text-red-700 border-red-200" :
                           t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
                           t.tt_type === "Cài đặt - Nâng cấp" ? "bg-violet-50 text-violet-700 border-violet-200" :
@@ -528,42 +643,42 @@ export default function RequestsPage() {
                       </td>
 
                       {/* Danh mục */}
-                      <td className="px-4 py-3.5 text-slate-600 font-medium text-xs whitespace-nowrap">
+                      <td className="px-4 py-1 text-slate-600 text-sm font-normal whitespace-nowrap">
                         {t.category || "—"}
                       </td>
 
                       {/* Thời gian sự cố */}
-                      <td className="px-4 py-3.5 font-mono text-slate-500 text-xs whitespace-nowrap">
+                      <td className="px-4 py-1 font-mono text-slate-500 text-sm font-normal whitespace-nowrap">
                         {t.tt_type === "Xử lý lỗi" && t.start_time
                           ? formatDate(t.start_time)
                           : <span className="text-slate-300">—</span>}
                       </td>
 
                       {/* Dịch vụ ảnh hưởng */}
-                      <td className="px-4 py-3.5">
-                        <p className="text-[11px] text-slate-500 line-clamp-2 max-w-[140px]">
+                      <td className="px-4 py-1">
+                        <p className="text-slate-500 text-sm font-normal truncate max-w-[140px]" title={t.hold_reason}>
                           {t.hold_reason || <span className="text-slate-300">—</span>}
                         </p>
                       </td>
 
                       {/* Hợp đồng */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-1">
                         {contractName
-                          ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold whitespace-nowrap">{contractName}</span>
+                          ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-sm font-normal whitespace-nowrap">{contractName}</span>
                           : <span className="text-slate-300">—</span>}
                       </td>
 
                       {/* Khách hàng */}
-                      <td className="px-4 py-3.5 text-slate-700 font-semibold text-xs whitespace-nowrap">
+                      <td className="px-4 py-1 text-slate-700 text-sm font-normal whitespace-nowrap">
                         {customerName}
                       </td>
 
                       {/* Ticket liên kết */}
-                      <td className="px-4 py-3.5 whitespace-nowrap font-mono text-xs">
+                      <td className="px-4 py-1 whitespace-nowrap font-mono text-sm font-normal">
                         {hasLinkedTicket ? (
                           <span
                             onClick={() => { window.location.href = `/tickets?search=${t.document_link}`; }}
-                            className="px-2.5 py-1 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-[10px] font-bold cursor-pointer hover:bg-green-100 transition"
+                            className="px-2.5 py-0.5 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-sm font-normal cursor-pointer hover:bg-green-100 transition"
                             title="Bấm để xem chi tiết ticket"
                           >
                             {t.document_link}
@@ -574,19 +689,19 @@ export default function RequestsPage() {
                       </td>
 
                       {/* Thao tác */}
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-4 py-1 text-center whitespace-nowrap">
                         {!hasLinkedTicket ? (
                           <button
                             onClick={() => {
-                              window.location.href = `/tickets?action=create&customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
+                              window.location.href = `/tickets/create?customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
                             }}
-                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition shadow-xs cursor-pointer"
+                            className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
                           >
                             <Plus size={10} />
                             <span>Tạo Ticket</span>
                           </button>
                         ) : (
-                          <span className="text-slate-400 text-[10px] italic">Đã liên kết</span>
+                          <span className="text-slate-400 text-sm italic">Đã liên kết</span>
                         )}
                       </td>
                     </tr>
@@ -603,91 +718,95 @@ export default function RequestsPage() {
   // 4. RENDER INTERNAL TASKS TABLE (Tab 2)
   const renderInternalTasksTable = (title: string, list: RequestTask[], emptyMsg: string, isPending: boolean) => {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs overflow-hidden mb-6">
-        <div className="bg-slate-50 px-6 py-3.5 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[250px] shrink-0' : 'flex-1'}`}>
+        <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200 flex justify-between items-center shrink-0">
+          <h3 className="text-sm font-normal text-slate-700 tracking-wide uppercase flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${isPending ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
             <span>{title}</span>
-            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-sm font-normal ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
               {list.length}
             </span>
           </h3>
         </div>
 
-        <div className="table-scroll">
+        <div className="table-scroll flex-1 min-h-0 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr className="text-xs text-slate-500 font-semibold text-left">
-                <th className="px-6 py-3 w-32">Mã công việc</th>
-                <th className="px-4 py-3 min-w-[200px]">Tên công việc / Yêu cầu</th>
-                <th className="px-4 py-3">Loại công việc</th>
-                <th className="px-4 py-3">Người yêu cầu</th>
-                <th className="px-4 py-3">Người được giao</th>
-                <th className="px-4 py-3">Người theo dõi</th>
-                <th className="px-4 py-3">Thời gian bắt đầu</th>
-                <th className="px-4 py-3 w-40">Tình trạng</th>
-                <th className="px-4 py-3 text-center w-24">Thao tác</th>
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+              <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
+                <th className="px-6 py-1.5 w-44 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
+                <th className="px-4 py-1.5 min-w-[350px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tên công việc / Yêu cầu</th>
+                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
+                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người yêu cầu</th>
+                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người được giao</th>
+                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người theo dõi</th>
+                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian bắt đầu</th>
+                <th className="px-4 py-1.5 w-40 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tình trạng</th>
+                <th className="px-4 py-1.5 text-center w-24 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-400">
+                  <td colSpan={9} className="py-20 text-center text-slate-400 text-sm font-normal">
                     <Inbox size={28} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-xs">{emptyMsg}</p>
+                    <p className="text-sm font-normal">{emptyMsg}</p>
                   </td>
                 </tr>
               ) : (
                 list.map((req) => (
-                  <tr key={req.id} className="hover:bg-slate-50/50 transition">
-                    <td className="px-6 py-3.5 font-semibold text-blue-600 font-mono text-xs">
-                      {req.code}
+                  <tr key={req.id} className="hover:bg-slate-50/50 transition text-sm font-normal">
+                    <td className="px-6 py-1 text-blue-600 font-mono text-sm font-normal">
+                      <span
+                        onClick={() => handleEditOpen(req)}
+                        className="cursor-pointer hover:underline text-blue-600 font-normal"
+                      >
+                        {req.code}
+                      </span>
                     </td>
-                    <td className="px-4 py-3.5 text-left">
-                      <p className="font-bold text-slate-800 text-sm line-clamp-1">{req.title}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1 max-w-[280px]">
-                        {req.description || "Không có mô tả chi tiết."}
+                    <td className="px-4 py-1 text-left">
+                      <p className="text-slate-800 text-sm font-normal truncate max-w-[450px]" title={req.description || req.title}>
+                        {req.title}
                       </p>
                     </td>
-                    <td className="px-4 py-3.5 text-left">
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${getTypeColor(req.type)}`}>
+                    <td className="px-4 py-1 text-left">
+                      <span className={`px-2.5 py-0.5 rounded text-sm font-normal border ${getTypeColor(req.type)}`}>
                         {req.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-650 font-medium text-xs text-left">
+                    <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
                       <div className="flex items-center gap-1">
-                        <div className="w-5 h-5 rounded-full bg-slate-100 text-[10px] font-bold flex items-center justify-center text-slate-500">
+                        <div className="w-5 h-5 rounded-full bg-slate-100 text-xs font-normal flex items-center justify-center text-slate-500">
                           {req.requester ? req.requester.charAt(0) : "U"}
                         </div>
                         <span>{req.requester || "—"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-655 font-medium text-xs text-left">
+                    <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
                       <div className="flex items-center gap-1">
                         {req.assignee ? (
                           <>
-                            <div className="w-5 h-5 rounded-full bg-blue-50 text-[10px] font-bold flex items-center justify-center text-blue-600">
+                            <div className="w-5 h-5 rounded-full bg-blue-50 text-xs font-normal flex items-center justify-center text-blue-600">
                               {req.assignee.charAt(0)}
                             </div>
                             <span>{req.assignee}</span>
                           </>
                         ) : (
-                          <span className="text-slate-400 italic">Chưa giao</span>
+                          <span className="text-slate-400 text-sm italic">Chưa giao</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-500 text-xs text-left">
+                    <td className="px-4 py-1 text-slate-500 text-sm font-normal text-left">
                       {req.follower || "—"}
                     </td>
-                    <td className="px-4 py-3.5 text-slate-500 font-mono text-xs text-left">
+                    <td className="px-4 py-1 text-slate-500 font-mono text-sm font-normal text-left">
                       {formatDate(req.startTime)}
                     </td>
-                    <td className="px-4 py-3.5 text-left">
+                    <td className="px-4 py-1 text-left">
                       <div className="relative">
                         <select
                           value={req.status}
                           onChange={(e) => handleQuickStatusChange(req.id, e.target.value as RequestTask["status"])}
-                          className={`text-[10px] font-bold px-2.5 py-1 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(req.status)}`}
+                          className={`text-sm font-normal px-2.5 py-0.5 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(req.status)}`}
                         >
                           <option value="New">Mới tạo</option>
                           <option value="In Progress">Đang xử lý</option>
@@ -697,7 +816,7 @@ export default function RequestsPage() {
                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[7px] text-slate-500 pointer-events-none">▼</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-4 py-1 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => handleEditOpen(req)}
@@ -727,170 +846,227 @@ export default function RequestsPage() {
 
   return (
     <MainLayout>
-      <Header 
-        title="Quản Lý Yêu Cầu & Công Việc" 
-        description="Ghi nhận và điều phối các yêu cầu từ khách hàng trên Portal và các yêu cầu nội bộ của nhân viên." 
-      />
-
-      {/* Tabs Selector Bar */}
-      <div className="flex border-b border-slate-200 mb-6 bg-white p-1 rounded-xl max-w-max border shadow-xs">
-        <button
-          onClick={() => {
-            setActiveTab("customer");
-            setTypeFilter("All");
-            setStatusFilter("All");
-            setSearchQuery("");
-          }}
-          className={`px-5 py-2.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-            activeTab === "customer" 
-              ? "bg-blue-600 text-white shadow-sm" 
-              : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-          }`}
-        >
-          <Inbox size={14} />
-          <span>Yêu cầu từ khách hàng</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${activeTab === "customer" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-            {customerTickets.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab("internal");
-            setTypeFilter("All");
-            setStatusFilter("All");
-            setSearchQuery("");
-          }}
-          className={`px-5 py-2.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-            activeTab === "internal" 
-              ? "bg-blue-600 text-white shadow-sm" 
-              : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-          }`}
-        >
-          <Users size={14} />
-          <span>Yêu cầu nội bộ (Tasks)</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${activeTab === "internal" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-            {requests.length}
-          </span>
-        </button>
-      </div>
-
-      {/* Toolbar Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs mb-6">
-        <div className="flex flex-1 flex-col sm:flex-row items-center gap-3">
-          {/* Search bar */}
-          <div className="relative w-full sm:max-w-xs">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm mã, tiêu đề, mô tả..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
+      <div className="flex flex-col h-[calc(100vh-28px)] overflow-hidden gap-3">
+        {/* Header Block Banner */}
+        <div className="flex items-center justify-between gap-3 mb-0 bg-gradient-to-r from-teal-800/90 via-teal-900/95 to-slate-900/95 backdrop-blur-md border border-teal-700/30 text-white py-3.5 px-5 rounded-2xl shadow-[0_4px_20px_rgba(13,148,136,0.15)] shrink-0 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_-20%,rgba(20,184,166,0.15),transparent_60%)] pointer-events-none" />
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-xs flex items-center justify-center text-white border border-white/20 shrink-0">
+              <Inbox size={18} className="text-white" />
+            </div>
+            <div className="space-y-0 text-left">
+              <h1 className="text-[18px] font-normal tracking-tight leading-tight text-white">Quản lý Yêu cầu &amp; Công việc</h1>
+              <p className="text-sm text-teal-200/70 font-normal leading-normal">Trang chủ &nbsp;/&nbsp; Yêu cầu</p>
+            </div>
           </div>
 
-          {/* Conditional Type Filter options */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter size={13} className="text-slate-400" />
-            {activeTab === "customer" ? (
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
-              >
-                <option value="All">Tất cả loại yêu cầu</option>
-                <option value="Xử lý lỗi">Xử lý lỗi</option>
-                <option value="Thay đổi cấu hình">Thay đổi cấu hình</option>
-                <option value="Cài đặt - Nâng cấp">Cài đặt - Nâng cấp</option>
-                <option value="Khác">Khác</option>
-              </select>
-            ) : (
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
-              >
-                <option value="All">Tất cả loại công việc</option>
-                <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
-                <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật</option>
-                <option value="Yêu cầu tư vấn">Yêu cầu tư vấn</option>
-                <option value="Yêu cầu">Yêu cầu</option>
-                <option value="Yêu cầu công việc">Yêu cầu công việc</option>
-              </select>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
+          {/* Tabs Selector Bar inside Header */}
+          <div className="flex bg-slate-900/45 p-1 rounded-lg border border-slate-800/10 shadow-inner gap-1 relative z-10">
+            <button
+              onClick={() => {
+                setActiveTab("customer");
+                setTypeFilter("All");
+                setStatusFilter("All");
+                setSearchQuery("");
+              }}
+              className={`px-3 py-1.5 rounded-md text-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
+                activeTab === "customer" 
+                  ? "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-semibold border-amber-300/40 shadow-[0_2px_10px_rgba(245,158,11,0.3)]" 
+                  : "bg-white/5 text-slate-200 border-white/5 hover:bg-white/10 hover:text-white"
+              }`}
             >
-              <option value="All">Tất cả tình trạng</option>
-              <option value="New">Mới tạo</option>
-              <option value="In Progress">Đang xử lý</option>
-              {activeTab === "customer" && <option value="On Hold">Chờ phản hồi</option>}
-              {activeTab === "customer" ? <option value="Resolved">Hoàn thành</option> : <option value="Completed">Hoàn thành</option>}
-              {activeTab === "customer" ? <option value="Closed">Đã đóng</option> : <option value="Rejected">Từ chối</option>}
-            </select>
+              <Inbox size={12} className={activeTab === "customer" ? "text-slate-950" : ""} />
+              <span>Customer request</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "customer" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                {customerTickets.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("service");
+                setTypeFilter("All");
+                setStatusFilter("All");
+                setSearchQuery("");
+              }}
+              className={`px-3 py-1.5 rounded-md text-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
+                activeTab === "service" 
+                  ? "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-semibold border-amber-300/40 shadow-[0_2px_10px_rgba(245,158,11,0.3)]" 
+                  : "bg-white/5 text-slate-200 border-white/5 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <Users size={12} className={activeTab === "service" ? "text-slate-950" : ""} />
+              <span>Service request</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "service" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                {serviceRequests.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("task");
+                setTypeFilter("All");
+                setStatusFilter("All");
+                setSearchQuery("");
+              }}
+              className={`px-3 py-1.5 rounded-md text-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
+                activeTab === "task" 
+                  ? "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-semibold border-amber-300/40 shadow-[0_2px_10px_rgba(245,158,11,0.3)]" 
+                  : "bg-white/5 text-slate-200 border-white/5 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <CheckSquare size={12} className={activeTab === "task" ? "text-slate-950" : ""} />
+              <span>Task request</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "task" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                {taskRequests.length}
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* Create Button depending on Active Tab */}
-        {activeTab === "customer" ? (
-          <button
-            onClick={handleCustomerCreateOpen}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition shadow-sm hover:shadow-md cursor-pointer shrink-0 animate-fade-in"
-          >
-            <Plus size={14} />
-            <span>Tạo Yêu Cầu Hộ Khách Hàng</span>
-          </button>
-        ) : (
-          <button
-            onClick={handleCreateOpen}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition shadow-sm hover:shadow-md cursor-pointer shrink-0 animate-fade-in"
-          >
-            <Plus size={14} />
-            <span>Tạo Yêu Cầu Nội Bộ</span>
-          </button>
-        )}
-      </div>
+        {/* Toolbar Filters */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs mb-0 shrink-0">
+          <div className="flex flex-1 flex-col sm:flex-row items-center gap-3">
+            {/* Search bar */}
+            <div className="relative w-full sm:max-w-xs">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm kiếm mã, tiêu đề, mô tả..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-lg text-sm font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 transition bg-white text-slate-800"
+              />
+            </div>
 
-      {/* Tabs View Body */}
-      <div className="space-y-6">
-        {activeTab === "customer" ? (
-          <>
-            {renderCustomerTicketsTable(
-              "Yêu cầu chờ tiếp nhận từ khách hàng", 
-              pendingCustomerTickets, 
-              "Không có yêu cầu mới nào từ khách hàng đang chờ tiếp nhận.", 
-              true
+            {/* Conditional Type Filter options */}
+            {activeTab !== "task" && (
+              <div className="flex items-center gap-2">
+                <Filter size={13} className="text-slate-400" />
+                {activeTab === "customer" ? (
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
+                  >
+                    <option value="All">Tất cả loại yêu cầu</option>
+                    <option value="Xử lý lỗi">Xử lý lỗi</option>
+                    <option value="Thay đổi cấu hình">Thay đổi cấu hình</option>
+                    <option value="Cài đặt - Nâng cấp">Cài đặt - Nâng cấp</option>
+                    <option value="Khác">Khác</option>
+                  </select>
+                ) : (
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
+                  >
+                    <option value="All">Tất cả loại dịch vụ</option>
+                    <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
+                    <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật</option>
+                    <option value="Yêu cầu tư vấn">Yêu cầu tư vấn</option>
+                    <option value="Yêu cầu">Yêu cầu</option>
+                  </select>
+                )}
+              </div>
             )}
-            {renderCustomerTicketsTable(
-              "Yêu cầu khách hàng đang xử lý và hoàn thành", 
-              processedCustomerTickets, 
-              "Không có yêu cầu khách hàng nào đang trong quá trình xử lý hoặc hoàn thành.", 
-              false
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
+              >
+                <option value="All">Tất cả tình trạng</option>
+                <option value="New">Mới tạo</option>
+                <option value="In Progress">Đang xử lý</option>
+                {activeTab === "customer" && <option value="On Hold">Chờ phản hồi</option>}
+                {activeTab === "customer" ? <option value="Resolved">Hoàn thành</option> : <option value="Completed">Hoàn thành</option>}
+                {activeTab === "customer" ? <option value="Closed">Đã đóng</option> : <option value="Rejected">Từ chối</option>}
+              </select>
+            </div>
+          </div>
+
+          {/* Create Button in Filter Bar */}
+          <div>
+            {activeTab === "customer" ? (
+              <button
+                onClick={handleCustomerCreateOpen}
+                className="h-9 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 border border-teal-400/40 text-white text-sm font-semibold flex items-center gap-1.5 transition shadow-[0_2px_8px_rgba(20,184,166,0.2)] cursor-pointer whitespace-nowrap animate-fade-in"
+              >
+                <Plus size={14} />
+                <span>Create Request</span>
+              </button>
+            ) : activeTab === "service" ? (
+              <button
+                onClick={() => handleCreateOpen("Yêu cầu triển khai")}
+                className="h-9 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 border border-teal-400/40 text-white text-sm font-semibold flex items-center gap-1.5 transition shadow-[0_2px_8px_rgba(20,184,166,0.2)] cursor-pointer whitespace-nowrap animate-fade-in"
+              >
+                <Plus size={14} />
+                <span>Create Request</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleCreateOpen("Yêu cầu công việc")}
+                className="h-9 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 border border-teal-400/40 text-white text-sm font-semibold flex items-center gap-1.5 transition shadow-[0_2px_8px_rgba(20,184,166,0.2)] cursor-pointer whitespace-nowrap animate-fade-in"
+              >
+                <Plus size={14} />
+                <span>Create Request</span>
+              </button>
             )}
-          </>
-        ) : (
-          <>
-            {renderInternalTasksTable(
-              "Yêu cầu chờ tiếp nhận nội bộ", 
-              pendingInternalRequests, 
-              "Hiện tại không có yêu cầu nội bộ nào đang chờ tiếp nhận.", 
-              true
-            )}
-            {renderInternalTasksTable(
-              "Yêu cầu nội bộ đang xử lý và hoàn thành", 
-              processedInternalRequests, 
-              "Hiện tại không có yêu cầu nội bộ nào đang được xử lý hoặc đã hoàn thành.", 
-              false
-            )}
-          </>
-        )}
+          </div>
+        </div>
+
+        {/* Tabs View Body */}
+        <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden mb-1">
+          {activeTab === "customer" ? (
+            <>
+              {renderCustomerTicketsTable(
+                "Yêu cầu chờ tiếp nhận từ khách hàng", 
+                pendingCustomerTickets, 
+                "Không có yêu cầu mới nào từ khách hàng đang chờ tiếp nhận.", 
+                true
+              )}
+              {renderCustomerTicketsTable(
+                "Yêu cầu khách hàng đang xử lý và hoàn thành", 
+                processedCustomerTickets, 
+                "Không có yêu cầu khách hàng nào đang trong quá trình xử lý hoặc hoàn thành.", 
+                false
+              )}
+            </>
+          ) : activeTab === "service" ? (
+            <>
+              {renderInternalTasksTable(
+                "Yêu cầu thực hiện dịch vụ chờ tiếp nhận", 
+                pendingServiceRequests, 
+                "Hiện tại không có yêu cầu dịch vụ nào đang chờ tiếp nhận.", 
+                true
+              )}
+              {renderInternalTasksTable(
+                "Yêu cầu thực hiện dịch vụ đang xử lý và hoàn thành", 
+                processedServiceRequests, 
+                "Hiện tại không có yêu cầu dịch vụ nào đang được xử lý hoặc đã hoàn thành.", 
+                false
+              )}
+            </>
+          ) : (
+            <>
+              {renderInternalTasksTable(
+                "Yêu cầu công việc cá nhân chờ tiếp nhận", 
+                pendingTaskRequests, 
+                "Hiện tại không có yêu cầu công việc cá nhân nào đang chờ tiếp nhận.", 
+                true
+              )}
+              {renderInternalTasksTable(
+                "Yêu cầu công việc cá nhân đang xử lý và hoàn thành", 
+                processedTaskRequests, 
+                "Hiện tại không có yêu cầu công việc cá nhân nào đang được xử lý hoặc đã hoàn thành.", 
+                false
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Modal Popup for internal requests creation/editing */}
@@ -905,10 +1081,14 @@ export default function RequestsPage() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-base font-bold text-slate-900">
-                    {editingRequest ? "Chỉnh Sửa Yêu Cầu Nội Bộ" : "Tạo Yêu Cầu Công Việc Nội Bộ Mới"}
+                    {editingRequest 
+                      ? (editingRequest.type === "Yêu cầu công việc" ? "Chỉnh Sửa Yêu Cầu Công Việc" : "Chỉnh Sửa Yêu Cầu Dịch Vụ") 
+                      : (activeTab === "task" ? "Tạo Yêu Cầu Công Việc Mới" : "Tạo Yêu Cầu Dịch Vụ Nội Bộ Mới")}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {editingRequest ? `Cập nhật thông tin công việc: ${editingRequest.code}` : "Lập phiếu ghi nhận yêu cầu mới."}
+                    {editingRequest 
+                      ? `Cập nhật thông tin: ${editingRequest.code}` 
+                      : (activeTab === "task" ? "Lập phiếu phân công công việc cá nhân mới." : "Lập phiếu ghi nhận yêu cầu dịch vụ nội bộ mới.")}
                   </p>
                 </div>
               </div>
@@ -974,11 +1154,16 @@ export default function RequestsPage() {
                     onChange={handleInputChange}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                   >
-                    <option value="Yêu cầu triển khai">Yêu cầu triển khai (Deployment)</option>
-                    <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật (Technical Support)</option>
-                    <option value="Yêu cầu tư vấn">Yêu cầu tư vấn (Consultancy)</option>
-                    <option value="Yêu cầu">Yêu cầu (General Request)</option>
-                    <option value="Yêu cầu công việc">Yêu cầu công việc (Work Request)</option>
+                    {activeTab === "task" ? (
+                      <option value="Yêu cầu công việc">Yêu cầu công việc (Work Request)</option>
+                    ) : (
+                      <>
+                        <option value="Yêu cầu triển khai">Yêu cầu triển khai (Deployment)</option>
+                        <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật (Technical Support)</option>
+                        <option value="Yêu cầu tư vấn">Yêu cầu tư vấn (Consultancy)</option>
+                        <option value="Yêu cầu">Yêu cầu (General Request)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -1108,15 +1293,18 @@ export default function RequestsPage() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-base font-bold text-slate-900">
-                    Tạo Yêu Cầu Hộ Khách Hàng
+                    {editingCustomerTicket ? "Chi Tiết & Chỉnh Sửa Yêu Cầu Khách Hàng" : "Tạo Yêu Cầu Hộ Khách Hàng"}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Ghi nhận sự cố hoặc yêu cầu dịch vụ thay mặt cho khách hàng.
+                    {editingCustomerTicket ? `Đang xem và chỉnh sửa mã yêu cầu ${editingCustomerTicket.ticket_id.replace(/^TH-/, "CR-")}` : "Ghi nhận sự cố hoặc yêu cầu dịch vụ thay mặt cho khách hàng."}
                   </p>
                 </div>
               </div>
               <button 
-                onClick={() => setIsCustomerModalOpen(false)} 
+                onClick={() => {
+                  setIsCustomerModalOpen(false);
+                  setEditingCustomerTicket(null);
+                }} 
                 className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
               >
                 <X size={20} />
@@ -1142,7 +1330,8 @@ export default function RequestsPage() {
                   value={customerFormData.customerId}
                   onChange={handleCustomerInputChange}
                   required
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                  disabled={!!editingCustomerTicket}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
                   <option value="">-- Chọn khách hàng nhận yêu cầu --</option>
                   {dbCustomers.map((c) => (
@@ -1282,7 +1471,10 @@ export default function RequestsPage() {
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsCustomerModalOpen(false)}
+                  onClick={() => {
+                    setIsCustomerModalOpen(false);
+                    setEditingCustomerTicket(null);
+                  }}
                   className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
                 >
                   Hủy
@@ -1291,7 +1483,7 @@ export default function RequestsPage() {
                   type="submit"
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
                 >
-                  Tạo Yêu Cầu Hộ
+                  {editingCustomerTicket ? "Cập Nhật Yêu Cầu" : "Tạo Yêu Cầu Hộ"}
                 </button>
               </div>
             </form>
