@@ -462,11 +462,11 @@ export default function MaintenancePage() {
 
       return (
         <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-          <td className="px-4 py-3.5 border-r border-slate-200 text-center font-medium text-slate-700">{idx + 1}</td>
-          <td className="px-4 py-3.5 border-r border-slate-200 font-semibold text-slate-800 max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
+          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-normal text-slate-700 text-sm">{idx + 1}</td>
+          <td className="px-4 py-3.5 border-r border-slate-200 font-normal text-slate-700 text-sm max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
             {t.customer?.name || t.customer_name || "—"}
           </td>
-          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-600 max-w-[200px] truncate" title={t.contract?.name || t.contract_no}>
+          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-700 text-sm font-normal max-w-[200px] truncate" title={t.contract?.name || t.contract_no}>
             <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline">
               {t.contract?.name || t.contract_no || "—"}
             </Link>
@@ -487,13 +487,13 @@ export default function MaintenancePage() {
             const isHold = t.tt_status === "On Hold";
             
             // Choose background color based on status
-            let bgClass = "bg-slate-100 text-slate-600 border-slate-200"; // Planning
+            let bgClass = "bg-slate-100 text-slate-600 border-slate-200 font-normal"; // Planning
             if (isHold && c.status !== "Completed") {
-              bgClass = "bg-amber-400 text-amber-950 border-amber-500 font-medium"; // Hold
+              bgClass = "bg-purple-100 text-purple-800 border-purple-200 font-normal"; // Hold
             } else if (c.status === "Completed") {
-              bgClass = "bg-emerald-100 text-emerald-800 border-emerald-200 font-medium"; // Done
+              bgClass = "bg-emerald-100 text-emerald-800 border-emerald-200 font-normal"; // Done
             } else if (c.status === "In Progress") {
-              bgClass = "bg-orange-100 text-orange-800 border-orange-200 font-medium"; // On-going
+              bgClass = "bg-orange-100 text-orange-800 border-orange-200 font-normal"; // On-going
             }
 
             return (
@@ -503,7 +503,7 @@ export default function MaintenancePage() {
                 className="p-1 border-r border-slate-200 last:border-r-0"
               >
                 <Link href={`/maintenance/${t.id}`}>
-                  <div className={`h-8 w-full rounded flex items-center justify-center text-[10px] shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
+                  <div className={`h-8 w-full rounded flex items-center justify-center text-sm font-normal shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
                     Lần {seg.cycleNum}
                   </div>
                 </Link>
@@ -742,7 +742,7 @@ export default function MaintenancePage() {
                 <span className="text-slate-600">Planing (Kế hoạch)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-amber-400 border border-amber-500" />
+                <span className="w-3.5 h-3.5 rounded bg-purple-100 border border-purple-200" />
                 <span className="text-slate-600">Hold (Tạm ngưng)</span>
               </div>
             </div>
@@ -770,9 +770,9 @@ export default function MaintenancePage() {
                   </tr>
                   {/* Column names */}
                   <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
-                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "5%" }}>No</th>
-                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Khách hàng</th>
-                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "15%" }}>Dự án / Hợp đồng</th>
+                    <th className="px-2 py-3 border-r border-slate-200 text-center" style={{ width: "3%" }}>No</th>
+                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "16%" }}>Khách hàng</th>
+                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "16%" }}>Dự án / Hợp đồng</th>
                     {timeScale === "month" && ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
                       <th key={idx} className="px-2 py-3 text-center border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 12}%` }}>
                         {m}
@@ -809,7 +809,7 @@ export default function MaintenancePage() {
                   className="absolute top-0 bottom-0 w-[3px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
                   style={{ left: `${todayLinePercent}%` }}
                 >
-                  <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
+                  <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
                     Hiện tại
                   </div>
                 </div>
