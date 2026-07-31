@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { supabase } from "@/lib/supabase";
@@ -100,6 +100,7 @@ export default function MaintenancePage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
   const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("month");
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const [form, setForm] = useState({
     customerId: "",
@@ -327,6 +328,25 @@ export default function MaintenancePage() {
     }
   };
   const todayLineFraction = getTodayLinePercent();
+
+  useEffect(() => {
+    if (activeTab === "timeline" && scrollContainerRef.current) {
+      const timer = setTimeout(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          const scrollWidth = container.scrollWidth;
+          const containerWidth = container.clientWidth;
+          const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
+          const targetScrollLeft = lineLeft - containerWidth / 2;
+          container.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: "smooth"
+          });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, timeScale, tickets, todayLineFraction]);
 
   const renderTimelineRows = () => {
     const year = 2026;
@@ -754,7 +774,7 @@ export default function MaintenancePage() {
             </div>
           </div>
 
-          <div className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
+          <div ref={scrollContainerRef} className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
             <div className={`relative ${
               timeScale === "month" ? "min-w-[1200px]" : 
               timeScale === "week" ? "min-w-[2400px]" : 
