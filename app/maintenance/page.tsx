@@ -31,6 +31,13 @@ const getWeekOfYear = (dateStr: string): number => {
   return Math.min(51, Math.floor(dayOfYear / 7));
 };
 
+const getDayOfYear = (date: Date): number => {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const diff = date.getTime() - start.getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+  return Math.floor(diff / oneDay);
+};
+
 const addMonths = (dateStr: string, months: number): string => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -304,31 +311,26 @@ export default function MaintenancePage() {
   const getTodayLinePercent = () => {
     const today = new Date();
     const year = today.getFullYear();
+    const start = new Date(year, 0, 1);
+    const diff = today.getTime() - start.getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const currentDayOfYear = Math.floor(diff / oneDay);
+    
     if (timeScale === "month") {
       const currentMonth = today.getMonth();
       const currentDate = today.getDate();
       const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
-      const positionPercent = (currentMonth + currentDate / daysInMonth) / 12;
-      return 35 + 65 * positionPercent;
-    } else if (timeScale === "week") {
-      const currentDayOfYear = Math.floor((today.getTime() - new Date(year, 0, 1).getTime()) / (24 * 60 * 60 * 1000));
-      const positionPercent = currentDayOfYear / 365;
-      return 35 + 65 * positionPercent;
+      return (currentMonth + currentDate / daysInMonth) / 12;
     } else {
-      // Day scale for July 2026 (month index 6)
-      const currentMonth = 6;
-      const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
-      const positionPercent = (today.getDate() - 1 + today.getHours() / 24) / daysInMonth;
-      return 35 + 65 * positionPercent;
+      // Both Week and Day scales show the entire year 2026!
+      return currentDayOfYear / 365;
     }
   };
-  const todayLinePercent = getTodayLinePercent();
+  const todayLineFraction = getTodayLinePercent();
 
   const renderTimelineRows = () => {
     const year = 2026;
-    const month = 6; // July (0-indexed)
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const limit = timeScale === "month" ? 12 : timeScale === "week" ? 52 : daysInMonth;
+    const limit = timeScale === "month" ? 12 : timeScale === "week" ? 52 : 365;
 
     return filtered.map((t: any, idx: number) => {
       const segments: { type: "empty" | "cycle"; startMonth: number; span: number; cycleNum?: string; cycle?: any }[] = [];
@@ -393,32 +395,23 @@ export default function MaintenancePage() {
           }
         }
       } else {
-        // day scale
-        const monthStart = new Date(year, month, 1);
-        const monthEnd = new Date(year, month, daysInMonth);
+        // Day scale across the entire year 2026
         for (let i = 1; i <= totalCycles; i++) {
           const cycleNum = String(i);
           const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
-          const cycleStart = new Date(plannedDate);
-          if (!isNaN(cycleStart.getTime())) {
-            const spanDaysConfig = parsedConfig.interval === "yearly" ? 365 : parsedConfig.interval === "quarterly" ? 90 : 30;
-            const cycleEnd = new Date(cycleStart.getTime());
-            cycleEnd.setDate(cycleEnd.getDate() + spanDaysConfig);
-            
-            if (cycleStart <= monthEnd && cycleEnd >= monthStart) {
-              const startDay = cycleStart < monthStart ? 0 : cycleStart.getDate() - 1;
-              const endDay = cycleEnd > monthEnd ? daysInMonth - 1 : cycleEnd.getDate() - 1;
-              
-              cycleRanges.push({
-                cycleNum,
-                startMonth: startDay,
-                endMonth: endDay,
-                span: endDay - startDay + 1,
-                plannedDate,
-                tasks: parsedTasks[cycleNum] || [],
-                progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
-              });
-            }
+          const date = new Date(plannedDate);
+          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
+            const startDay = getDayOfYear(date);
+            const spanDays = parsedConfig.interval === "yearly" ? 365 : parsedConfig.interval === "quarterly" ? 90 : 30;
+            cycleRanges.push({
+              cycleNum,
+              startMonth: startDay,
+              endMonth: Math.min(364, startDay + spanDays - 1),
+              span: Math.min(365 - startDay, spanDays),
+              plannedDate,
+              tasks: parsedTasks[cycleNum] || [],
+              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+            });
           }
         }
       }
@@ -461,12 +454,25 @@ export default function MaintenancePage() {
       }
 
       return (
-        <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-          <td className="px-2 py-3.5 border-r border-slate-200 text-center font-normal text-slate-700 text-sm">{idx + 1}</td>
-          <td className="px-4 py-3.5 border-r border-slate-200 font-normal text-slate-700 text-sm max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
+        <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition group">
+          <td 
+            className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 text-center font-normal text-slate-700 text-sm" 
+            style={{ left: 0, minWidth: "48px", width: "48px" }}
+          >
+            {idx + 1}
+          </td>
+          <td 
+            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 font-normal text-slate-700 text-sm max-w-[150px] truncate" 
+            style={{ left: "48px", minWidth: "150px", width: "150px" }} 
+            title={t.customer?.name || t.customer_name}
+          >
             {t.customer?.name || t.customer_name || "—"}
           </td>
-          <td className="px-4 py-3.5 border-r border-slate-200 text-slate-700 text-sm font-normal max-w-[200px] truncate" title={t.contract?.name || t.contract_no}>
+          <td 
+            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 text-slate-700 text-sm font-normal max-w-[180px] truncate" 
+            style={{ left: "198px", minWidth: "180px", width: "180px" }} 
+            title={t.contract?.name || t.contract_no}
+          >
             <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline">
               {t.contract?.name || t.contract_no || "—"}
             </Link>
@@ -749,42 +755,60 @@ export default function MaintenancePage() {
           </div>
 
           <div className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
-            <div className={`relative w-full ${
-              timeScale === "month" ? "min-w-[1000px]" : 
-              timeScale === "week" ? "min-w-[2200px]" : 
-              "min-w-[1500px]"
-            }`}>
+            <div className={`relative ${
+              timeScale === "month" ? "min-w-[1200px]" : 
+              timeScale === "week" ? "min-w-[2400px]" : 
+              "min-w-[11500px]"
+            } w-full`}>
               <table className="w-full text-sm border-collapse">
                 <thead>
                   {/* Year/Scale header */}
                   <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200">
-                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left">
-                      {timeScale === "day" ? "Tháng 07/2026" : "Năm 2026"}
+                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left sticky left-0 bg-slate-100 z-30" style={{ left: 0 }}>
+                      Năm 2026
                     </th>
-                    <th 
-                      colSpan={timeScale === "month" ? 12 : timeScale === "week" ? 52 : 31} 
-                      className="px-4 py-2 text-center text-sm font-semibold"
-                    >
-                      Lịch trình bảo trì định kỳ ({timeScale === "day" ? "Theo Ngày" : timeScale === "week" ? "Theo Tuần" : "Theo Tháng"})
-                    </th>
+                    {timeScale === "month" && (
+                      <th colSpan={12} className="px-4 py-2 text-center text-sm font-semibold">
+                        Lịch trình bảo trì định kỳ (Theo Tháng)
+                      </th>
+                    )}
+                    {timeScale === "week" && (
+                      <th colSpan={52} className="px-4 py-2 text-center text-sm font-semibold">
+                        Lịch trình bảo trì định kỳ (Theo Tuần)
+                      </th>
+                    )}
+                    {timeScale === "day" && [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].map((days, idx) => (
+                      <th 
+                        key={idx} 
+                        colSpan={days} 
+                        className="px-2 py-2 border-r border-slate-200 text-center text-xs font-semibold"
+                      >
+                        {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][idx]}
+                      </th>
+                    ))}
                   </tr>
                   {/* Column names */}
                   <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
-                    <th className="px-2 py-3 border-r border-slate-200 text-center" style={{ width: "3%" }}>No</th>
-                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "16%" }}>Khách hàng</th>
-                    <th className="px-4 py-3 border-r border-slate-200" style={{ width: "16%" }}>Dự án / Hợp đồng</th>
+                    <th className="px-2 py-3 border-r border-slate-200 text-center sticky left-0 bg-slate-50 z-30" style={{ left: 0, minWidth: "48px", width: "48px" }}>No</th>
+                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30" style={{ left: "48px", minWidth: "150px", width: "150px" }}>Khách hàng</th>
+                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30" style={{ left: "198px", minWidth: "180px", width: "180px" }}>Dự án / Hợp đồng</th>
+                    
                     {timeScale === "month" && ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
                       <th key={idx} className="px-2 py-3 text-center border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 12}%` }}>
                         {m}
                       </th>
                     ))}
+                    
                     {timeScale === "week" && Array.from({ length: 52 }, (_, i) => `W${i + 1}`).map((w, idx) => (
                       <th key={idx} className="px-1 py-3 text-center text-[9px] border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 52}%` }}>
                         {w}
                       </th>
                     ))}
-                    {timeScale === "day" && Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d, idx) => (
-                      <th key={idx} className="px-1 py-3 text-center text-[10px] border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 31}%` }}>
+                    
+                    {timeScale === "day" && [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].flatMap((days) => 
+                      Array.from({ length: days }, (_, dIdx) => `${dIdx + 1}`)
+                    ).map((d, idx) => (
+                      <th key={idx} className="px-1 py-3 text-center text-[9px] border-r border-slate-200 last:border-r-0" style={{ minWidth: "30px" }}>
                         {d}
                       </th>
                     ))}
@@ -793,7 +817,10 @@ export default function MaintenancePage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={15} className="py-14 text-center text-slate-400">
+                      <td 
+                        colSpan={timeScale === "month" ? 15 : timeScale === "week" ? 55 : 368} 
+                        className="py-14 text-center text-slate-400"
+                      >
                         Chưa có kế hoạch bảo trì nào phù hợp bộ lọc
                       </td>
                     </tr>
@@ -807,7 +834,7 @@ export default function MaintenancePage() {
               {filtered.length > 0 && (
                 <div 
                   className="absolute top-0 bottom-0 w-[3px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
-                  style={{ left: `${todayLinePercent}%` }}
+                  style={{ left: `calc(378px + (100% - 378px) * ${todayLineFraction})` }}
                 >
                   <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
                     Hiện tại
