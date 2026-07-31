@@ -331,19 +331,35 @@ export default function MaintenancePage() {
 
   useEffect(() => {
     if (activeTab === "timeline" && scrollContainerRef.current) {
-      const timer = setTimeout(() => {
+      let attempts = 0;
+      const scroll = () => {
         const container = scrollContainerRef.current;
-        if (container) {
-          const scrollWidth = container.scrollWidth;
-          const containerWidth = container.clientWidth;
-          const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
-          const targetScrollLeft = lineLeft - containerWidth / 2;
-          container.scrollTo({
-            left: Math.max(0, targetScrollLeft),
-            behavior: "smooth"
-          });
+        if (!container) return;
+        
+        const scrollWidth = container.scrollWidth;
+        const containerWidth = container.clientWidth;
+        
+        // Wait for rendering to expand scrollWidth for wider timelines
+        if (timeScale === "day" && scrollWidth < 10000 && attempts < 15) {
+          attempts++;
+          setTimeout(scroll, 100);
+          return;
         }
-      }, 200);
+        if (timeScale === "week" && scrollWidth < 2000 && attempts < 15) {
+          attempts++;
+          setTimeout(scroll, 100);
+          return;
+        }
+
+        const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
+        const targetScrollLeft = lineLeft - containerWidth / 2;
+        container.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: "smooth"
+        });
+      };
+
+      const timer = setTimeout(scroll, 150);
       return () => clearTimeout(timer);
     }
   }, [activeTab, timeScale, tickets, todayLineFraction]);
