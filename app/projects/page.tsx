@@ -30,7 +30,9 @@ import {
   AlertTriangle,
   FolderOpen,
   TrendingUp,
-  Clock
+  Clock,
+  LayoutGrid,
+  List
 } from "lucide-react";
 
 export default function ProjectsPage() {
@@ -41,6 +43,7 @@ export default function ProjectsPage() {
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -282,14 +285,41 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Right: Add Button */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition shadow-sm hover:shadow-md cursor-pointer shrink-0"
-        >
-          <Plus size={16} />
-          <span>Thêm Dự Án</span>
-        </button>
+        {/* Right: View Mode & Add Button */}
+        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+          <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 gap-0.5 shrink-0">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === "grid"
+                  ? "bg-white text-slate-800 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+              }`}
+            >
+              <LayoutGrid size={14} />
+              <span>Thẻ</span>
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === "table"
+                  ? "bg-white text-slate-800 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+              }`}
+            >
+              <List size={14} />
+              <span>Bảng</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition shadow-sm hover:shadow-md cursor-pointer shrink-0"
+          >
+            <Plus size={16} />
+            <span>Thêm Dự Án</span>
+          </button>
+        </div>
       </div>
 
       {/* Projects Grid */}
@@ -299,7 +329,7 @@ export default function ProjectsPage() {
           <h3 className="text-lg font-bold text-slate-800">Không tìm thấy dự án</h3>
           <p className="text-sm text-slate-500 mt-1">Thử thay đổi từ khóa tìm kiếm hoặc lọc trạng thái khác.</p>
         </div>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((project) => (
             <Link 
@@ -397,6 +427,90 @@ export default function ProjectsPage() {
               </div>
             </Link>
           ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse text-left">
+              <thead>
+                <tr className="text-xs text-slate-500 font-semibold bg-slate-50 border-b border-slate-200">
+                  <th className="px-6 py-4">Mã</th>
+                  <th className="px-6 py-4">Tên dự án</th>
+                  <th className="px-6 py-4">Khách hàng</th>
+                  <th className="px-6 py-4">Chủ nhiệm (PM)</th>
+                  <th className="px-6 py-4">Thời gian</th>
+                  <th className="px-6 py-4">Ngân sách</th>
+                  <th className="px-6 py-4 w-40">Tiến độ</th>
+                  <th className="px-6 py-4 text-center">Trạng thái</th>
+                  <th className="px-6 py-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.map((project) => (
+                  <tr 
+                    key={project.id} 
+                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition duration-150 group"
+                  >
+                    <td className="px-6 py-4 font-mono font-bold text-slate-500 text-xs">
+                      {project.code}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Link 
+                        href={`/projects/${project.id}`}
+                        className="font-bold text-slate-800 hover:text-blue-600 transition"
+                      >
+                        {project.name}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-600">
+                      {project.customer || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">
+                      {project.manager || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">
+                      {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 font-semibold">
+                      {project.budget ? formatCurrency(project.budget) : "—"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-blue-600 h-full rounded-full transition-all duration-300" 
+                            style={{ width: `${project.progress}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold text-slate-600 w-8 text-right shrink-0">{project.progress}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                      <span className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(project.status)}`}>
+                        {getStatusLabel(project.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={(e) => handleDelete(project.id, e)}
+                          className="p-1.5 hover:text-red-500 hover:bg-red-50 rounded-lg transition duration-150 cursor-pointer"
+                          title="Xóa dự án"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <Link href={`/projects/${project.id}`}>
+                          <div className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 group-hover:text-blue-500 hover:text-blue-600 transition cursor-pointer">
+                            <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
