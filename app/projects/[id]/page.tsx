@@ -390,8 +390,8 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Project Banner Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm px-5 py-4 mb-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs font-mono font-normal text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
@@ -402,18 +402,17 @@ export default function ProjectDetailPage() {
                 {project.customer}
               </span>
             </div>
-            <h1 className="text-[18px] font-normal text-slate-900 mt-2">{project.name}</h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">{project.description}</p>
+            <h1 className="text-lg font-bold text-slate-900 mt-1.5">{project.name}</h1>
           </div>
 
           {/* Right Status Controller */}
           <div className="flex items-center gap-3 shrink-0">
-            <span className="text-sm text-slate-500 font-medium">Trạng thái:</span>
+            <span className="text-xs text-slate-500 font-semibold">Trạng thái:</span>
             <div className="relative">
               <select
                 value={project.status}
                 onChange={(e) => handleStatusChange(e.target.value as Project["status"])}
-                className={`text-xs font-bold px-3 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none pr-8 cursor-pointer ${getStatusBadgeClass(project.status)}`}
+                className={`text-xs font-bold px-3 py-1.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none pr-8 cursor-pointer ${getStatusBadgeClass(project.status)}`}
               >
                 <option value="Planning">Lập kế hoạch</option>
                 <option value="Active">Đang triển khai</option>
@@ -429,10 +428,10 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Project Meta Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4">
           <div className="space-y-1">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Chủ nhiệm (PM)</span>
-            <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Chủ nhiệm (PM)</span>
+            <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
               <div className="w-5 h-5 rounded-full bg-slate-200 text-[10px] font-bold flex items-center justify-center text-slate-600">
                 {project.manager ? project.manager.charAt(0) : "U"}
               </div>
@@ -441,28 +440,20 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="space-y-1">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Thời gian</span>
-            <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Thời gian</span>
+            <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
               <Calendar size={14} className="text-slate-400" />
               <span>{formatDate(project.startDate)} - {formatDate(project.endDate)}</span>
             </span>
           </div>
 
-          <div className="space-y-1">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Ngân sách</span>
-            <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
-              <DollarSign size={14} className="text-slate-400" />
-              <span>{formatCurrency(project.budget)}</span>
-            </span>
-          </div>
-
           {/* Progress Section */}
           <div className="space-y-1">
-            <div className="flex justify-between items-center text-xs text-slate-400 font-semibold uppercase tracking-wider">
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               <span>Tiến độ tổng thể</span>
               <span className="text-blue-600 font-bold">{project.progress}%</span>
             </div>
-            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mt-1">
+            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-1.5">
               <div 
                 className="bg-blue-600 h-full rounded-full transition-all duration-500" 
                 style={{ width: `${project.progress}%` }}
