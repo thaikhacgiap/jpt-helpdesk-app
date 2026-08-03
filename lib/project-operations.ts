@@ -7,6 +7,12 @@ export interface ProjectTask {
   endDate: string;
   status: 'Todo' | 'In Progress' | 'Completed';
   progress: number; // 0 - 100
+  // New fields for hierarchical excel-like plan
+  taskIndex?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
+  notes?: string;
+  isHeader?: boolean;
 }
 
 export interface ProjectMilestone {
@@ -37,6 +43,12 @@ export interface ProjectDiaryEntry {
   category: 'Update' | 'Issue' | 'Resolve' | 'Comment' | 'Milestone';
 }
 
+export interface ProjectSowItem {
+  item: string;
+  deliverable: string;
+  status: string;
+}
+
 export interface Project {
   id: string;
   code: string;
@@ -53,6 +65,8 @@ export interface Project {
   timeline: ProjectMilestone[];
   documents: ProjectDocument[];
   diary: ProjectDiaryEntry[];
+  sow?: ProjectSowItem[];
+  notes?: string[];
 }
 
 const DEFAULT_PROJECTS: Project[] = [
@@ -70,94 +84,172 @@ const DEFAULT_PROJECTS: Project[] = [
     progress: 45,
     plan: [
       {
-        id: "task-1-1",
-        title: "Khảo sát và thu thập yêu cầu người dùng cuối",
+        id: "task-1-0",
+        title: "Chuẩn bị",
         phase: "Phase 1: Chuẩn bị",
-        assignee: "Jane S.",
-        startDate: "2026-06-01",
-        endDate: "2026-06-10",
+        assignee: "Hiếu, Dũng",
+        startDate: "2026-07-05",
+        endDate: "2026-07-05",
+        actualStartDate: "2026-07-07",
+        actualEndDate: "2026-07-09",
+        status: "In Progress",
+        progress: 84,
+        taskIndex: "1",
+        isHeader: true
+      },
+      {
+        id: "task-1-1",
+        title: "Khảo sát yêu cầu triển khai hệ thống AVDF",
+        phase: "Phase 1: Chuẩn bị",
+        assignee: "Hiếu",
+        startDate: "2026-07-05",
+        endDate: "2026-07-08",
+        actualStartDate: "2026-07-08",
+        actualEndDate: "2026-07-10",
         status: "Completed",
-        progress: 100
+        progress: 100,
+        taskIndex: "1.1",
+        isHeader: false
       },
       {
         id: "task-1-2",
-        title: "Thiết kế kiến trúc cơ sở dữ liệu chi tiết",
+        title: "Khảo sát hiện trạng CSDL và cơ chế sao lưu",
         phase: "Phase 1: Chuẩn bị",
-        assignee: "Mike R.",
-        startDate: "2026-06-11",
-        endDate: "2026-06-20",
+        assignee: "Hiếu",
+        startDate: "2026-07-05",
+        endDate: "2026-07-08",
+        actualStartDate: "2026-07-09",
+        actualEndDate: "2026-07-11",
         status: "Completed",
-        progress: 100
+        progress: 100,
+        taskIndex: "1.2",
+        isHeader: false
       },
       {
         id: "task-1-3",
-        title: "Thiết kế giao diện UI/UX (Figma mockup)",
+        title: "Khảo sát nguồn truy cập CSDL và các dữ liệu cần thu thập, bảo vệ",
         phase: "Phase 1: Chuẩn bị",
-        assignee: "Sarah L.",
-        startDate: "2026-06-15",
-        endDate: "2026-06-25",
+        assignee: "Hiếu",
+        startDate: "2026-07-06",
+        endDate: "2026-07-10",
+        actualStartDate: "2026-07-10",
+        actualEndDate: "2026-07-12",
+        status: "In Progress",
+        progress: 90,
+        taskIndex: "1.3",
+        isHeader: false
+      },
+      {
+        id: "task-1-4",
+        title: "Khảo sát yêu cầu triển khai các tính năng tường lửa CSDL, kiểm toán log",
+        phase: "Phase 1: Chuẩn bị",
+        assignee: "Hiếu",
+        startDate: "2026-07-07",
+        endDate: "2026-07-11",
+        actualStartDate: "2026-07-11",
+        actualEndDate: "2026-07-13",
         status: "Completed",
-        progress: 100
+        progress: 100,
+        taskIndex: "1.4",
+        isHeader: false
+      },
+      {
+        id: "task-1-5",
+        title: "Khảo sát hệ thống mạng",
+        phase: "Phase 1: Chuẩn bị",
+        assignee: "Hiếu",
+        startDate: "2026-07-08",
+        endDate: "2026-07-12",
+        actualStartDate: "2026-07-12",
+        actualEndDate: "2026-07-14",
+        status: "In Progress",
+        progress: 50,
+        taskIndex: "1.5",
+        isHeader: false
+      },
+      {
+        id: "task-1-6",
+        title: "Khảo sát hạ tầng triển khai",
+        phase: "Phase 1: Chuẩn bị",
+        assignee: "Dũng",
+        startDate: "2026-07-09",
+        endDate: "2026-07-13",
+        actualStartDate: "2026-07-13",
+        actualEndDate: "2026-07-15",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.6",
+        isHeader: false
+      },
+      {
+        id: "task-1-7",
+        title: "Đề xuất và thống nhất kế hoạch triển khai",
+        phase: "Phase 1: Chuẩn bị",
+        assignee: "Dũng",
+        startDate: "2026-07-10",
+        endDate: "2026-07-14",
+        actualStartDate: "2026-07-14",
+        actualEndDate: "2026-07-16",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.7",
+        isHeader: false
+      },
+      {
+        id: "task-2-0",
+        title: "Triển khai cài đặt Oracle AVDF",
+        phase: "Phase 2: Triển khai",
+        assignee: "Hiếu, Dũng",
+        startDate: "2026-07-13",
+        endDate: "2026-07-13",
+        actualStartDate: "2026-07-15",
+        actualEndDate: "2026-07-17",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2",
+        isHeader: true
       },
       {
         id: "task-2-1",
-        title: "Lập trình giao diện Frontend (Next.js & Tailwind)",
+        title: "Cài đặt máy chủ Audit Vault Server",
         phase: "Phase 2: Triển khai",
-        assignee: "John D.",
-        startDate: "2026-06-26",
-        endDate: "2026-07-20",
-        status: "In Progress",
-        progress: 70
+        assignee: "Dũng",
+        startDate: "2026-07-13",
+        endDate: "2026-07-16",
+        actualStartDate: "2026-07-15",
+        actualEndDate: "2026-07-17",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.1",
+        isHeader: false
       },
       {
         id: "task-2-2",
-        title: "Tích hợp Supabase & Cấu hình RLS Policies",
+        title: "Cài đặt máy chủ Database Firewall Server",
         phase: "Phase 2: Triển khai",
-        assignee: "Mike R.",
-        startDate: "2026-07-01",
-        endDate: "2026-07-15",
-        status: "In Progress",
-        progress: 40
+        assignee: "Dũng",
+        startDate: "2026-07-13",
+        endDate: "2026-07-16",
+        actualStartDate: "2026-07-15",
+        actualEndDate: "2026-07-17",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.2",
+        isHeader: false
       },
       {
         id: "task-2-3",
-        title: "Phát triển Module Triển khai Dự án (5 Tab)",
+        title: "Cấu hình tích hợp máy chủ Database Firewall Server vào máy chủ quản trị tập trung Audit Vault Server",
         phase: "Phase 2: Triển khai",
-        assignee: "John D.",
-        startDate: "2026-07-05",
-        endDate: "2026-07-25",
-        status: "In Progress",
-        progress: 30
-      },
-      {
-        id: "task-2-4",
-        title: "Xây dựng hệ thống SLA & Thông báo email tự động",
-        phase: "Phase 2: Triển khai",
-        assignee: "Tom H.",
-        startDate: "2026-07-20",
-        endDate: "2026-08-10",
-        status: "Todo",
-        progress: 0
-      },
-      {
-        id: "task-3-1",
-        title: "Viết tài liệu hướng dẫn và đào tạo nội bộ",
-        phase: "Phase 3: Bàn giao",
-        assignee: "Jane S.",
-        startDate: "2026-08-11",
-        endDate: "2026-08-20",
-        status: "Todo",
-        progress: 0
-      },
-      {
-        id: "task-3-2",
-        title: "Kiểm thử UAT toàn hệ thống & Go-live",
-        phase: "Phase 3: Bàn giao",
-        assignee: "Emily R.",
-        startDate: "2026-08-21",
-        endDate: "2026-08-30",
-        status: "Todo",
-        progress: 0
+        assignee: "Dũng",
+        startDate: "2026-07-17",
+        endDate: "2026-07-20",
+        actualStartDate: "2026-07-20",
+        actualEndDate: "2026-07-20",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.3",
+        isHeader: false
       }
     ],
     timeline: [
@@ -693,4 +785,15 @@ export function addDiaryEntry(projectId: string, entry: Omit<ProjectDiaryEntry, 
   projects[index].diary.unshift(newEntry); // new entries at top
   setStoredProjects(projects);
   return newEntry;
+}
+
+export function updateProjectPlan(projectId: string, plan: ProjectTask[]): Project | undefined {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  projects[index].plan = plan;
+  recalculateProgress(projects[index]);
+  setStoredProjects(projects);
+  return projects[index];
 }

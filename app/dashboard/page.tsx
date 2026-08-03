@@ -154,15 +154,6 @@ export default function DashboardPage() {
       sub: "Dự án đang triển khai",
     },
     {
-      label: "Tổng ngân sách dự án",
-      value: totalBudgetSynth > 1000000 ? `${Math.round(totalBudgetSynth / 1000000)} Tr.đ` : formatVND(totalBudgetSynth),
-      icon: DollarSign,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
-      border: "border-emerald-100",
-      sub: "Ngân sách triển khai",
-    },
-    {
       label: "Tiến độ công việc chung",
       value: `${overallSynthProgress}%`,
       icon: Percent,
@@ -459,9 +450,9 @@ export default function DashboardPage() {
     name, value, color: projStatusColors[name] || "#6B7280"
   }));
 
-  const projBudgetData = filteredProjects.slice(0, 5).map(p => ({
+  const projProgressData = filteredProjects.slice(0, 5).map(p => ({
     name: p.name.length > 15 ? p.name.substring(0, 15) + "..." : p.name,
-    "Ngân sách (Tr.đ)": Math.round(p.budget / 1000000)
+    "Tiến độ (%)": p.progress || 0
   }));
 
 
@@ -1041,14 +1032,12 @@ export default function DashboardPage() {
 
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-4 flex flex-col gap-3 shadow-xs">
                   <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                    <DollarSign size={20} />
+                    <CheckCircle2 size={20} />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 font-bold">Tổng ngân sách dự toán</p>
-                    <p className="text-lg font-extrabold text-emerald-600 mt-1 truncate" title={formatVND(totalBudget)}>
-                      {formatVND(totalBudget)}
-                    </p>
-                    <p className="text-[10px] text-slate-450 mt-0.5">tất cả dự án triển khai</p>
+                    <p className="text-xs text-slate-500 font-bold">Dự án đã hoàn thành</p>
+                    <p className="text-2xl font-bold text-emerald-600 mt-0.5">{completedProjects}</p>
+                    <p className="text-[10px] text-slate-450 mt-0.5">đã nghiệm thu & bàn giao</p>
                   </div>
                 </div>
               </div>
@@ -1084,26 +1073,26 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Project Budget Bar Chart */}
+                {/* Project Progress Bar Chart */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Top dự án có ngân sách lớn nhất (Triệu đồng)</h3>
-                  {projBudgetData.length > 0 ? (
+                  <h3 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wide">Top dự án có tiến độ cao nhất (%)</h3>
+                  {projProgressData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart
-                        data={projBudgetData}
+                        data={projProgressData}
                         margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                         <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip />
-                        <Bar dataKey="Ngân sách (Tr.đ)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Tiến độ (%)" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-52 flex flex-col items-center justify-center text-slate-350 gap-2">
                       <TrendingUp size={32} />
-                      <p className="text-xs font-semibold">Chưa có dữ liệu ngân sách dự án</p>
+                      <p className="text-xs font-semibold">Chưa có dữ liệu tiến độ dự án</p>
                     </div>
                   )}
                 </div>
@@ -1128,7 +1117,6 @@ export default function DashboardPage() {
                         <th className="px-4 py-3.5">Tên dự án</th>
                         <th className="px-4 py-3.5">Khách hàng</th>
                         <th className="px-4 py-3.5">PM quản lý</th>
-                        <th className="px-4 py-3.5">Ngân sách</th>
                         <th className="px-4 py-3.5 text-center">Tiến độ hoàn thành</th>
                         <th className="px-6 py-3.5">Trạng thái</th>
                       </tr>
@@ -1136,7 +1124,7 @@ export default function DashboardPage() {
                     <tbody className="divide-y divide-slate-100">
                       {filteredProjects.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                          <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
                             <FolderOpen size={32} className="mx-auto mb-2 opacity-30" />
                             <p className="text-xs">Chưa có dự án nào được tạo lập trong kỳ lọc</p>
                           </td>
@@ -1155,9 +1143,6 @@ export default function DashboardPage() {
                             </td>
                             <td className="px-4 py-4 text-slate-650 font-medium text-xs">
                               {p.manager || "—"}
-                            </td>
-                            <td className="px-4 py-4 font-bold text-xs text-slate-800">
-                              {formatVND(p.budget)}
                             </td>
                             <td className="px-4 py-4 min-w-[150px]">
                               <div className="flex items-center gap-2 justify-center">

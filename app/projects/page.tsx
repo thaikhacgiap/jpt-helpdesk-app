@@ -20,7 +20,8 @@ import {
   Building2, 
   Calendar, 
   DollarSign, 
-  CheckSquare, 
+  CheckSquare,
+  CheckCircle2, 
   FileText, 
   Flag, 
   MessageSquare, 
@@ -240,15 +241,15 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Card 4: Total Budget */}
+        {/* Card 4: Completed Projects */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between hover:shadow-md transition duration-200">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng ngân sách</p>
-            <h3 className="text-xl font-bold text-slate-800 mt-1.5 truncate max-w-[170px]">{formatCurrency(stats.totalBudget)}</h3>
-            <p className="text-xs text-slate-400 mt-1">Tổng giá trị các dự án</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dự án Hoàn thành</p>
+            <h3 className="text-xl font-bold text-slate-800 mt-1.5">{stats.completed}</h3>
+            <p className="text-xs text-slate-400 mt-1">Các dự án đã nghiệm thu</p>
           </div>
-          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
-            <DollarSign size={22} />
+          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+            <CheckCircle2 size={22} />
           </div>
         </div>
       </div>
@@ -439,7 +440,6 @@ export default function ProjectsPage() {
                   <th className="px-6 py-4">Khách hàng</th>
                   <th className="px-6 py-4">Chủ nhiệm (PM)</th>
                   <th className="px-6 py-4">Thời gian</th>
-                  <th className="px-6 py-4">Ngân sách</th>
                   <th className="px-6 py-4 w-40">Tiến độ</th>
                   <th className="px-6 py-4 text-center">Trạng thái</th>
                   <th className="px-6 py-4 text-right">Thao tác</th>
@@ -465,14 +465,11 @@ export default function ProjectsPage() {
                     <td className="px-6 py-4 font-medium text-slate-600">
                       {project.customer || "—"}
                     </td>
-                    <td className="px-6 py-4 text-slate-600">
+                    <td className="px-6 py-4 text-slate-650 mt-0.5">
                       {project.manager || "—"}
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">
                       {formatDate(project.startDate)} - {formatDate(project.endDate)}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 font-semibold">
-                      {project.budget ? formatCurrency(project.budget) : "—"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -656,39 +653,23 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 4: Budget & Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Giá trị / Ngân sách dự án (VND)
-                  </label>
-                  <input
-                    type="number"
-                    name="budget"
-                    value={formData.budget || ""}
-                    onChange={handleInputChange}
-                    placeholder="VD: 500000000"
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Trạng thái khởi tạo
-                  </label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                  >
-                    <option value="Planning">Lập kế hoạch (Planning)</option>
-                    <option value="Active">Đang triển khai (Active)</option>
-                    <option value="On Hold">Tạm hoãn (On Hold)</option>
-                    <option value="Completed">Hoàn thành (Completed)</option>
-                    <option value="Delayed">Trễ hạn (Delayed)</option>
-                  </select>
-                </div>
+              {/* Row 4: Status */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                  Trạng thái khởi tạo
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                >
+                  <option value="Planning">Lập kế hoạch (Planning)</option>
+                  <option value="Active">Đang triển khai (Active)</option>
+                  <option value="On Hold">Tạm hoãn (On Hold)</option>
+                  <option value="Completed">Hoàn thành (Completed)</option>
+                  <option value="Delayed">Trễ hạn (Delayed)</option>
+                </select>
               </div>
 
               {/* Description */}
