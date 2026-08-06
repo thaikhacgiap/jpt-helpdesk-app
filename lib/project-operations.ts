@@ -74,7 +74,7 @@ const DEFAULT_PROJECTS: Project[] = [
     id: "proj-1",
     code: "PROJ-2026-001",
     name: "Triển khai Hệ thống IT Helpdesk JPT v4.0",
-    customer: "Tập đoàn ACME Corp Việt Nam",
+    customer: "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)",
     manager: "John D.",
     startDate: "2026-06-01",
     endDate: "2026-08-30",
@@ -542,6 +542,78 @@ const DEFAULT_PROJECTS: Project[] = [
         category: "Issue"
       }
     ]
+  },
+  {
+    id: "proj-4",
+    code: "PROJ-2026-004",
+    name: "Nâng cấp Hạ tầng & Bảo mật Ngân hàng Số VPBank",
+    customer: "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)",
+    manager: "Mike R.",
+    startDate: "2026-07-01",
+    endDate: "2026-09-30",
+    budget: 620000000,
+    status: "Active",
+    description: "Nâng cấp hệ thống bảo mật SSL/TLS 1.3 và triển khai giám sát an ninh mạng định kỳ cho ứng dụng ngân hàng số VPBank.",
+    progress: 75,
+    plan: [
+      {
+        id: "task-4-1",
+        title: "Phase 1: Khảo sát & Đánh giá an ninh",
+        phase: "Phase 1: Khảo sát",
+        assignee: "Mike R.",
+        startDate: "2026-07-01",
+        endDate: "2026-07-15",
+        actualStartDate: "2026-07-01",
+        actualEndDate: "2026-07-15",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1",
+        isHeader: true
+      },
+      {
+        id: "task-4-1-1",
+        title: "Đánh giá lỗ hổng bảo mật ứng dụng",
+        phase: "Phase 1: Khảo sát",
+        assignee: "Mike R.",
+        startDate: "2026-07-01",
+        endDate: "2026-07-15",
+        actualStartDate: "2026-07-01",
+        actualEndDate: "2026-07-15",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.1",
+        isHeader: false
+      },
+      {
+        id: "task-4-2",
+        title: "Phase 2: Triển khai Cấu hình & Nâng cấp",
+        phase: "Phase 2: Triển khai",
+        assignee: "Mike R., Tom H.",
+        startDate: "2026-07-16",
+        endDate: "2026-08-25",
+        actualStartDate: "2026-07-16",
+        status: "In Progress",
+        progress: 60,
+        taskIndex: "2",
+        isHeader: true
+      },
+      {
+        id: "task-4-2-1",
+        title: "Cấu hình chứng chỉ SSL & Tối ưu hóa WAF Firewall",
+        phase: "Phase 2: Triển khai",
+        assignee: "Tom H.",
+        startDate: "2026-07-16",
+        endDate: "2026-08-25",
+        actualStartDate: "2026-07-16",
+        status: "In Progress",
+        progress: 60,
+        taskIndex: "2.1",
+        isHeader: false
+      }
+    ],
+    timeline: [],
+    documents: [],
+    diary: []
   }
 ];
 
@@ -558,7 +630,22 @@ function getStoredProjects(): Project[] {
     return DEFAULT_PROJECTS;
   }
   try {
-    return JSON.parse(stored);
+    const list: Project[] = JSON.parse(stored);
+    let updated = false;
+    list.forEach(p => {
+      if (p.id === "proj-1" && p.customer !== "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)") {
+        p.customer = "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)";
+        updated = true;
+      }
+    });
+    if (!list.some(p => p.id === "proj-4")) {
+      const proj4 = DEFAULT_PROJECTS.find(p => p.id === "proj-4");
+      if (proj4) { list.push(proj4); updated = true; }
+    }
+    if (updated) {
+      localStorage.setItem('jpt_projects', JSON.stringify(list));
+    }
+    return list;
   } catch (e) {
     console.error("Error parsing stored projects", e);
     return DEFAULT_PROJECTS;

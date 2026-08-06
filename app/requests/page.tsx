@@ -610,11 +610,11 @@ export default function RequestsPage() {
                             onChange={(e) => handleCustomerStatusChange(t.id, e.target.value)}
                             className={`text-sm font-normal px-2 py-0.5 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(t.tt_status)}`}
                           >
-                            <option value="New">Mới tạo</option>
+                            <option value="New">Chờ tiếp nhận</option>
                             <option value="In Progress">Đang xử lý</option>
-                            <option value="Resolved">Hoàn thành</option>
-                            <option value="On Hold">Chờ phản hồi</option>
-                            <option value="Closed">Đã đóng</option>
+                            <option value="On Hold">Tạm Dừng</option>
+                            <option value="Rejected">Hủy Bỏ</option>
+                            <option value="Resolved">Hoàn Thành</option>
                           </select>
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[7px] text-slate-500 pointer-events-none">▼</span>
                         </div>

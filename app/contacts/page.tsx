@@ -9,7 +9,15 @@ import {
   Plus, Search, Download, Upload,
   UsersRound, Building2, Phone, Mail,
 } from "lucide-react";
+import { Users, UserCheck, FileText } from "lucide-react";
 import { fetchContacts, Contact } from "@/lib/contact-operations";
+
+const INFO_NAV_TABS = [
+  { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/contacts", label: "Liên hệ", icon: UsersRound },
+  { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
+  { href: "/contracts", label: "Hợp đồng", icon: FileText }
+];
 
 export default function ContactsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,8 +68,9 @@ export default function ContactsPage() {
   return (
     <MainLayout>
       <Header
-        title="Quản lý Liên Hệ"
+        title="Quản lý Thông Tin"
         description="Danh sách đầu mối liên hệ tại các khách hàng"
+        navTabs={INFO_NAV_TABS}
       />
 
       {/* Stats */}

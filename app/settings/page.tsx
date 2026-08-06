@@ -23,6 +23,13 @@ import {
   Info,
   Edit2
 } from "lucide-react";
+import { User, Server } from "lucide-react";
+
+const SYSTEM_NAV_TABS = [
+  { href: "/users", label: "Người dùng", icon: User },
+  { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
+  { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
+];
 
 const SYSTEM_MENUS = [
   { path: "/dashboard", label: "Dashboard (Bảng điều khiển)" },
@@ -238,7 +245,11 @@ export default function SettingsPage() {
 
   return (
     <MainLayout>
-      <Header title="Phân Quyền Nhóm" description="Quản lý các nhóm người dùng, thiết lập danh mục menu được phép truy cập của từng nhóm." />
+      <Header 
+        title="Quản Lý Hệ Thống" 
+        description="Quản lý các nhóm người dùng, thiết lập danh mục menu được phép truy cập của từng nhóm." 
+        navTabs={SYSTEM_NAV_TABS}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         

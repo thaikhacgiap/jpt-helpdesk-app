@@ -20,6 +20,7 @@ import {
   UserCheck,
   Inbox,
   Server,
+  Bell,
 } from "lucide-react";
 
 interface MenuItemProps {
@@ -59,9 +60,9 @@ export default function Sidebar() {
   }, []);
 
   const menuItemClass = ({ isActive }: MenuItemProps) =>
-    `flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium relative group ${
+    `flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium whitespace-nowrap overflow-hidden relative group ${
       isActive
-        ? "bg-teal-500/20 text-teal-400"
+        ? "bg-teal-500/20 text-teal-400 font-semibold"
         : "text-gray-300 hover:text-white hover:bg-white/5"
     }`;
 
@@ -76,49 +77,52 @@ export default function Sidebar() {
   };
 
   // Section visibility checks
-  const showServiceSection = showLink("/dashboard") || showLink("/requests") || showLink("/tickets") || showLink("/maintenance") || showLink("/projects");
-  const showInfoSection = showLink("/customers") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts");
-  const showSystemSection = showLink("/sla") || showLink("/users") || showLink("/settings") || showLink("/system");
+  const showServiceSection = showLink("/requests") || showLink("/tickets") || showLink("/maintenance") || showLink("/projects") || showLink("/notifications");
+  const showInfoSection = showLink("/customers") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts") || showLink("/sla");
+  const showSystemSection = showLink("/users") || showLink("/settings") || showLink("/system");
 
   return (
-    <aside className="w-[205px] min-h-screen bg-slate-900 border-r border-slate-700 flex flex-col justify-between px-4 py-6 shrink-0">
+    <aside className="w-[230px] min-h-screen bg-slate-900 border-r border-slate-700/80 flex flex-col justify-between px-3.5 py-6 shrink-0">
       <div>
         {/* LOGO */}
-        <div className="mb-10">
+        <div className="mb-6 px-1">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-6 h-6 bg-teal-500 rounded-md flex items-center justify-center">
+            <div className="w-6 h-6 bg-teal-500 rounded-md flex items-center justify-center shadow-xs">
               <span className="text-white text-xs font-bold">⚙</span>
             </div>
-            <h1 className="text-lg font-bold text-white">IT Helpdesk</h1>
+            <h1 className="text-lg font-extrabold text-white tracking-tight">IT Helpdesk</h1>
           </div>
-          <p className="text-xs text-gray-400 ml-8">v4.0</p>
+          <p className="text-xs text-gray-400 ml-8 font-mono">v4.0</p>
         </div>
 
-        {/* DỊCH VỤ */}
+        {/* DASHBOARD (STANDALONE AT TOP OUTSIDE DỊCH VỤ) */}
+        {showLink("/dashboard") && (
+          <div className="mb-5">
+            <Link
+              href="/dashboard"
+              className={menuItemClass({ isActive: pathname === "/dashboard" })}
+            >
+              <LayoutDashboard size={18} className="shrink-0" />
+              <span className="truncate">Dashboard</span>
+            </Link>
+          </div>
+        )}
+
+        {/* SECTION 1: DỊCH VỤ */}
         {showServiceSection && (
           <div className="mb-6">
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3 px-2">
+            <p className="text-[11px] uppercase tracking-widest text-cyan-400 font-extrabold mb-2.5 px-2">
               DỊCH VỤ
             </p>
 
             <div className="space-y-1">
-              {showLink("/dashboard") && (
-                <Link
-                  href="/dashboard"
-                  className={menuItemClass({ isActive: pathname === "/dashboard" })}
-                >
-                  <LayoutDashboard size={18} />
-                  <span>Dashboard</span>
-                </Link>
-              )}
-
               {showLink("/requests") && (
                 <Link
                   href="/requests"
                   className={menuItemClass({ isActive: pathname.startsWith("/requests") })}
                 >
-                  <Inbox size={18} />
-                  <span>Yêu cầu</span>
+                  <Inbox size={18} className="shrink-0" />
+                  <span className="truncate">Yêu cầu</span>
                 </Link>
               )}
 
@@ -130,12 +134,10 @@ export default function Sidebar() {
                       isActive: pathname.startsWith("/tickets"),
                     })}
                   >
-                    <span className="relative">
-                      <AlertCircle size={18} />
-                    </span>
-                    <span>Quản Lý Ticket</span>
+                    <AlertCircle size={18} className="shrink-0" />
+                    <span className="truncate">Quản Lý Ticket</span>
                     {ongoingCount > 0 && (
-                      <span className="absolute right-3 top-2 bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="ml-auto bg-orange-500 text-white text-[10px] font-extrabold rounded-full w-5 h-5 flex items-center justify-center shrink-0">
                         {ongoingCount}
                       </span>
                     )}
@@ -150,8 +152,8 @@ export default function Sidebar() {
                     isActive: pathname === "/maintenance" || pathname.startsWith("/maintenance/"),
                   })}
                 >
-                  <Wrench size={18} />
-                  <span>Dịch Vụ Bảo Trì</span>
+                  <Wrench size={18} className="shrink-0" />
+                  <span className="truncate">Dịch Vụ Bảo Trì</span>
                 </Link>
               )}
 
@@ -160,126 +162,76 @@ export default function Sidebar() {
                   href="/projects"
                   className={menuItemClass({ isActive: pathname.startsWith("/projects") })}
                 >
-                  <FolderOpen size={18} />
-                  <span>Triển khai dự án</span>
+                  <FolderOpen size={18} className="shrink-0" />
+                  <span className="truncate">Triển khai dự án</span>
+                </Link>
+              )}
+
+              {showLink("/notifications") && (
+                <Link
+                  href="/notifications"
+                  className={menuItemClass({ isActive: pathname.startsWith("/notifications") })}
+                >
+                  <Bell size={18} className="shrink-0" />
+                  <span className="truncate">Thông báo</span>
                 </Link>
               )}
             </div>
           </div>
         )}
 
-        {/* QUẢN LÝ THÔNG TIN */}
+        {/* SECTION 2: THÔNG TIN (Renamed from QUẢN LÝ THÔNG TIN) */}
         {showInfoSection && (
           <div className="mb-6">
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3 px-2">
-              QUẢN LÝ THÔNG TIN
+            <p className="text-[11px] uppercase tracking-widest text-cyan-400 font-extrabold mb-2.5 px-2">
+              THÔNG TIN
             </p>
 
             <div className="space-y-1">
-              {showLink("/customers") && (
+              {(showLink("/customers") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts")) && (
                 <Link
                   href="/customers"
                   className={menuItemClass({
-                    isActive: pathname === "/customers",
+                    isActive: ["/customers", "/contacts", "/nhan-su", "/contracts"].some(path => pathname.startsWith(path)),
                   })}
                 >
-                  <Users size={18} />
-                  <span>Khách hàng</span>
+                  <FolderOpen size={18} className="shrink-0" />
+                  <span className="truncate">Quản Lý Thông Tin</span>
                 </Link>
               )}
 
-              {showLink("/contacts") && (
-                <Link
-                  href="/contacts"
-                  className={menuItemClass({
-                    isActive: pathname === "/contacts",
-                  })}
-                >
-                  <UsersRound size={18} />
-                  <span>Liên hệ</span>
-                </Link>
-              )}
-
-              {showLink("/nhan-su") && (
-                <Link
-                  href="/nhan-su"
-                  className={menuItemClass({
-                    isActive: pathname === "/nhan-su",
-                  })}
-                >
-                  <UserCheck size={18} />
-                  <span>Nhân sự</span>
-                </Link>
-              )}
-
-              {showLink("/contracts") && (
-                <Link
-                  href="/contracts"
-                  className={menuItemClass({
-                    isActive: pathname === "/contracts",
-                  })}
-                >
-                  <FileText size={18} />
-                  <span>Hợp đồng</span>
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* HỆ THỐNG */}
-        {showSystemSection && (
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3 px-2">
-              HỆ THỐNG
-            </p>
-
-            <div className="space-y-1">
               {showLink("/sla") && (
                 <Link
                   href="/sla"
                   className={menuItemClass({
-                    isActive: pathname === "/sla",
+                    isActive: pathname.startsWith("/sla"),
                   })}
                 >
-                  <AlertCircle size={18} />
-                  <span>Quản lý SLA</span>
+                  <AlertCircle size={18} className="shrink-0" />
+                  <span className="truncate">Quản lý SLA</span>
                 </Link>
               )}
+            </div>
+          </div>
+        )}
 
-              {showLink("/users") && (
+        {/* SECTION 3: HỆ THỐNG */}
+        {showSystemSection && (
+          <div className="mb-6">
+            <p className="text-[11px] uppercase tracking-widest text-cyan-400 font-extrabold mb-2.5 px-2">
+              HỆ THỐNG
+            </p>
+
+            <div className="space-y-1">
+              {(showLink("/system") || showLink("/users") || showLink("/settings")) && (
                 <Link
                   href="/users"
                   className={menuItemClass({
-                    isActive: pathname === "/users",
+                    isActive: ["/system", "/users", "/settings"].some(path => pathname.startsWith(path)),
                   })}
                 >
-                  <User size={18} />
-                  <span>Người dùng</span>
-                </Link>
-              )}
-
-              {showLink("/settings") && (
-                <Link
-                  href="/settings"
-                  className={menuItemClass({
-                    isActive: pathname === "/settings",
-                  })}
-                >
-                  <Settings size={18} />
-                  <span>Phân quyền nhóm</span>
-                </Link>
-              )}
-
-              {showLink("/system") && (
-                <Link
-                  href="/system"
-                  className={menuItemClass({
-                    isActive: pathname === "/system",
-                  })}
-                >
-                  <Server size={18} />
-                  <span>Quản lý hệ thống</span>
+                  <Server size={18} className="shrink-0" />
+                  <span className="truncate">Quản lý hệ thống</span>
                 </Link>
               )}
             </div>

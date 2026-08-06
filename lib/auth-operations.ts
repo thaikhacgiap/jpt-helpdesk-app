@@ -255,12 +255,12 @@ export function hasAccess(role: UserSession["role"], pathname: string): boolean 
 
   // Static Fallback
   if (role === "PM") {
-    const pmAllowedPaths = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts"];
+    const pmAllowedPaths = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts", "/notifications"];
     return pmAllowedPaths.some(p => path === p || path.startsWith(p + "/"));
   }
 
   if (role === "Technical") {
-    const techAllowedPaths = ["/dashboard", "/requests", "/tickets", "/maintenance"];
+    const techAllowedPaths = ["/dashboard", "/requests", "/tickets", "/maintenance", "/notifications"];
     return techAllowedPaths.some(p => path === p || path.startsWith(p + "/"));
   }
 

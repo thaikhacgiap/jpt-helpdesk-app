@@ -9,6 +9,15 @@ import ContractTable from "@/components/contracts/contract-table";
 import ContractModal from "@/components/contracts/new-contract-modal";
 import type { Contract } from "@/lib/contract-operations";
 
+import { Users, UsersRound, UserCheck, FileText } from "lucide-react";
+
+const INFO_NAV_TABS = [
+  { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/contacts", label: "Liên hệ", icon: UsersRound },
+  { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
+  { href: "/contracts", label: "Hợp đồng", icon: FileText }
+];
+
 export default function ContractsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
@@ -31,8 +40,9 @@ export default function ContractsPage() {
   return (
     <MainLayout>
       <Header
-        title="Contract Management"
-        description="Manage all contracts and related information"
+        title="Quản lý Thông Tin"
+        description="Quản lý toàn bộ thông tin hợp đồng của công ty"
+        navTabs={INFO_NAV_TABS}
       />
 
       <ContractForm onNewClick={() => { setEditingContract(null); setIsModalOpen(true); }} />

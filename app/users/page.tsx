@@ -26,8 +26,15 @@ import {
   AlertCircle,
   ShieldAlert,
   CheckCircle2,
-  UserCheck
+  UserCheck,
 } from "lucide-react";
+import { User, Settings, Server } from "lucide-react";
+
+const SYSTEM_NAV_TABS = [
+  { href: "/users", label: "Người dùng", icon: User },
+  { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
+  { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
+];
 
 const DEPARTMENTS = ["Ban Giám Đốc", "Phòng Quản lý dự án", "Phòng Kỹ thuật & Support", "Khách hàng doanh nghiệp"];
 
@@ -248,7 +255,11 @@ export default function UsersPage() {
 
   return (
     <MainLayout>
-      <Header title="Quản Lý Người Dùng" description="Quản lý tài khoản đăng nhập hệ thống, gán nhóm người dùng, khóa và mở khóa tài khoản." />
+      <Header 
+        title="Quản Lý Hệ Thống" 
+        description="Quản lý tài khoản đăng nhập hệ thống, gán nhóm người dùng, khóa và mở khóa tài khoản." 
+        navTabs={SYSTEM_NAV_TABS}
+      />
 
       {/* KPI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">

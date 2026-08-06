@@ -21,8 +21,15 @@ import {
   User,
   Activity,
   ShieldCheck,
-  FileCode
+  FileCode,
+  Settings
 } from "lucide-react";
+
+const SYSTEM_NAV_TABS = [
+  { href: "/users", label: "Người dùng", icon: User },
+  { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
+  { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
+];
 
 export default function SystemPage() {
   const [activeTab, setActiveTab] = useState<"app" | "db" | "logs">("app");
@@ -315,6 +322,7 @@ export default function SystemPage() {
       <Header 
         title="Quản Lý Hệ Thống" 
         description="Sao lưu ứng dụng, xuất/nhập dữ liệu cơ sở dữ liệu và theo dõi nhật ký hoạt động của phần mềm." 
+        navTabs={SYSTEM_NAV_TABS}
       />
 
       {/* Tabs */}

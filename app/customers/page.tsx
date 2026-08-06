@@ -12,6 +12,14 @@ import {
   Trash2, Loader2,
 } from "lucide-react";
 import { fetchCustomers, deleteCustomer, Customer } from "@/lib/customer-operations";
+import { UsersRound, UserCheck, FileText } from "lucide-react";
+
+const INFO_NAV_TABS = [
+  { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/contacts", label: "Liên hệ", icon: UsersRound },
+  { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
+  { href: "/contracts", label: "Hợp đồng", icon: FileText }
+];
 
 export default function CustomersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -101,8 +109,9 @@ export default function CustomersPage() {
   return (
     <MainLayout>
       <Header
-        title="Quản lý Khách Hàng"
+        title="Quản lý Thông Tin"
         description="Quản lý thông tin toàn bộ khách hàng của công ty"
+        navTabs={INFO_NAV_TABS}
       />
 
       {/* Stats Cards */}
