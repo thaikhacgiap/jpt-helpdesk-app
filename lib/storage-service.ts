@@ -8,6 +8,8 @@ export interface StorageConfig {
   drive_folder_name: string;
   drive_api_key?: string;
   drive_client_id?: string;
+  drive_client_secret?: string;
+  drive_refresh_token?: string;
   drive_access_token?: string;
   drive_client_email?: string;
   drive_private_key?: string;
@@ -37,6 +39,8 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   drive_folder_name: "JPT Helpdesk Attachments",
   drive_api_key: "",
   drive_client_id: "",
+  drive_client_secret: "",
+  drive_refresh_token: "",
   drive_access_token: "",
   drive_client_email: "",
   drive_private_key: "",
@@ -95,7 +99,7 @@ export async function saveStorageConfig(config: StorageConfig): Promise<{ succes
       {
         setting_key: "storage_config",
         setting_value: config,
-        description: "Cấu hình lưu trữ tệp đính kèm phần mềm (Google Drive Service Account / Supabase)",
+        description: "Cấu hình lưu trữ tệp đính kèm phần mềm (Google Drive OAuth / Service Account / Supabase)",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "setting_key" }
@@ -130,6 +134,9 @@ export async function testDriveConnection(config: StorageConfig): Promise<{ succ
         action: "test",
         folderId: config.drive_folder_id,
         apiKey: config.drive_api_key,
+        clientId: config.drive_client_id,
+        clientSecret: config.drive_client_secret,
+        refreshToken: config.drive_refresh_token,
         clientEmail: config.drive_client_email,
         privateKey: config.drive_private_key,
       }),
@@ -176,12 +183,15 @@ export async function uploadFileToStorage(
 
   if (config.provider === "google_drive") {
     try {
-      // Send file to API route for uploading to Google Drive via Service Account
+      // Send file to API route for uploading to Google Drive via OAuth2 / Service Account
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folderId", config.drive_folder_id);
       formData.append("module", module);
       formData.append("apiKey", config.drive_api_key || "");
+      formData.append("clientId", config.drive_client_id || "");
+      formData.append("clientSecret", config.drive_client_secret || "");
+      formData.append("refreshToken", config.drive_refresh_token || "");
       formData.append("clientEmail", config.drive_client_email || "");
       formData.append("privateKey", config.drive_private_key || "");
 

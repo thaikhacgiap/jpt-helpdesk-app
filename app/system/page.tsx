@@ -436,7 +436,7 @@ export default function SystemPage() {
           }`}
         >
           <HardDrive size={15} />
-          <span>Cấu hình Lưu trữ (Google Service Account)</span>
+          <span>Cấu hình Lưu trữ (Google Drive Email Riêng)</span>
         </button>
         <button
           onClick={() => setActiveTab("logs")}
@@ -454,7 +454,7 @@ export default function SystemPage() {
       {/* Contents */}
       <div className="mt-4">
         
-        {/* TAB 3: STORAGE CONFIGURATION (GOOGLE DRIVE SERVICE ACCOUNT) */}
+        {/* TAB 3: STORAGE CONFIGURATION (GOOGLE DRIVE DEDICATED EMAIL ACCOUNT) */}
         {activeTab === "storage" && (
           <div className="space-y-6">
             {/* Storage Banner */}
@@ -465,14 +465,14 @@ export default function SystemPage() {
               <div className="relative z-10 max-w-3xl space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-300 text-xs font-bold">
                   <ShieldCheck size={14} />
-                  <span>Google Service Account Server-to-Server Authentication</span>
+                  <span>Google Drive OAuth 2.0 - Dedicated App Account</span>
                 </div>
                 <h2 className="text-xl font-black tracking-tight text-white">
-                  Cấu Hình Tải Tệp Trực Tiếp Lên Google Drive
+                  Cấu Hình Nơi Lưu Trữ Google Drive Bằng Email Google Riêng
                 </h2>
                 <p className="text-slate-300 text-xs leading-relaxed font-normal">
-                  Sử dụng <strong>Google Service Account</strong> giúp ứng dụng lưu trữ tệp đính kèm tự động 100% ngầm phía máy chủ mà người dùng 
-                  không cần đăng nhập Google. Tất cả tệp tải lên đều được tự động cấp quyền xem công khai qua đường dẫn liên kết!
+                  Sử dụng <strong>Tài khoản Email Google riêng của ứng dụng</strong> (ví dụ: <code>helpdesk.upload@gmail.com</code>). 
+                  Tệp đính kèm sẽ được lưu trữ trực tiếp lên Google Drive của Email này, tận dụng dung lượng 15GB miễn phí hoặc Google Workspace của công ty mà người dùng cuối không phải thao tác gì!
                 </p>
               </div>
             </div>
@@ -489,7 +489,7 @@ export default function SystemPage() {
                       <span>Chọn Nơi Lưu Trữ Mặc Định</span>
                     </h3>
                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Active: {storageConfig.provider === "google_drive" ? "Google Drive (Service Account)" : "Supabase"}
+                      Active: {storageConfig.provider === "google_drive" ? "Google Drive (Email Riêng)" : "Supabase"}
                     </span>
                   </div>
 
@@ -512,13 +512,13 @@ export default function SystemPage() {
                       />
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900">Google Drive Service Account</span>
+                          <span className="text-xs font-bold text-slate-900">Google Drive Email Riêng</span>
                           <span className="bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
-                            Khuyên dùng (An toàn & Tự động)
+                            Khuyên dùng (Đơn giản nhất)
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 leading-normal">
-                          Tất cả tệp đính kèm sẽ được upload ngầm an toàn lên Google Drive bằng Service Account Server Key.
+                          Tải ngầm tệp lên Google Drive của Email đại diện ứng dụng qua Refresh Token.
                         </p>
                       </div>
                     </label>
@@ -547,7 +547,7 @@ export default function SystemPage() {
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 leading-normal">
-                          Lưu trữ tệp trực tiếp trong Supabase Bucket storage (Tối đa giới hạn dung lượng database).
+                          Lưu trữ tệp trực tiếp trong Supabase Bucket storage.
                         </p>
                       </div>
                     </label>
@@ -570,33 +570,31 @@ export default function SystemPage() {
                   </div>
                 </div>
 
-                {/* Service Account Setup Instructions Guide */}
+                {/* Setup Instructions Guide */}
                 <div className="bg-slate-900 text-slate-200 rounded-2xl p-5 space-y-3 text-xs border border-slate-800">
                   <h4 className="font-bold text-emerald-400 flex items-center gap-1.5 text-sm">
                     <ShieldCheck size={16} />
-                    <span>Hướng dẫn thiết lập Service Account</span>
+                    <span>Các bước lấy Refresh Token cho Email riêng</span>
                   </h4>
                   <ol className="list-decimal list-inside space-y-2 text-[11px] text-slate-300 leading-relaxed">
-                    <li>Vào <strong>Google Cloud Console</strong> ➔ Bật API <strong>Google Drive API</strong>.</li>
-                    <li>Tạo <strong>Service Account</strong> ➔ Tải về tệp Key định dạng JSON.</li>
-                    <li>Mở tệp JSON, sao chép giá trị <code>client_email</code> và <code>private_key</code> dán vào bảng bên phải.</li>
-                    <li>
-                      <strong className="text-amber-300">Quan trọng:</strong> Mở Thư mục Google Drive của bạn ➔ Bấm <strong>Chia sẻ (Share)</strong> thư mục đó cho email <code>client_email</code> của Service Account với quyền <strong>Người chỉnh sửa (Editor)</strong>.
-                    </li>
+                    <li>Vào <strong>Google Cloud Console</strong> ➔ Bật <strong>Google Drive API</strong>.</li>
+                    <li>Tạo <strong>OAuth 2.0 Client ID</strong> (Web application) ➔ Lấy <code>Client ID</code> & <code>Client Secret</code>.</li>
+                    <li>Đăng nhập bằng Email riêng của App để lấy chuỗi <code>Refresh Token</code> duy nhất.</li>
+                    <li>Điền 3 thông số vào bảng bên phải ➔ Bấm <strong>Kiểm Tra Kết Nối</strong> & <strong>Lưu Cấu Hình</strong>.</li>
                   </ol>
                 </div>
               </div>
 
-              {/* Right Column: Google Drive Detailed Service Account Credentials & Settings */}
+              {/* Right Column: Google Drive Credentials & Settings */}
               <div className="lg:col-span-7 space-y-6">
                 <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-5">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         <FolderCheck size={18} className="text-emerald-600" />
-                        <span>Thông Tin Service Account & Folder ID Google Drive</span>
+                        <span>Thông Tin Tài Khoản Email Google Upload & Folder ID</span>
                       </h3>
-                      <p className="text-[11px] text-slate-400">Nhập thông số Service Account để xác thực lưu tệp Server-to-Server.</p>
+                      <p className="text-[11px] text-slate-400">Nhập OAuth credentials của Email riêng để ứng dụng tự động upload file ngầm.</p>
                     </div>
                     {storageConfig.drive_folder_id && (
                       <a
@@ -630,7 +628,7 @@ export default function SystemPage() {
                         <HardDrive size={15} className="absolute left-3 top-3 text-slate-400" />
                       </div>
                       <p className="text-[10px] text-slate-400">
-                        Ví dụ: Đường dẫn <code>drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong></code> thì <code>1A2b3C4d5E6f...</code> là Folder ID.
+                        Đường dẫn <code>drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong></code> thì <code>1A2b3C4d5E6f...</code> là Folder ID.
                       </p>
                     </div>
 
@@ -646,41 +644,79 @@ export default function SystemPage() {
                       />
                     </div>
 
-                    {/* Service Account Client Email */}
+                    {/* Google OAuth Client ID */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Key size={13} className="text-emerald-600" />
-                        <span>Service Account Email (client_email)</span>
+                        <span>Google Client ID</span>
                       </label>
                       <input
-                        type="email"
-                        value={storageConfig.drive_client_email || ""}
-                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_email: e.target.value })}
-                        placeholder="service-account-name@project-id.iam.gserviceaccount.com"
+                        type="text"
+                        value={storageConfig.drive_client_id || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_id: e.target.value })}
+                        placeholder="xxxx.apps.googleusercontent.com"
                         className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
                       />
-                      <p className="text-[10px] text-slate-400">
-                        Lấy từ thuộc tính <code>client_email</code> trong tệp JSON Service Account Key.
-                      </p>
                     </div>
 
-                    {/* Service Account Private Key */}
+                    {/* Google OAuth Client Secret */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                        <Lock size={13} className="text-amber-600" />
-                        <span>Service Account Private Key (private_key)</span>
+                        <Lock size={13} className="text-slate-500" />
+                        <span>Google Client Secret</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={storageConfig.drive_client_secret || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_secret: e.target.value })}
+                        placeholder="GOCSPX-xxxx..."
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                      />
+                    </div>
+
+                    {/* Google OAuth Refresh Token */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <ShieldCheck size={13} className="text-emerald-600" />
+                        <span>Google OAuth Refresh Token (Của Email riêng)</span>
                       </label>
                       <textarea
-                        rows={4}
-                        value={storageConfig.drive_private_key || ""}
-                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_private_key: e.target.value })}
-                        placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...\n-----END PRIVATE KEY-----"
-                        className="w-full px-3 py-2 text-[11px] border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono leading-relaxed bg-slate-50/30"
+                        rows={2}
+                        value={storageConfig.drive_refresh_token || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_refresh_token: e.target.value })}
+                        placeholder="1//04xxxx... (Refresh token giúp ứng dụng tự tạo access token 24/7)"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono leading-relaxed bg-slate-50/30"
                       />
-                      <p className="text-[10px] text-slate-400">
-                        Dán toàn bộ chuỗi <code>private_key</code> từ tệp JSON Key (bao gồm cả dòng -----BEGIN PRIVATE KEY-----).
-                      </p>
                     </div>
+
+                    {/* Service Account Alternative (Optional) */}
+                    <details className="pt-2 border-t border-slate-100 group">
+                      <summary className="text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-800 transition py-1">
+                        ⚙️ Cấu hình Service Account tùy chọn (Nâng cao)
+                      </summary>
+                      <div className="space-y-3 pt-3 pl-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">Service Account Email</label>
+                          <input
+                            type="email"
+                            value={storageConfig.drive_client_email || ""}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_email: e.target.value })}
+                            placeholder="service-account@project.iam.gserviceaccount.com"
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-hidden font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">Service Account Private Key</label>
+                          <textarea
+                            rows={2}
+                            value={storageConfig.drive_private_key || ""}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, drive_private_key: e.target.value })}
+                            placeholder="-----BEGIN PRIVATE KEY-----..."
+                            className="w-full px-2.5 py-1.5 text-[10px] border border-slate-200 rounded-lg outline-hidden font-mono"
+                          />
+                        </div>
+                      </div>
+                    </details>
 
                     {/* Auto subfolders toggle */}
                     <div className="pt-2">
@@ -730,7 +766,7 @@ export default function SystemPage() {
                         ) : (
                           <FolderCheck size={14} className="text-emerald-600" />
                         )}
-                        <span>{testingDrive ? "Đang xác thực Service Account..." : "Kiểm Tra Kết Nối Service Account"}</span>
+                        <span>{testingDrive ? "Đang kiểm tra kết nối..." : "Kiểm Tra Kết Nối Google Drive"}</span>
                       </button>
 
                       <button
@@ -744,14 +780,14 @@ export default function SystemPage() {
                         ) : (
                           <Save size={14} />
                         )}
-                        <span>{savingStorage ? "Đang lưu..." : "Lưu Cấu Hình Service Account"}</span>
+                        <span>{savingStorage ? "Đang lưu..." : "Lưu Cấu Hình Storage"}</span>
                       </button>
                     </div>
 
                     {storageSaveSuccess && (
                       <p className="text-right text-xs font-bold text-emerald-600 flex items-center justify-end gap-1">
                         <CheckCircle2 size={14} />
-                        <span>Đã lưu cấu hình Service Account thành công!</span>
+                        <span>Đã lưu cấu hình Google Drive thành công!</span>
                       </p>
                     )}
                   </div>
