@@ -22,8 +22,22 @@ import {
   Activity,
   ShieldCheck,
   FileCode,
-  Settings
+  Settings,
+  HardDrive,
+  FolderCheck,
+  Link,
+  Save,
+  Key,
+  ExternalLink,
+  Lock
 } from "lucide-react";
+import { 
+  StorageConfig, 
+  DEFAULT_STORAGE_CONFIG, 
+  getStorageConfig, 
+  saveStorageConfig, 
+  testDriveConnection 
+} from "@/lib/storage-service";
 
 const SYSTEM_NAV_TABS = [
   { href: "/users", label: "Người dùng", icon: User },
@@ -32,11 +46,19 @@ const SYSTEM_NAV_TABS = [
 ];
 
 export default function SystemPage() {
-  const [activeTab, setActiveTab] = useState<"app" | "db" | "logs">("app");
+  const [activeTab, setActiveTab] = useState<"app" | "db" | "storage" | "logs">("app");
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [searchLogQuery, setSearchLogQuery] = useState("");
   
+  // Storage Config states
+  const [storageConfig, setStorageConfig] = useState<StorageConfig>(DEFAULT_STORAGE_CONFIG);
+  const [loadingStorage, setLoadingStorage] = useState(false);
+  const [savingStorage, setSavingStorage] = useState(false);
+  const [testingDrive, setTestingDrive] = useState(false);
+  const [storageSaveSuccess, setStorageSaveSuccess] = useState(false);
+  const [driveTestResult, setDriveTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // App Backup/Restore states
   const [appBackupLoading, setAppBackupLoading] = useState(false);
   const [appRestoreLoading, setAppRestoreLoading] = useState(false);
@@ -57,8 +79,64 @@ export default function SystemPage() {
   useEffect(() => {
     if (activeTab === "logs") {
       loadLogs();
+    } else if (activeTab === "storage") {
+      loadStorageData();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    loadStorageData();
+  }, []);
+
+  const loadStorageData = async () => {
+    setLoadingStorage(true);
+    try {
+      const cfg = await getStorageConfig();
+      setStorageConfig(cfg);
+    } catch (err) {
+      console.error("Error loading storage config:", err);
+    } finally {
+      setLoadingStorage(false);
+    }
+  };
+
+  const handleSaveStorage = async () => {
+    setSavingStorage(true);
+    setDriveTestResult(null);
+    try {
+      const res = await saveStorageConfig(storageConfig);
+      if (res.success) {
+        setStorageSaveSuccess(true);
+        await logOperation(
+          "Cấu hình Lưu trữ",
+          `Cập nhật thành công nhà cung cấp lưu trữ tệp đính kèm: [${storageConfig.provider === "google_drive" ? "Google Drive" : "Supabase Storage"}] với thư mục "${storageConfig.drive_folder_name}".`
+        );
+        setTimeout(() => setStorageSaveSuccess(false), 3000);
+      } else {
+        alert(res.error || "Không thể lưu cấu hình lưu trữ.");
+      }
+    } catch (err: any) {
+      alert(`Lỗi hệ thống: ${err.message}`);
+    } finally {
+      setSavingStorage(false);
+    }
+  };
+
+  const handleTestDrive = async () => {
+    setTestingDrive(true);
+    setDriveTestResult(null);
+    try {
+      const res = await testDriveConnection(storageConfig);
+      setDriveTestResult(res);
+    } catch (err: any) {
+      setDriveTestResult({
+        success: false,
+        message: `Lỗi kiểm tra kết nối Google Drive: ${err.message}`
+      });
+    } finally {
+      setTestingDrive(false);
+    }
+  };
 
   const loadLogs = async () => {
     setLoadingLogs(true);
@@ -350,6 +428,17 @@ export default function SystemPage() {
           <span>Sao lưu / Khôi phục Database</span>
         </button>
         <button
+          onClick={() => setActiveTab("storage")}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === "storage" 
+              ? "border-emerald-600 text-emerald-600 font-extrabold" 
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <HardDrive size={15} />
+          <span>Cấu hình Lưu trữ (Google Service Account)</span>
+        </button>
+        <button
           onClick={() => setActiveTab("logs")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === "logs" 
@@ -365,6 +454,314 @@ export default function SystemPage() {
       {/* Contents */}
       <div className="mt-4">
         
+        {/* TAB 3: STORAGE CONFIGURATION (GOOGLE DRIVE SERVICE ACCOUNT) */}
+        {activeTab === "storage" && (
+          <div className="space-y-6">
+            {/* Storage Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+              <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-10 pointer-events-none">
+                <HardDrive size={220} />
+              </div>
+              <div className="relative z-10 max-w-3xl space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-300 text-xs font-bold">
+                  <ShieldCheck size={14} />
+                  <span>Google Service Account Server-to-Server Authentication</span>
+                </div>
+                <h2 className="text-xl font-black tracking-tight text-white">
+                  Cấu Hình Tải Tệp Trực Tiếp Lên Google Drive
+                </h2>
+                <p className="text-slate-300 text-xs leading-relaxed font-normal">
+                  Sử dụng <strong>Google Service Account</strong> giúp ứng dụng lưu trữ tệp đính kèm tự động 100% ngầm phía máy chủ mà người dùng 
+                  không cần đăng nhập Google. Tất cả tệp tải lên đều được tự động cấp quyền xem công khai qua đường dẫn liên kết!
+                </p>
+              </div>
+            </div>
+
+            {/* Provider Selection Card & Drive Config */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Left Column: Select Provider & Setup Guide */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <HardDrive size={16} className="text-emerald-600" />
+                      <span>Chọn Nơi Lưu Trữ Mặc Định</span>
+                    </h3>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Active: {storageConfig.provider === "google_drive" ? "Google Drive (Service Account)" : "Supabase"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Radio Google Drive */}
+                    <label 
+                      onClick={() => setStorageConfig({ ...storageConfig, provider: "google_drive" })}
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+                        storageConfig.provider === "google_drive"
+                          ? "border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="storage_provider" 
+                        checked={storageConfig.provider === "google_drive"} 
+                        onChange={() => {}} 
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900">Google Drive Service Account</span>
+                          <span className="bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            Khuyên dùng (An toàn & Tự động)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Tất cả tệp đính kèm sẽ được upload ngầm an toàn lên Google Drive bằng Service Account Server Key.
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Radio Supabase Storage */}
+                    <label 
+                      onClick={() => setStorageConfig({ ...storageConfig, provider: "supabase" })}
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+                        storageConfig.provider === "supabase"
+                          ? "border-blue-500 bg-blue-50/40 ring-1 ring-blue-500"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="storage_provider" 
+                        checked={storageConfig.provider === "supabase"} 
+                        onChange={() => {}} 
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900">Supabase Storage</span>
+                          <span className="bg-slate-200 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            Dự phòng
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Lưu trữ tệp trực tiếp trong Supabase Bucket storage (Tối đa giới hạn dung lượng database).
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Limits */}
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      Dung lượng tối đa mỗi tệp (MB)
+                    </label>
+                    <input
+                      type="number"
+                      value={storageConfig.max_file_size_mb || 50}
+                      onChange={(e) => setStorageConfig({ ...storageConfig, max_file_size_mb: parseInt(e.target.value) || 50 })}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                      min={1}
+                      max={500}
+                    />
+                    <p className="text-[10px] text-slate-400">Tệp vượt quá giới hạn này sẽ bị từ chối đính kèm.</p>
+                  </div>
+                </div>
+
+                {/* Service Account Setup Instructions Guide */}
+                <div className="bg-slate-900 text-slate-200 rounded-2xl p-5 space-y-3 text-xs border border-slate-800">
+                  <h4 className="font-bold text-emerald-400 flex items-center gap-1.5 text-sm">
+                    <ShieldCheck size={16} />
+                    <span>Hướng dẫn thiết lập Service Account</span>
+                  </h4>
+                  <ol className="list-decimal list-inside space-y-2 text-[11px] text-slate-300 leading-relaxed">
+                    <li>Vào <strong>Google Cloud Console</strong> ➔ Bật API <strong>Google Drive API</strong>.</li>
+                    <li>Tạo <strong>Service Account</strong> ➔ Tải về tệp Key định dạng JSON.</li>
+                    <li>Mở tệp JSON, sao chép giá trị <code>client_email</code> và <code>private_key</code> dán vào bảng bên phải.</li>
+                    <li>
+                      <strong className="text-amber-300">Quan trọng:</strong> Mở Thư mục Google Drive của bạn ➔ Bấm <strong>Chia sẻ (Share)</strong> thư mục đó cho email <code>client_email</code> của Service Account với quyền <strong>Người chỉnh sửa (Editor)</strong>.
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Right Column: Google Drive Detailed Service Account Credentials & Settings */}
+              <div className="lg:col-span-7 space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <FolderCheck size={18} className="text-emerald-600" />
+                        <span>Thông Tin Service Account & Folder ID Google Drive</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Nhập thông số Service Account để xác thực lưu tệp Server-to-Server.</p>
+                    </div>
+                    {storageConfig.drive_folder_id && (
+                      <a
+                        href={`https://drive.google.com/drive/folders/${storageConfig.drive_folder_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+                      >
+                        <ExternalLink size={13} />
+                        <span>Mở Google Drive</span>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="space-y-4">
+                    {/* Folder ID */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <span>Google Drive Folder ID</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={storageConfig.drive_folder_id}
+                          onChange={(e) => setStorageConfig({ ...storageConfig, drive_folder_id: e.target.value })}
+                          placeholder="Nhập ID thư mục Google Drive (Ví dụ: 1A2b3C4d5E6f7G8h9I0j)"
+                          className="w-full pl-9 pr-4 py-2.5 text-xs font-mono border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden bg-slate-50/50"
+                        />
+                        <HardDrive size={15} className="absolute left-3 top-3 text-slate-400" />
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Ví dụ: Đường dẫn <code>drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong></code> thì <code>1A2b3C4d5E6f...</code> là Folder ID.
+                      </p>
+                    </div>
+
+                    {/* Folder Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Tên Thư Mục Hiển Thị</label>
+                      <input
+                        type="text"
+                        value={storageConfig.drive_folder_name}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_folder_name: e.target.value })}
+                        placeholder="Ví dụ: JPT Helpdesk Attachments"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                      />
+                    </div>
+
+                    {/* Service Account Client Email */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Key size={13} className="text-emerald-600" />
+                        <span>Service Account Email (client_email)</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={storageConfig.drive_client_email || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_email: e.target.value })}
+                        placeholder="service-account-name@project-id.iam.gserviceaccount.com"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        Lấy từ thuộc tính <code>client_email</code> trong tệp JSON Service Account Key.
+                      </p>
+                    </div>
+
+                    {/* Service Account Private Key */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Lock size={13} className="text-amber-600" />
+                        <span>Service Account Private Key (private_key)</span>
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={storageConfig.drive_private_key || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_private_key: e.target.value })}
+                        placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...\n-----END PRIVATE KEY-----"
+                        className="w-full px-3 py-2 text-[11px] border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono leading-relaxed bg-slate-50/30"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        Dán toàn bộ chuỗi <code>private_key</code> từ tệp JSON Key (bao gồm cả dòng -----BEGIN PRIVATE KEY-----).
+                      </p>
+                    </div>
+
+                    {/* Auto subfolders toggle */}
+                    <div className="pt-2">
+                      <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/60 transition">
+                        <input
+                          type="checkbox"
+                          checked={storageConfig.auto_subfolders}
+                          onChange={(e) => setStorageConfig({ ...storageConfig, auto_subfolders: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Tự động phân loại thư mục con theo Module</p>
+                          <p className="text-[10px] text-slate-500">Tự động lưu vào <code>/Tickets/</code>, <code>/Contracts/</code>, <code>/Requests/</code> tương ứng.</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Test Connection Result Notice */}
+                    {driveTestResult && (
+                      <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
+                        driveTestResult.success 
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                          : "bg-rose-50 border-rose-200 text-rose-800"
+                      }`}>
+                        {driveTestResult.success ? (
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <p className="font-bold">{driveTestResult.success ? "Kiểm tra thành công!" : "Kiểm tra kết nối thất bại"}</p>
+                          <p className="text-[11px] mt-0.5 leading-relaxed">{driveTestResult.message}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleTestDrive}
+                        disabled={testingDrive}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 hover:border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {testingDrive ? (
+                          <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                        ) : (
+                          <FolderCheck size={14} className="text-emerald-600" />
+                        )}
+                        <span>{testingDrive ? "Đang xác thực Service Account..." : "Kiểm Tra Kết Nối Service Account"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveStorage}
+                        disabled={savingStorage}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition shadow-xs hover:shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {savingStorage ? (
+                          <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>{savingStorage ? "Đang lưu..." : "Lưu Cấu Hình Service Account"}</span>
+                      </button>
+                    </div>
+
+                    {storageSaveSuccess && (
+                      <p className="text-right text-xs font-bold text-emerald-600 flex items-center justify-end gap-1">
+                        <CheckCircle2 size={14} />
+                        <span>Đã lưu cấu hình Service Account thành công!</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
         {/* TAB 1: APP BACKUP/RESTORE */}
         {activeTab === "app" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

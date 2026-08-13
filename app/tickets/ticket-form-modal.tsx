@@ -6,7 +6,7 @@ import {
   X, ChevronDown, Save, Edit2, CheckCircle,
   Search, Building2, FileText, Check, Maximize2,
   Trash2, Pause, Info, Calendar, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
-  Filter, AlertCircle
+  Filter, AlertCircle, HardDrive
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
@@ -16,6 +16,8 @@ import type { Contract } from "@/lib/contract-operations";
 import { NhanSu, fetchNhanSu } from "@/lib/nhan-su-operations";
 import { Contact, fetchContactsByCustomerCode } from "@/lib/contact-operations";
 import { supabase } from "@/lib/supabase";
+import AttachmentUploader from "@/components/common/attachment-uploader";
+import { AttachedFile } from "@/lib/storage-service";
 
 /* ═══════════════════════════════════════════════════════════ */
 /* Types                                                       */
