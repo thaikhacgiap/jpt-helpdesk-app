@@ -49,16 +49,33 @@ export default function CustomersPage() {
       const sheetUrl = localStorage.getItem("jpt_customer_sheet_url") || "";
       const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
 
+      const authType = localStorage.getItem("jpt_google_auth_type") || "user_oauth";
+      const userAccessToken = localStorage.getItem("jpt_google_user_access_token") || "";
+      const userRefreshToken = localStorage.getItem("jpt_google_user_refresh_token") || "";
+      const userClientId = localStorage.getItem("jpt_google_user_client_id") || "";
+      const userClientSecret = localStorage.getItem("jpt_google_user_client_secret") || "";
+
       const clientEmail = localStorage.getItem("jpt_google_client_email") || "";
       const privateKey = localStorage.getItem("jpt_google_private_key") || "";
 
       if (!enabled || !sheetUrl) return;
 
       try {
+        const payload: any = { sheetUrl };
+        if (authType === "user_oauth") {
+          payload.userAccessToken = userAccessToken;
+          payload.userRefreshToken = userRefreshToken;
+          payload.userClientId = userClientId;
+          payload.userClientSecret = userClientSecret;
+        } else {
+          payload.clientEmail = clientEmail;
+          payload.privateKey = privateKey;
+        }
+
         const res = await fetch("/api/customers/sync-sheets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sheetUrl, clientEmail, privateKey }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (data.success) {

@@ -14,8 +14,58 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// Fetch spreadsheet values via official Google Sheets API v4 using Service Account User Credentials
-async function fetchFromGoogleSheetsAPI(
+// 1. Fetch via Real Google User OAuth 2.0 (Access Token / Refresh Token of Real Google User)
+async function fetchFromGoogleSheetsAPIUserOAuth(
+  spreadsheetId: string,
+  accessToken?: string,
+  refreshToken?: string,
+  clientId?: string,
+  clientSecret?: string
+): Promise<SheetRow[]> {
+  const oauth2Client = new google.auth.OAuth2(
+    clientId || undefined,
+    clientSecret || undefined
+  );
+  
+  oauth2Client.setCredentials({
+    access_token: accessToken || undefined,
+    refresh_token: refreshToken || undefined,
+  });
+
+  const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "A1:Z2000",
+  });
+
+  const rows = response.data.values;
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+  const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
+
+  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
+  const nameIdx = getIndex(["tên hiển thị", "ten hien thi", "tên khách hàng", "ten khach hang", "name"]);
+  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
+
+  const result: SheetRow[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const code = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
+    const name = nameIdx >= 0 ? String(row[nameIdx] || "").trim() : "";
+    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
+
+    if (code && name) {
+      result.push({ code, name, ten_tieng_anh });
+    }
+  }
+
+  return result;
+}
+
+// 2. Fetch via Service Account JWT
+async function fetchFromGoogleSheetsAPIServiceAccount(
   spreadsheetId: string,
   clientEmail: string,
   privateKey: string
@@ -29,7 +79,6 @@ async function fetchFromGoogleSheetsAPI(
 
   const sheets = google.sheets({ version: "v4", auth });
   
-  // Fetch values from first tab (A1:Z2000)
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: "A1:Z2000",
@@ -109,7 +158,16 @@ function getCsvUrl(inputUrl: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sheetUrl, clientEmail, privateKey, data: rawRows } = body;
+    const { 
+      sheetUrl, 
+      clientEmail, 
+      privateKey, 
+      userAccessToken, 
+      userRefreshToken, 
+      userClientId, 
+      userClientSecret,
+      data: rawRows 
+    } = body;
 
     let rowsToProcess: SheetRow[] = [];
 
@@ -121,7 +179,33 @@ export async function POST(req: NextRequest) {
         ten_tieng_anh: String(r["Tên Tiếng Anh"] || r.ten_tieng_anh || "").trim(),
       })).filter(r => r.code && r.name);
     } 
-    // Case 2: Fetch via Official Google Sheets API using Service Account User Credentials
+    // Case 2: Fetch via REAL Google User OAuth 2.0 (Access Token / Refresh Token)
+    else if (sheetUrl && (userAccessToken || userRefreshToken)) {
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) {
+        return NextResponse.json({
+          success: false,
+          error: "Không thể nhận diện Spreadsheet ID từ đường link Google Sheet.",
+        }, { status: 400 });
+      }
+
+      try {
+        rowsToProcess = await fetchFromGoogleSheetsAPIUserOAuth(
+          spreadsheetId,
+          userAccessToken,
+          userRefreshToken,
+          userClientId,
+          userClientSecret
+        );
+      } catch (authErr: any) {
+        console.error("Real Google User Auth Error:", authErr);
+        return NextResponse.json({
+          success: false,
+          error: `Lỗi xác thực Google User (${authErr.message}). Vui lòng kiểm tra Access Token hoặc Refresh Token của tài khoản Google User.`,
+        }, { status: 400 });
+      }
+    }
+    // Case 3: Fetch via Google Service Account (Client Email & Private Key)
     else if (sheetUrl && clientEmail && privateKey) {
       const spreadsheetId = extractSpreadsheetId(sheetUrl);
       if (!spreadsheetId) {
@@ -132,7 +216,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        rowsToProcess = await fetchFromGoogleSheetsAPI(spreadsheetId, clientEmail, privateKey);
+        rowsToProcess = await fetchFromGoogleSheetsAPIServiceAccount(spreadsheetId, clientEmail, privateKey);
       } catch (authErr: any) {
         console.error("Google Service Account Auth Error:", authErr);
         return NextResponse.json({
@@ -141,14 +225,14 @@ export async function POST(req: NextRequest) {
         }, { status: 400 });
       }
     }
-    // Case 3: Public CSV Fetch (Fallback)
+    // Case 4: Public CSV Fetch (Fallback)
     else if (sheetUrl) {
       const csvUrl = getCsvUrl(sheetUrl);
       const res = await fetch(csvUrl, { cache: "no-store" });
       if (!res.ok) {
         return NextResponse.json({
           success: false,
-          error: `Không thể kết nối đến Google Sheet (HTTP status: ${res.status}). Vui lòng nhập thông tin Email Tài khoản Google (Service Account) hoặc kiểm tra quyền truy cập.`,
+          error: `Không thể kết nối đến Google Sheet (HTTP status: ${res.status}). Vui lòng kiểm tra thông tin Tài khoản Google User hoặc quyền truy cập của Sheet.`,
         }, { status: 400 });
       }
 
