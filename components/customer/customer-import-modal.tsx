@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw, Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet } from "lucide-react";
+import { X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw, Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink } from "lucide-react";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
 
 interface ImportModalProps {
@@ -294,9 +294,21 @@ function autoSyncToHelpdesk() {
             <div className="space-y-5">
               {/* Sheet Link Input Box */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Đường link Google Sheet (Public Link / View Permission)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Đường link Google Sheet (Link Chia Sẻ)
+                  </label>
+                  {sheetUrl.trim() && (
+                    <a
+                      href={sheetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                    >
+                      <ExternalLink size={13} /> Mở Google Sheet
+                    </a>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <LinkIcon size={16} className="absolute left-3.5 top-3 text-slate-400" />
@@ -317,9 +329,21 @@ function autoSyncToHelpdesk() {
                     {syncing ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
-                  • Bảng chứa 3 cột bắt buộc: <code className="bg-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800">Mã Khách Hàng</code>, <code className="bg-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800">Tên Hiển Thị</code>, <code className="bg-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800">Tên Tiếng Anh</code>.
-                </p>
+
+                {/* Guide Box for Sharing Permission */}
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1.5 mt-2">
+                  <p className="font-bold flex items-center gap-1.5 text-blue-800">
+                    🔒 Cấu hình phân quyền trên Google Sheet để ứng dụng truy cập:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-700 font-medium pl-1">
+                    <li>Mở file Google Sheet của bạn $\rightarrow$ Bấm nút <strong>Chia sẻ (Share)</strong> ở góc trên cùng bên phải.</li>
+                    <li>Mục <em>Quyền truy cập chung (General access)</em>: Đổi từ <u>Hạn chế</u> sang <strong>Bất kỳ ai có đường liên kết (Anyone with the link)</strong>.</li>
+                    <li>Đặt quyền là <strong>Người xem (Viewer)</strong> $\rightarrow$ Bấm <strong>Sao chép đường liên kết (Copy link)</strong> và dán vào ô trên.</li>
+                  </ol>
+                  <p className="text-[11px] text-slate-500 pt-1 border-t border-blue-200/60 mt-1">
+                    • Bảng bắt buộc gồm 3 tên cột: <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Mã Khách Hàng</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Tên Hiển Thị</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Tên Tiếng Anh</code>.
+                  </p>
+                </div>
               </div>
 
               {/* Sync Result Banner */}
