@@ -256,9 +256,8 @@ function autoSyncToHelpdesk() {
     URL.revokeObjectURL(url);
   };
 
-  const progressPct = syncProgress && syncProgress.total > 0
-    ? Math.round((syncProgress.processed / syncProgress.total) * 100)
-    : 0;
+
+
 
   if (!isOpen) return null;
 
