@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw, Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink, ShieldCheck, Key, UserCheck, User } from "lucide-react";
+import {
+  X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw,
+  Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink,
+  User, ChevronRight
+} from "lucide-react";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
 
 interface ImportModalProps {
@@ -10,7 +14,7 @@ interface ImportModalProps {
   onSuccess: () => void;
 }
 
-type RowStatus = "pending" | "importing" | "success" | "error" | "duplicate";
+type RowStatus = "pending" | "importing" | "success" | "error";
 
 interface ParsedRow {
   code: string;
@@ -18,6 +22,16 @@ interface ParsedRow {
   ten_tieng_anh: string;
   status: RowStatus;
   message?: string;
+}
+
+interface SyncProgress {
+  total: number;
+  processed: number;
+  created: number;
+  updated: number;
+  errors: number;
+  currentName: string;
+  done: boolean;
 }
 
 const SAMPLE_CSV = `"Mã Khách Hàng","Tên Hiển Thị","Tên Tiếng Anh"
@@ -30,20 +44,17 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = useState("");
-  
-  // Real Google User Credentials state (OAuth 2.0 / User Tokens)
-  const [authType, setAuthType] = useState<"user_oauth" | "service_account">("user_oauth");
+
+  // Real Google User OAuth 2.0 Credentials
   const [userAccessToken, setUserAccessToken] = useState("");
   const [userRefreshToken, setUserRefreshToken] = useState("");
   const [userClientId, setUserClientId] = useState("");
   const [userClientSecret, setUserClientSecret] = useState("");
-
-  // Service Account Credentials state
-  const [clientEmail, setClientEmail] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
   const [showAuthConfig, setShowAuthConfig] = useState(false);
 
+  // Sync state
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
     total?: number;
@@ -65,35 +76,20 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
   const [fileName, setFileName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const jsonKeyFileRef = useRef<HTMLInputElement>(null);
 
   // Load saved settings from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedUrl = localStorage.getItem("jpt_customer_sheet_url") || "";
-      const savedAuthType = (localStorage.getItem("jpt_google_auth_type") as "user_oauth" | "service_account") || "user_oauth";
-      const savedAccessToken = localStorage.getItem("jpt_google_user_access_token") || "";
-      const savedRefreshToken = localStorage.getItem("jpt_google_user_refresh_token") || "";
-      const savedClientId = localStorage.getItem("jpt_google_user_client_id") || "";
-      const savedClientSecret = localStorage.getItem("jpt_google_user_client_secret") || "";
+      setSheetUrl(localStorage.getItem("jpt_customer_sheet_url") || "");
+      setUserAccessToken(localStorage.getItem("jpt_google_user_access_token") || "");
+      setUserRefreshToken(localStorage.getItem("jpt_google_user_refresh_token") || "");
+      setUserClientId(localStorage.getItem("jpt_google_user_client_id") || "");
+      setUserClientSecret(localStorage.getItem("jpt_google_user_client_secret") || "");
+      setAutoSyncEnabled(localStorage.getItem("jpt_customer_auto_sync") === "true");
+      setAutoSyncInterval(parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10));
 
-      const savedEmail = localStorage.getItem("jpt_google_client_email") || "";
-      const savedKey = localStorage.getItem("jpt_google_private_key") || "";
-      const savedAutoSync = localStorage.getItem("jpt_customer_auto_sync") === "true";
-      const savedInterval = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
-      
-      setSheetUrl(savedUrl);
-      setAuthType(savedAuthType);
-      setUserAccessToken(savedAccessToken);
-      setUserRefreshToken(savedRefreshToken);
-      setUserClientId(savedClientId);
-      setUserClientSecret(savedClientSecret);
-
-      setClientEmail(savedEmail);
-      setPrivateKey(savedKey);
-      setAutoSyncEnabled(savedAutoSync);
-      setAutoSyncInterval(savedInterval);
-      if (savedAccessToken || savedRefreshToken || savedEmail) setShowAuthConfig(true);
+      const hasToken = localStorage.getItem("jpt_google_user_access_token");
+      if (hasToken) setShowAuthConfig(true);
     }
   }, []);
 
@@ -103,6 +99,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     setStep("upload");
     setFileName("");
     setSyncResult(null);
+    setSyncProgress(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -111,35 +108,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     onClose();
   };
 
-  // Handle Service Account JSON Key File Upload
-  const handleJsonKeyUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        if (json.client_email && json.private_key) {
-          setClientEmail(json.client_email);
-          setPrivateKey(json.private_key);
-          setAuthType("service_account");
-          localStorage.setItem("jpt_google_client_email", json.client_email);
-          localStorage.setItem("jpt_google_private_key", json.private_key);
-          localStorage.setItem("jpt_google_auth_type", "service_account");
-          setShowAuthConfig(true);
-          alert(`Đã nhận diện thành công Service Account: ${json.client_email}`);
-        } else {
-          alert("File JSON không chứa client_email hoặc private_key.");
-        }
-      } catch (err) {
-        alert("Không thể đọc file JSON Google Credentials.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Sync Google Sheets Now
+  // Sync Google Sheets — with streaming progress using Server-Sent Events simulation
   const handleSyncSheetsNow = async () => {
     if (!sheetUrl.trim()) {
       alert("Vui lòng nhập link Google Sheet.");
@@ -148,47 +117,78 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
     setSyncing(true);
     setSyncResult(null);
+    setSyncProgress(null);
 
-    // Save preferences
+    // Save settings
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
-    localStorage.setItem("jpt_google_auth_type", authType);
     localStorage.setItem("jpt_google_user_access_token", userAccessToken.trim());
     localStorage.setItem("jpt_google_user_refresh_token", userRefreshToken.trim());
     localStorage.setItem("jpt_google_user_client_id", userClientId.trim());
     localStorage.setItem("jpt_google_user_client_secret", userClientSecret.trim());
-
-    localStorage.setItem("jpt_google_client_email", clientEmail.trim());
-    localStorage.setItem("jpt_google_private_key", privateKey.trim());
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
 
     try {
-      const payload: any = { sheetUrl: sheetUrl.trim() };
+      const tokenInput = userAccessToken.trim();
+      const payload = {
+        sheetUrl: sheetUrl.trim(),
+        userAccessToken: tokenInput,
+        userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
+        userClientId: userClientId.trim(),
+        userClientSecret: userClientSecret.trim(),
+      };
 
-      if (authType === "user_oauth") {
-        const tokenInput = userAccessToken.trim();
-        payload.userAccessToken = tokenInput;
-        payload.userRefreshToken = userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : "");
-        payload.userClientId = userClientId.trim();
-        payload.userClientSecret = userClientSecret.trim();
-      } else {
-        payload.clientEmail = clientEmail.trim();
-        payload.privateKey = privateKey.trim();
-      }
+      // Step 1: Fetch the rows first
+      setSyncProgress({ total: 0, processed: 0, created: 0, updated: 0, errors: 0, currentName: "Đang kết nối Google Sheets...", done: false });
 
       const res = await fetch("/api/customers/sync-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, progressMode: true }),
       });
 
       const data = await res.json();
+
       if (!res.ok || !data.success) {
+        setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ dữ liệu từ Google Sheet." });
+        setSyncProgress(null);
+      } else if (data.rows && Array.isArray(data.rows)) {
+        // Step 2: Process rows client-side with progress visualization
+        const allRows = data.rows as Array<{ code: string; name: string; ten_tieng_anh?: string }>;
+        let created = 0, updated = 0, errors = 0;
+
+        setSyncProgress({ total: allRows.length, processed: 0, created: 0, updated: 0, errors: 0, currentName: "", done: false });
+
+        for (let i = 0; i < allRows.length; i++) {
+          const row = allRows[i];
+          setSyncProgress(p => ({ ...p!, processed: i, currentName: row.name, done: false }));
+
+          const result = await upsertCustomerFromImport(row);
+          if (result.success) {
+            if (result.action === "created") created++;
+            else updated++;
+          } else {
+            errors++;
+          }
+
+          // Small delay to make progress visible
+          await new Promise(r => setTimeout(r, 20));
+        }
+
+        setSyncProgress({ total: allRows.length, processed: allRows.length, created, updated, errors, currentName: "", done: true });
+
         setSyncResult({
-          success: false,
-          message: data.error || "Lỗi đồng bộ dữ liệu từ Google Sheet.",
+          success: true,
+          total: allRows.length,
+          created,
+          updated,
+          errors,
+          lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
         });
+        onSuccess();
       } else {
+        // Old-style response (no rows array)
+        setSyncProgress(null);
         setSyncResult({
           success: true,
           total: data.total,
@@ -200,10 +200,8 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
         onSuccess();
       }
     } catch (err: any) {
-      setSyncResult({
-        success: false,
-        message: err.message || "Lỗi kết nối máy chủ.",
-      });
+      setSyncResult({ success: false, message: err.message || "Lỗi kết nối máy chủ." });
+      setSyncProgress(null);
     } finally {
       setSyncing(false);
     }
@@ -215,24 +213,18 @@ function autoSyncToHelpdesk() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return;
-  
   var headers = data[0].map(function(h) { return String(h).trim(); });
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     var row = {};
-    for (var j = 0; j < headers.length; j++) {
-      row[headers[j]] = data[i][j];
-    }
+    for (var j = 0; j < headers.length; j++) row[headers[j]] = data[i][j];
     rows.push(row);
   }
-  
-  var options = {
+  UrlFetchApp.fetch(WEBHOOK_URL, {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({ data: rows })
-  };
-  
-  UrlFetchApp.fetch(WEBHOOK_URL, options);
+  });
 }`;
 
   const copyAppsScript = () => {
@@ -245,10 +237,9 @@ function autoSyncToHelpdesk() {
   const parseCSV = (text: string): ParsedRow[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return [];
-
     const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
     const codeIdx = headers.findIndex(h => h.includes("mã") || h.includes("code"));
-    const nameIdx = headers.findIndex(h => h.includes("tên hiển thị") || h.includes("ten hien thi") || h.includes("tên kh") || h.includes("name"));
+    const nameIdx = headers.findIndex(h => h.includes("tên hiển thị") || h.includes("tên kh") || h.includes("name"));
     const engIdx = headers.findIndex(h => h.includes("tiếng anh") || h.includes("tieng anh") || h.includes("english"));
 
     return lines.slice(1).map(line => {
@@ -256,17 +247,8 @@ function autoSyncToHelpdesk() {
       const code = codeIdx >= 0 ? values[codeIdx] : "";
       const name = nameIdx >= 0 ? values[nameIdx] : "";
       const ten_tieng_anh = engIdx >= 0 ? values[engIdx] : "";
-
-      const row: ParsedRow = {
-        code,
-        name,
-        ten_tieng_anh,
-        status: "pending",
-      };
-
-      if (!code) { row.status = "error"; row.message = "Thiếu Mã Khách Hàng"; }
-      else if (!name) { row.status = "error"; row.message = "Thiếu Tên Hiển Thị"; }
-
+      const row: ParsedRow = { code, name, ten_tieng_anh, status: "pending" };
+      if (!name) { row.status = "error"; row.message = "Thiếu Tên Hiển Thị"; }
       return row;
     });
   };
@@ -277,9 +259,7 @@ function autoSyncToHelpdesk() {
     setFileName(file.name);
     const reader = new FileReader();
     reader.onload = ev => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
-      setRows(parsed);
+      setRows(parseCSV(ev.target?.result as string));
       setStep("preview");
     };
     reader.readAsText(file, "utf-8");
@@ -289,16 +269,14 @@ function autoSyncToHelpdesk() {
     setImporting(true);
     const updated = [...rows];
     for (let i = 0; i < updated.length; i++) {
-      const row = updated[i];
-      if (row.status === "error") continue;
-      updated[i] = { ...row, status: "importing" };
+      if (updated[i].status === "error") continue;
+      updated[i] = { ...updated[i], status: "importing" };
       setRows([...updated]);
-
-      const result = await upsertCustomerFromImport(row);
+      const result = await upsertCustomerFromImport(updated[i]);
       updated[i] = {
-        ...row,
+        ...updated[i],
         status: result.success ? "success" : "error",
-        message: result.success ? (result.action === "created" ? "Tạo mới KH-001" : "Đã cập nhật") : result.error,
+        message: result.success ? (result.action === "created" ? "Đã tạo mới" : "Đã cập nhật") : result.error,
       };
       setRows([...updated]);
     }
@@ -317,11 +295,16 @@ function autoSyncToHelpdesk() {
     URL.revokeObjectURL(url);
   };
 
+  const progressPct = syncProgress && syncProgress.total > 0
+    ? Math.round((syncProgress.processed / syncProgress.total) * 100)
+    : 0;
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
@@ -330,7 +313,7 @@ function autoSyncToHelpdesk() {
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">Import & Đồng bộ Khách hàng</h2>
-              <p className="text-xs text-slate-500">Đồng bộ qua Tài khoản Google User thực hoặc File CSV</p>
+              <p className="text-xs text-slate-500">Đồng bộ 1 chiều qua Google User OAuth 2.0 hoặc File CSV</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 hover:bg-slate-100 rounded-lg transition">
@@ -340,49 +323,39 @@ function autoSyncToHelpdesk() {
 
         {/* Tab Navigation */}
         <div className="flex border-b border-slate-200 px-6 bg-slate-50/50">
-          <button
-            onClick={() => setActiveTab("sheets")}
-            className={`py-3 px-4 font-semibold text-sm flex items-center gap-2 border-b-2 transition ${
-              activeTab === "sheets"
-                ? "border-green-600 text-green-700 bg-white"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <RefreshCw size={16} className={syncing ? "animate-spin text-green-600" : ""} />
-            Đồng bộ Google Sheet (Google User)
-          </button>
-          <button
-            onClick={() => setActiveTab("csv")}
-            className={`py-3 px-4 font-semibold text-sm flex items-center gap-2 border-b-2 transition ${
-              activeTab === "csv"
-                ? "border-blue-600 text-blue-700 bg-white"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            <Upload size={16} />
-            Import File CSV thủ công
-          </button>
+          {(["sheets", "csv"] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`py-3 px-4 font-semibold text-sm flex items-center gap-2 border-b-2 transition ${
+                activeTab === tab
+                  ? tab === "sheets" ? "border-green-600 text-green-700 bg-white" : "border-blue-600 text-blue-700 bg-white"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {tab === "sheets" ? (
+                <><RefreshCw size={16} className={syncing ? "animate-spin text-green-600" : ""} /> Đồng bộ Google Sheet</>
+              ) : (
+                <><Upload size={16} /> Import File CSV thủ công</>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Modal Body */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {/* TAB 1: GOOGLE SHEETS SYNC */}
+
+          {/* ====== TAB: GOOGLE SHEETS ====== */}
           {activeTab === "sheets" && (
             <div className="space-y-5">
 
-              {/* Sheet Link Input Box */}
+              {/* Sheet URL */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Đường link Google Sheet
-                  </label>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Đường link Google Sheet</label>
                   {sheetUrl.trim() && (
-                    <a
-                      href={sheetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline"
-                    >
+                    <a href={sheetUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
                       <ExternalLink size={13} /> Mở Google Sheet
                     </a>
                   )}
@@ -409,153 +382,119 @@ function autoSyncToHelpdesk() {
                 </div>
               </div>
 
-              {/* SECTION: Google User Credentials Config */}
+              {/* Google User OAuth Config */}
               <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <User size={18} className="text-blue-600" />
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800">Cấu hình Quyền Google User Thực Truỵ Cập</h4>
-                      <p className="text-xs text-slate-500">Truy cập file Google Sheet cá nhân/doanh nghiệp bằng quyền User OAuth 2.0</p>
+                      <h4 className="text-sm font-bold text-slate-800">Cấu hình Tài khoản Google User</h4>
+                      <p className="text-xs text-slate-500">Truy cập file Google Sheet bằng OAuth 2.0 Access Token / Refresh Token</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowAuthConfig(!showAuthConfig)}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
                   >
-                    {showAuthConfig ? "Ẩn cấu hình" : "Cấu hình Google User"}
+                    {showAuthConfig ? "Ẩn cấu hình" : "Cấu hình"}
                   </button>
                 </div>
 
                 {showAuthConfig && (
                   <div className="pt-3 border-t border-slate-100 space-y-3">
-                    {/* Method Toggle */}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setAuthType("user_oauth"); localStorage.setItem("jpt_google_auth_type", "user_oauth"); }}
-                        className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                          authType === "user_oauth"
-                            ? "bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-500/20"
-                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        <User size={14} /> Google User OAuth 2.0 (Khuyên dùng)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setAuthType("service_account"); localStorage.setItem("jpt_google_auth_type", "service_account"); }}
-                        className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                          authType === "service_account"
-                            ? "bg-purple-50 text-purple-700 border-purple-300 ring-2 ring-purple-500/20"
-                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        <ShieldCheck size={14} /> Google Service Account
-                      </button>
-                    </div>
-
-                    {/* Mode 1: REAL GOOGLE USER OAUTH */}
-                    {authType === "user_oauth" && (
-                      <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
+                    <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Google User Access Token / Refresh Token <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={userAccessToken || userRefreshToken}
+                          onChange={e => {
+                            setUserAccessToken(e.target.value);
+                            localStorage.setItem("jpt_google_user_access_token", e.target.value);
+                          }}
+                          placeholder="ya29.a0A... hoặc 1//04P... (Refresh Token)"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          • Nhập OAuth 2.0 Access Token hoặc Refresh Token của tài khoản Google User thực. File Sheet không cần Share công khai.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            Google User Access Token / Refresh Token
-                          </label>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">OAuth Client ID <span className="text-slate-400">(Tùy chọn)</span></label>
                           <input
                             type="text"
-                            value={userAccessToken || userRefreshToken}
-                            onChange={e => {
-                              setUserAccessToken(e.target.value);
-                              localStorage.setItem("jpt_google_user_access_token", e.target.value);
-                            }}
-                            placeholder="ya29.a0A... (Google User OAuth Access Token hoặc Refresh Token)"
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={userClientId}
+                            onChange={e => { setUserClientId(e.target.value); localStorage.setItem("jpt_google_user_client_id", e.target.value); }}
+                            placeholder="xxx.apps.googleusercontent.com"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
                           />
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            • Nhập Mã Token OAuth 2.0 của tài khoản Google cá nhân/công ty đại diện để truy cập file Sheet trực tiếp không cần Share cho robot.
-                          </p>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
-                          <div>
-                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">OAuth Client ID (Tùy chọn)</label>
-                            <input
-                              type="text"
-                              value={userClientId}
-                              onChange={e => { setUserClientId(e.target.value); localStorage.setItem("jpt_google_user_client_id", e.target.value); }}
-                              placeholder="xxx.apps.googleusercontent.com"
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">OAuth Client Secret (Tùy chọn)</label>
-                            <input
-                              type="password"
-                              value={userClientSecret}
-                              onChange={e => { setUserClientSecret(e.target.value); localStorage.setItem("jpt_google_user_client_secret", e.target.value); }}
-                              placeholder="GOCSPX-..."
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Mode 2: SERVICE ACCOUNT */}
-                    {authType === "service_account" && (
-                      <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
-                        <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
-                          <div>
-                            <p className="text-xs font-bold text-slate-700">Tải file JSON Key từ Google Cloud</p>
-                            <p className="text-[11px] text-slate-500">Tự động điền email và private key</p>
-                          </div>
-                          <input ref={jsonKeyFileRef} type="file" accept=".json" className="hidden" onChange={handleJsonKeyUpload} />
-                          <button
-                            type="button"
-                            onClick={() => jsonKeyFileRef.current?.click()}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition flex items-center gap-1.5"
-                          >
-                            <Upload size={13} /> Tải JSON Key
-                          </button>
-                        </div>
-
                         <div>
-                          <label className="block text-xs font-semibold text-slate-600 mb-1">Client Email</label>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">OAuth Client Secret <span className="text-slate-400">(Tùy chọn)</span></label>
                           <input
-                            type="email"
-                            value={clientEmail}
-                            onChange={e => { setClientEmail(e.target.value); localStorage.setItem("jpt_google_client_email", e.target.value); }}
-                            placeholder="bot@project.iam.gserviceaccount.com"
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 mb-1">Private Key</label>
-                          <textarea
-                            value={privateKey}
-                            onChange={e => { setPrivateKey(e.target.value); localStorage.setItem("jpt_google_private_key", e.target.value); }}
-                            placeholder="-----BEGIN PRIVATE KEY-----\n..."
-                            rows={2}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px] font-mono resize-none"
+                            type="password"
+                            value={userClientSecret}
+                            onChange={e => { setUserClientSecret(e.target.value); localStorage.setItem("jpt_google_user_client_secret", e.target.value); }}
+                            placeholder="GOCSPX-..."
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
                           />
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 text-xs text-blue-900">
+                      <p className="font-bold flex items-center gap-1 text-blue-800">👤 Quyền truy cập bằng Google User thực:</p>
+                      <p className="text-slate-700 mt-1">Ứng dụng dùng thông tin xác thực Google User của bạn để kết nối trực tiếp đến Google Sheets API v4. File Google Sheet được bảo vệ riêng tư 100%.</p>
+                    </div>
                   </div>
                 )}
-
-                {/* Info Note */}
-                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1">
-                  <p className="font-bold flex items-center gap-1 text-blue-800">
-                    👤 Quyền truy cập bằng Tài khoản Google User thực:
-                  </p>
-                  <p className="text-slate-700 font-medium">
-                    Ứng dụng sẽ sử dụng thông tin xác thực Google User thực của bạn để kết nối trực tiếp đến Google Sheets API v4. File Google Sheet của bạn được bảo vệ riêng tư 100%!
-                  </p>
-                </div>
               </div>
+
+              {/* ====== SYNC PROGRESS BAR ====== */}
+              {syncing && syncProgress && !syncProgress.done && (
+                <div className="bg-white border border-green-200 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Đang đồng bộ dữ liệu khách hàng...</span>
+                  </div>
+
+                  {syncProgress.total > 0 && (
+                    <>
+                      {/* Progress bar */}
+                      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-300 ease-out"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+
+                      {/* Stats row */}
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <span className="font-medium truncate max-w-xs">
+                          <ChevronRight size={13} className="inline text-green-500" /> {syncProgress.currentName}
+                        </span>
+                        <span className="font-bold text-green-700 shrink-0 ml-2">
+                          {syncProgress.processed} / {syncProgress.total} ({progressPct}%)
+                        </span>
+                      </div>
+
+                      {/* Mini stats */}
+                      <div className="flex gap-4 text-[11px]">
+                        <span className="text-green-600">✓ Tạo mới: <strong>{syncProgress.created}</strong></span>
+                        <span className="text-blue-600">↺ Cập nhật: <strong>{syncProgress.updated}</strong></span>
+                        {syncProgress.errors > 0 && <span className="text-red-500">✗ Lỗi: <strong>{syncProgress.errors}</strong></span>}
+                      </div>
+                    </>
+                  )}
+
+                  {syncProgress.total === 0 && (
+                    <p className="text-xs text-slate-500">Đang tải dữ liệu từ Google Sheets...</p>
+                  )}
+                </div>
+              )}
 
               {/* Sync Result Banner */}
               {syncResult && (
@@ -568,11 +507,11 @@ function autoSyncToHelpdesk() {
                         <CheckCircle2 size={18} /> Đồng bộ thành công!
                       </div>
                       <div className="grid grid-cols-3 gap-2 mt-3 bg-white/70 p-3 rounded-lg text-xs">
-                        <div>Tổng số dòng: <strong>{syncResult.total}</strong></div>
-                        <div>Tạo mới KH-00x: <strong className="text-green-600">+{syncResult.created}</strong></div>
+                        <div>Tổng: <strong>{syncResult.total}</strong></div>
+                        <div>Tạo mới: <strong className="text-green-600">+{syncResult.created}</strong></div>
                         <div>Cập nhật: <strong className="text-blue-600">{syncResult.updated}</strong></div>
                       </div>
-                      <p className="text-xs text-slate-500 mt-2">Đồng bộ gần nhất: {syncResult.lastSyncedAt}</p>
+                      <p className="text-xs text-slate-500 mt-2">Đồng bộ lúc: {syncResult.lastSyncedAt}</p>
                     </div>
                   ) : (
                     <div className="flex items-start gap-2">
@@ -582,14 +521,14 @@ function autoSyncToHelpdesk() {
                         <p className="mt-1 leading-relaxed">{syncResult.message}</p>
                         {syncResult.message?.includes("console.developers.google.com") && (
                           <div className="mt-3 pt-2.5 border-t border-red-200/80">
-                            <p className="text-xs font-semibold text-slate-800 mb-1.5">👉 Vui lòng nhấn vào nút bên dưới để BẬT (Enable) Google Sheets API cho dự án của bạn:</p>
+                            <p className="text-xs font-semibold text-slate-800 mb-1.5">👉 Bật Google Sheets API cho dự án của bạn:</p>
                             <a
-                              href="https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=983045502462"
+                              href="https://console.developers.google.com/apis/api/sheets.googleapis.com/overview"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition"
                             >
-                              <ExternalLink size={14} /> Bật Google Sheets API (Project 983045502462)
+                              <ExternalLink size={14} /> Bật Google Sheets API
                             </a>
                           </div>
                         )}
@@ -599,40 +538,30 @@ function autoSyncToHelpdesk() {
                 </div>
               )}
 
-              {/* Auto Sync Schedule Config */}
+              {/* Auto Sync Schedule */}
               <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Clock size={18} className="text-blue-600" />
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800">Tự động đồng bộ định kỳ trong App</h4>
-                      <p className="text-xs text-slate-500">Ứng dụng sẽ tự động tải lại dữ liệu từ Google Sheet theo chu kỳ</p>
+                      <h4 className="text-sm font-bold text-slate-800">Tự động đồng bộ định kỳ</h4>
+                      <p className="text-xs text-slate-500">Ứng dụng tự động tải lại dữ liệu từ Google Sheet theo chu kỳ đã cấu hình</p>
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoSyncEnabled}
-                      onChange={e => {
-                        setAutoSyncEnabled(e.target.checked);
-                        localStorage.setItem("jpt_customer_auto_sync", String(e.target.checked));
-                      }}
+                    <input type="checkbox" checked={autoSyncEnabled}
+                      onChange={e => { setAutoSyncEnabled(e.target.checked); localStorage.setItem("jpt_customer_auto_sync", String(e.target.checked)); }}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                   </label>
                 </div>
-
                 {autoSyncEnabled && (
                   <div className="flex items-center gap-3 pt-2 border-t border-slate-100 text-xs text-slate-600">
-                    <span>Tần suất đồng bộ:</span>
+                    <span>Tần suất:</span>
                     <select
                       value={autoSyncInterval}
-                      onChange={e => {
-                        const val = parseInt(e.target.value, 10);
-                        setAutoSyncInterval(val);
-                        localStorage.setItem("jpt_customer_auto_sync_interval", String(val));
-                      }}
+                      onChange={e => { const v = parseInt(e.target.value, 10); setAutoSyncInterval(v); localStorage.setItem("jpt_customer_auto_sync_interval", String(v)); }}
                       className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none"
                     >
                       <option value={5}>Mỗi 5 phút</option>
@@ -644,31 +573,23 @@ function autoSyncToHelpdesk() {
                 )}
               </div>
 
-              {/* Apps Script Webhook Snippet */}
+              {/* Apps Script */}
               <div className="bg-slate-900 rounded-2xl p-4 text-slate-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    ⚡ Tự động đẩy dữ liệu từ Google Sheets (Tức thì)
-                  </span>
-                  <button
-                    onClick={copyAppsScript}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition"
-                  >
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">⚡ Tự động đẩy từ Google Sheet (Tức thì)</span>
+                  <button onClick={copyAppsScript}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition">
                     {copiedScript ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                    {copiedScript ? "Đã copy!" : "Copy Mã Script"}
+                    {copiedScript ? "Đã copy!" : "Copy Script"}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Mở Google Sheet $\rightarrow$ <strong>Tiện ích mở rộng (Extensions)</strong> $\rightarrow$ <strong>Apps Script</strong> $\rightarrow$ Dán mã dưới đây để đồng bộ ngay mỗi khi chỉnh sửa Sheet:
-                </p>
-                <pre className="bg-slate-950 p-3 rounded-xl text-[11px] font-mono text-green-400 overflow-x-auto max-h-36">
-                  {appsScriptCode}
-                </pre>
+                <p className="text-xs text-slate-400">Mở Google Sheet → <strong>Tiện ích mở rộng</strong> → <strong>Apps Script</strong> → Dán mã này để đồng bộ tức thì mỗi khi chỉnh sửa Sheet:</p>
+                <pre className="bg-slate-950 p-3 rounded-xl text-[11px] font-mono text-green-400 overflow-x-auto max-h-36">{appsScriptCode}</pre>
               </div>
             </div>
           )}
 
-          {/* TAB 2: MANUAL CSV IMPORT */}
+          {/* ====== TAB: CSV IMPORT ====== */}
           {activeTab === "csv" && (
             <div className="space-y-4">
               {step === "upload" && (
@@ -686,16 +607,13 @@ function autoSyncToHelpdesk() {
                     </div>
                     <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
                   </div>
-
                   <div className="flex items-center justify-between bg-slate-50 rounded-xl p-4">
                     <div>
                       <p className="text-sm font-medium text-slate-700">Tải file CSV mẫu chuẩn</p>
-                      <p className="text-xs text-slate-400 mt-0.5">Gồm 3 cột: Mã Khách Hàng, Tên Hiển Thị, Tên Tiếng Anh</p>
+                      <p className="text-xs text-slate-400 mt-0.5">3 cột: Mã Khách Hàng, Tên Hiển Thị, Tên Tiếng Anh</p>
                     </div>
-                    <button
-                      onClick={downloadSample}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-                    >
+                    <button onClick={downloadSample}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
                       <Download size={15} /> Tải mẫu
                     </button>
                   </div>
@@ -713,7 +631,7 @@ function autoSyncToHelpdesk() {
                       <thead className="bg-slate-50 sticky top-0 border-b">
                         <tr>
                           <th className="p-2.5">#</th>
-                          <th className="p-2.5">Mã Khách Hàng</th>
+                          <th className="p-2.5">Mã KH</th>
                           <th className="p-2.5">Tên Hiển Thị</th>
                           <th className="p-2.5">Tên Tiếng Anh</th>
                           <th className="p-2.5">Trạng thái</th>
@@ -723,15 +641,14 @@ function autoSyncToHelpdesk() {
                         {rows.map((r, i) => (
                           <tr key={i} className={r.status === "error" ? "bg-red-50" : ""}>
                             <td className="p-2.5 text-slate-400">{i + 1}</td>
-                            <td className="p-2.5 font-bold text-slate-800">{r.code || "—"}</td>
+                            <td className="p-2.5 font-bold">{r.code || "—"}</td>
                             <td className="p-2.5">{r.name || "—"}</td>
                             <td className="p-2.5 text-slate-500">{r.ten_tieng_anh || "—"}</td>
                             <td className="p-2.5">
-                              {r.status === "error" ? (
-                                <span className="text-red-500 font-semibold">{r.message}</span>
-                              ) : (
-                                <span className="text-green-600 font-semibold">✓ Hợp lệ</span>
-                              )}
+                              {r.status === "importing" ? <Loader2 size={12} className="animate-spin text-blue-500" /> :
+                               r.status === "success" ? <span className="text-green-600 font-semibold">{r.message}</span> :
+                               r.status === "error" ? <span className="text-red-500 font-semibold">{r.message}</span> :
+                               <span className="text-green-600 font-semibold">✓ Hợp lệ</span>}
                             </td>
                           </tr>
                         ))}
@@ -744,7 +661,7 @@ function autoSyncToHelpdesk() {
               {step === "result" && (
                 <div className="space-y-3">
                   <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm font-semibold flex items-center gap-2">
-                    <CheckCircle2 size={18} /> Đã hoàn tất import dữ liệu!
+                    <CheckCircle2 size={18} /> Đã hoàn tất import!
                   </div>
                   <div className="border rounded-xl overflow-hidden max-h-60 overflow-y-auto">
                     <table className="w-full text-xs text-left">
@@ -752,7 +669,7 @@ function autoSyncToHelpdesk() {
                         <tr>
                           <th className="p-2.5">#</th>
                           <th className="p-2.5">Mã KH</th>
-                          <th className="p-2.5">Tên Hiển Thị</th>
+                          <th className="p-2.5">Tên</th>
                           <th className="p-2.5">Kết quả</th>
                         </tr>
                       </thead>
@@ -762,7 +679,7 @@ function autoSyncToHelpdesk() {
                             <td className="p-2.5 text-slate-400">{i + 1}</td>
                             <td className="p-2.5 font-mono">{r.code}</td>
                             <td className="p-2.5">{r.name}</td>
-                            <td className="p-2.5 font-semibold text-green-600">{r.message || "Đã lưu"}</td>
+                            <td className={`p-2.5 font-semibold ${r.status === "success" ? "text-green-600" : "text-red-500"}`}>{r.message}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -776,18 +693,14 @@ function autoSyncToHelpdesk() {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <button
-            onClick={handleClose}
-            className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition text-sm"
-          >
+          <button onClick={handleClose}
+            className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition text-sm">
             Đóng
           </button>
           {activeTab === "csv" && step === "preview" && (
-            <button
-              onClick={handleImportCSV}
+            <button onClick={handleImportCSV}
               disabled={importing || rows.every(r => r.status === "error")}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition text-sm flex items-center gap-2 disabled:opacity-50"
-            >
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition text-sm flex items-center gap-2 disabled:opacity-50">
               {importing && <Loader2 size={14} className="animate-spin" />}
               {importing ? "Đang import..." : `Import ${rows.filter(r => r.status !== "error").length} dòng`}
             </button>

@@ -190,6 +190,7 @@ export async function POST(req: NextRequest) {
       userRefreshToken, 
       userClientId, 
       userClientSecret,
+      progressMode,
       data: rawRows 
     } = body;
 
@@ -281,6 +282,15 @@ export async function POST(req: NextRequest) {
         success: false,
         error: "Không tìm thấy dữ liệu hợp lệ trong Google Sheet. Đảm bảo bảng có các cột tên: 'Tên hiển thị' / 'Tên khách hàng', 'Mã khách hàng', 'Tên tiếng anh'.",
       }, { status: 400 });
+    }
+
+    // progressMode: return raw rows for client-side row-by-row processing with progress bar
+    if (progressMode) {
+      return NextResponse.json({
+        success: true,
+        rows: rowsToProcess,
+        total: rowsToProcess.length,
+      });
     }
 
     let createdCount = 0;
