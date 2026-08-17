@@ -14,6 +14,40 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// Helper to extract SheetRow items from 2D values array
+function extractRowsFromValues(rows: any[][]): SheetRow[] {
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+  const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
+
+  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
+  const displayNameIdx = getIndex(["tên hiển thị", "ten hien thi"]);
+  const fullNameIdx = getIndex(["tên khách hàng", "ten khach hang", "name"]);
+  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
+
+  const result: SheetRow[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+
+    const rowCode = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
+    const rowDisplayName = displayNameIdx >= 0 ? String(row[displayNameIdx] || "").trim() : "";
+    const rowFullName = fullNameIdx >= 0 ? String(row[fullNameIdx] || "").trim() : "";
+    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
+
+    // Name priority: Tên hiển thị -> Tên khách hàng
+    const name = rowDisplayName || rowFullName;
+    const code = rowCode || `AUTO-${i}`;
+
+    if (name) {
+      result.push({ code, name, ten_tieng_anh });
+    }
+  }
+
+  return result;
+}
+
 // 1. Fetch via Real Google User OAuth 2.0 (Access Token / Refresh Token of Real Google User)
 async function fetchFromGoogleSheetsAPIUserOAuth(
   spreadsheetId: string,
@@ -63,29 +97,7 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
     range: "A1:Z2000",
   });
 
-  const rows = response.data.values;
-  if (!rows || rows.length < 2) return [];
-
-  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
-  const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
-
-  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
-  const nameIdx = getIndex(["tên hiển thị", "ten hien thi", "tên khách hàng", "ten khach hang", "name"]);
-  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
-
-  const result: SheetRow[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const code = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
-    const name = nameIdx >= 0 ? String(row[nameIdx] || "").trim() : "";
-    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
-
-    if (code && name) {
-      result.push({ code, name, ten_tieng_anh });
-    }
-  }
-
-  return result;
+  return extractRowsFromValues(response.data.values || []);
 }
 
 // 2. Fetch via Service Account JWT
@@ -108,29 +120,7 @@ async function fetchFromGoogleSheetsAPIServiceAccount(
     range: "A1:Z2000",
   });
 
-  const rows = response.data.values;
-  if (!rows || rows.length < 2) return [];
-
-  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
-  const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
-
-  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
-  const nameIdx = getIndex(["tên hiển thị", "ten hien thi", "tên khách hàng", "ten khach hang", "name"]);
-  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
-
-  const result: SheetRow[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const code = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
-    const name = nameIdx >= 0 ? String(row[nameIdx] || "").trim() : "";
-    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
-
-    if (code && name) {
-      result.push({ code, name, ten_tieng_anh });
-    }
-  }
-
-  return result;
+  return extractRowsFromValues(response.data.values || []);
 }
 
 // Helper function to parse CSV text into row objects (fallback)
@@ -138,30 +128,8 @@ function parseCSV(text: string): SheetRow[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
-  
-  const getIndex = (keys: string[]) => {
-    return headers.findIndex(h => keys.some(k => h.includes(k)));
-  };
-
-  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
-  const nameIdx = getIndex(["tên hiển thị", "ten hien thi", "tên khách hàng", "ten khach hang", "name"]);
-  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
-
-  const rows: SheetRow[] = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-    const code = codeIdx >= 0 ? values[codeIdx] : "";
-    const name = nameIdx >= 0 ? values[nameIdx] : "";
-    const ten_tieng_anh = engIdx >= 0 ? values[engIdx] : "";
-
-    if (code && name) {
-      rows.push({ code, name, ten_tieng_anh });
-    }
-  }
-
-  return rows;
+  const parsedMatrix = lines.map(line => line.split(",").map(v => v.trim().replace(/^"|"$/g, "")));
+  return extractRowsFromValues(parsedMatrix);
 }
 
 function getCsvUrl(inputUrl: string): string {
@@ -197,11 +165,18 @@ export async function POST(req: NextRequest) {
 
     // Case 1: Direct JSON rows array passed (from Webhook or Client)
     if (Array.isArray(rawRows) && rawRows.length > 0) {
-      rowsToProcess = rawRows.map(r => ({
-        code: String(r["Mã Khách Hàng"] || r.code || r.ma_khach_hang || "").trim(),
-        name: String(r["Tên Hiển Thị"] || r.name || r.ten_hien_thi || "").trim(),
-        ten_tieng_anh: String(r["Tên Tiếng Anh"] || r.ten_tieng_anh || "").trim(),
-      })).filter(r => r.code && r.name);
+      rowsToProcess = rawRows.map((r, i) => {
+        const rowDisplayName = String(r["Tên Hiển Thị"] || r["Tên hiển thị"] || r.ten_hien_thi || "").trim();
+        const rowFullName = String(r["Tên Khách Hàng"] || r["Tên khách hàng"] || r.name || "").trim();
+        const name = rowDisplayName || rowFullName;
+
+        const rowCode = String(r["Mã Khách Hàng"] || r["Mã khách hàng"] || r.code || r.ma_khach_hang || "").trim();
+        const code = rowCode || `AUTO-${i + 1}`;
+
+        const ten_tieng_anh = String(r["Tên Tiếng Anh"] || r["Tên tiếng anh"] || r.ten_tieng_anh || "").trim();
+
+        return { code, name, ten_tieng_anh };
+      }).filter(r => r.name);
     } 
     // Case 2: Fetch via REAL Google User OAuth 2.0 (Access Token / Refresh Token)
     else if (sheetUrl && (userAccessToken || userRefreshToken)) {
@@ -272,7 +247,7 @@ export async function POST(req: NextRequest) {
     if (rowsToProcess.length === 0) {
       return NextResponse.json({
         success: false,
-        error: "Không tìm thấy dữ liệu hợp lệ trong Google Sheet. Đảm bảo có các cột: 'Mã Khách Hàng', 'Tên Hiển Thị', 'Tên Tiếng Anh'.",
+        error: "Không tìm thấy dữ liệu hợp lệ trong Google Sheet. Đảm bảo bảng có các cột tên: 'Tên hiển thị' / 'Tên khách hàng', 'Mã khách hàng', 'Tên tiếng anh'.",
       }, { status: 400 });
     }
 
@@ -288,7 +263,7 @@ export async function POST(req: NextRequest) {
         else updatedCount++;
       } else {
         errorCount++;
-        if (res.error) errors.push(`[${row.code}] ${res.error}`);
+        if (res.error) errors.push(`[${row.name}] ${res.error}`);
       }
     }
 

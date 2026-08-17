@@ -63,28 +63,42 @@ export async function checkCustomerCodeExists(code: string): Promise<boolean> {
 
 // Upsert single customer from import (Sheet / CSV)
 export async function upsertCustomerFromImport(item: {
-  code: string
+  code?: string
   name: string
   ten_tieng_anh?: string
 }): Promise<{ success: boolean; action: 'created' | 'updated'; error?: string }> {
   try {
-    const code = (item.code || '').trim().toUpperCase()
+    let code = (item.code || '').trim().toUpperCase()
     const name = (item.name || '').trim()
     const ten_tieng_anh = (item.ten_tieng_anh || '').trim()
 
-    if (!code || !name) {
-      return { success: false, action: 'created', error: 'Thiếu mã khách hàng hoặc tên hiển thị.' }
+    if (!name) {
+      return { success: false, action: 'created', error: 'Thiếu Tên hiển thị/Tên khách hàng.' }
     }
 
-    // Check existing by code
-    const { data: existing } = await supabase
-      .from('customers')
-      .select('id, system_code')
-      .eq('code', code)
-      .maybeSingle()
+    // If code is empty or auto-generated placeholder, try matching existing by name first
+    let existing: any = null
+
+    if (code && !code.startsWith('AUTO-')) {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, system_code, code')
+        .eq('code', code)
+        .maybeSingle()
+      existing = data
+    }
+
+    if (!existing) {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, system_code, code')
+        .eq('name', name)
+        .maybeSingle()
+      existing = data
+    }
 
     if (existing) {
-      // Update existing record (only update imported fields name, ten_tieng_anh, keep internal ttkd/phu_trach untouched)
+      // Update existing record
       const { error } = await supabase
         .from('customers')
         .update({
@@ -97,8 +111,12 @@ export async function upsertCustomerFromImport(item: {
       if (error) return { success: false, action: 'updated', error: error.message }
       return { success: true, action: 'updated' }
     } else {
-      // Insert new record
+      // Insert new record with auto generated system_code (KH-001, KH-002...)
       const system_code = await getNextSystemCode()
+      if (!code || code.startsWith('AUTO-')) {
+        code = system_code // Use generated system_code as customer code if missing
+      }
+
       const { error } = await supabase
         .from('customers')
         .insert([{
