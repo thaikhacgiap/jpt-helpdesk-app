@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw,
-  Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink,
-  User, ChevronRight
+  Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink, User
 } from "lucide-react";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
 
@@ -24,15 +23,6 @@ interface ParsedRow {
   message?: string;
 }
 
-interface SyncProgress {
-  total: number;
-  processed: number;
-  created: number;
-  updated: number;
-  errors: number;
-  currentName: string;
-  done: boolean;
-}
 
 const SAMPLE_CSV = `"Mã Khách Hàng","Tên Hiển Thị","Tên Tiếng Anh"
 "BANK-ACB","Ngân hàng ACB","Asia Commercial Joint Stock Bank"
@@ -54,7 +44,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [syncProgress, setSyncProgress] = useState(0); // 0-100 animated
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
     total?: number;
@@ -99,7 +89,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     setStep("upload");
     setFileName("");
     setSyncResult(null);
-    setSyncProgress(null);
+    setSyncProgress(0);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -108,7 +98,6 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     onClose();
   };
 
-  // Sync Google Sheets — with streaming progress using Server-Sent Events simulation
   const handleSyncSheetsNow = async () => {
     if (!sheetUrl.trim()) {
       alert("Vui lòng nhập link Google Sheet.");
@@ -117,7 +106,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
     setSyncing(true);
     setSyncResult(null);
-    setSyncProgress(null);
+    setSyncProgress(0);
 
     // Save settings
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
@@ -127,6 +116,14 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     localStorage.setItem("jpt_google_user_client_secret", userClientSecret.trim());
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
+
+    // Animate progress bar while waiting for server
+    let animFrame = 0;
+    const animInterval = setInterval(() => {
+      animFrame += 1;
+      // Ramp up to ~90% smoothly, hold there until done
+      setSyncProgress(p => p < 88 ? Math.min(88, p + (animFrame < 10 ? 3 : animFrame < 30 ? 1.5 : 0.3)) : p);
+    }, 200);
 
     try {
       const tokenInput = userAccessToken.trim();
@@ -138,57 +135,19 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
         userClientSecret: userClientSecret.trim(),
       };
 
-      // Step 1: Fetch the rows first
-      setSyncProgress({ total: 0, processed: 0, created: 0, updated: 0, errors: 0, currentName: "Đang kết nối Google Sheets...", done: false });
-
       const res = await fetch("/api/customers/sync-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, progressMode: true }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      clearInterval(animInterval);
+      setSyncProgress(100);
 
+      const data = await res.json();
       if (!res.ok || !data.success) {
         setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ dữ liệu từ Google Sheet." });
-        setSyncProgress(null);
-      } else if (data.rows && Array.isArray(data.rows)) {
-        // Step 2: Process rows client-side with progress visualization
-        const allRows = data.rows as Array<{ code: string; name: string; ten_tieng_anh?: string }>;
-        let created = 0, updated = 0, errors = 0;
-
-        setSyncProgress({ total: allRows.length, processed: 0, created: 0, updated: 0, errors: 0, currentName: "", done: false });
-
-        for (let i = 0; i < allRows.length; i++) {
-          const row = allRows[i];
-          setSyncProgress(p => ({ ...p!, processed: i, currentName: row.name, done: false }));
-
-          const result = await upsertCustomerFromImport(row);
-          if (result.success) {
-            if (result.action === "created") created++;
-            else updated++;
-          } else {
-            errors++;
-          }
-
-          // Small delay to make progress visible
-          await new Promise(r => setTimeout(r, 20));
-        }
-
-        setSyncProgress({ total: allRows.length, processed: allRows.length, created, updated, errors, currentName: "", done: true });
-
-        setSyncResult({
-          success: true,
-          total: allRows.length,
-          created,
-          updated,
-          errors,
-          lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
-        });
-        onSuccess();
       } else {
-        // Old-style response (no rows array)
-        setSyncProgress(null);
         setSyncResult({
           success: true,
           total: data.total,
@@ -200,10 +159,12 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
         onSuccess();
       }
     } catch (err: any) {
+      clearInterval(animInterval);
       setSyncResult({ success: false, message: err.message || "Lỗi kết nối máy chủ." });
-      setSyncProgress(null);
     } finally {
       setSyncing(false);
+      // Keep 100% for a moment then hide
+      setTimeout(() => setSyncProgress(0), 1500);
     }
   };
 
@@ -454,45 +415,27 @@ function autoSyncToHelpdesk() {
               </div>
 
               {/* ====== SYNC PROGRESS BAR ====== */}
-              {syncing && syncProgress && !syncProgress.done && (
+              {syncing && syncProgress > 0 && (
                 <div className="bg-white border border-green-200 rounded-2xl p-5 space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Đang đồng bộ dữ liệu khách hàng...</span>
+                    <span>
+                      {syncProgress < 100 ? "Đang đồng bộ dữ liệu khách hàng lên Supabase..." : "Hoàn tất đồng bộ!"}
+                    </span>
+                    <span className="ml-auto font-bold">{Math.round(syncProgress)}%</span>
                   </div>
 
-                  {syncProgress.total > 0 && (
-                    <>
-                      {/* Progress bar */}
-                      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-300 ease-out"
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${syncProgress}%` }}
+                    />
+                  </div>
 
-                      {/* Stats row */}
-                      <div className="flex items-center justify-between text-xs text-slate-600">
-                        <span className="font-medium truncate max-w-xs">
-                          <ChevronRight size={13} className="inline text-green-500" /> {syncProgress.currentName}
-                        </span>
-                        <span className="font-bold text-green-700 shrink-0 ml-2">
-                          {syncProgress.processed} / {syncProgress.total} ({progressPct}%)
-                        </span>
-                      </div>
-
-                      {/* Mini stats */}
-                      <div className="flex gap-4 text-[11px]">
-                        <span className="text-green-600">✓ Tạo mới: <strong>{syncProgress.created}</strong></span>
-                        <span className="text-blue-600">↺ Cập nhật: <strong>{syncProgress.updated}</strong></span>
-                        {syncProgress.errors > 0 && <span className="text-red-500">✗ Lỗi: <strong>{syncProgress.errors}</strong></span>}
-                      </div>
-                    </>
-                  )}
-
-                  {syncProgress.total === 0 && (
-                    <p className="text-xs text-slate-500">Đang tải dữ liệu từ Google Sheets...</p>
-                  )}
+                  <p className="text-[11px] text-slate-500">
+                    Server đang đọc Google Sheets và ghi trực tiếp vào Supabase database...
+                  </p>
                 </div>
               )}
 

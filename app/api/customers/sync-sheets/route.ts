@@ -190,7 +190,6 @@ export async function POST(req: NextRequest) {
       userRefreshToken, 
       userClientId, 
       userClientSecret,
-      progressMode,
       data: rawRows 
     } = body;
 
@@ -284,14 +283,6 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // progressMode: return raw rows for client-side row-by-row processing with progress bar
-    if (progressMode) {
-      return NextResponse.json({
-        success: true,
-        rows: rowsToProcess,
-        total: rowsToProcess.length,
-      });
-    }
 
     let createdCount = 0;
     let updatedCount = 0;
