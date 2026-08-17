@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Lock } from "lucide-react";
 import { fetchCustomers, deleteCustomer, Customer } from "@/lib/customer-operations";
 
 interface CustomerTableProps {
@@ -9,28 +9,6 @@ interface CustomerTableProps {
   onEdit?: (customer: Customer) => void;
   searchValue?: string;
 }
-
-const TYPE_COLORS: Record<string, string> = {
-  BANK: "bg-blue-50 text-blue-700 border-blue-200",
-  GOV: "bg-purple-50 text-purple-700 border-purple-200",
-  CORP: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  SME: "bg-green-50 text-green-700 border-green-200",
-  Corporate: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  Individual: "bg-pink-50 text-pink-700 border-pink-200",
-};
-
-const PHAN_LOAI_COLORS: Record<string, string> = {
-  "End User": "bg-blue-50 text-blue-700 border-blue-200",
-  "Partner":  "bg-purple-50 text-purple-700 border-purple-200",
-  "Reseller": "bg-orange-50 text-orange-700 border-orange-200",
-  "Internal": "bg-slate-100 text-slate-600 border-slate-200",
-};
-
-const KHU_VUC_COLORS: Record<string, string> = {
-  "Bắc": "bg-cyan-50 text-cyan-700",
-  "Trung": "bg-amber-50 text-amber-700",
-  "Nam": "bg-orange-50 text-orange-700",
-};
 
 const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, searchValue = "" }, ref) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -64,11 +42,11 @@ const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, 
     if (!searchValue) return true;
     const q = searchValue.toLowerCase();
     return (
+      c.system_code?.toLowerCase().includes(q) ||
       c.code?.toLowerCase().includes(q) ||
       c.name?.toLowerCase().includes(q) ||
-      c.type?.toLowerCase().includes(q) ||
+      c.ten_tieng_anh?.toLowerCase().includes(q) ||
       c.phu_trach?.toLowerCase().includes(q) ||
-      c.khu_vuc?.toLowerCase().includes(q) ||
       c.ttkd?.toLowerCase().includes(q)
     );
   });
@@ -138,15 +116,12 @@ const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, 
                   onChange={toggleAll}
                 />
               </th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Mã khách hàng</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Tên khách hàng</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Phân loại</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Loại DN</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Tình trạng</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Khu vực</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Địa chỉ</th>
-              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Người phụ trách</th>
+              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Mã HT</th>
+              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Mã Khách Hàng</th>
+              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Tên Khách Hàng (Tên Hiển Thị)</th>
+              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Tên Tiếng Anh</th>
               <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">TTKD</th>
+              <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Người Phụ Trách</th>
               <th className="px-4 py-3 whitespace-nowrap bg-slate-50 border-b border-r border-slate-200">Ghi chú</th>
               <th className="px-4 py-3 text-center whitespace-nowrap bg-slate-50 border-b border-slate-200">Thao tác</th>
             </tr>
@@ -156,20 +131,20 @@ const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-6 py-12 text-center">
+                <td colSpan={9} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-slate-500 text-sm">Đang tải dữ liệu...</span>
+                    <span className="text-slate-500 text-sm">Đang tải danh sách khách hàng...</span>
                   </div>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-6 py-12 text-center">
+                <td colSpan={9} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <div className="text-3xl">🏢</div>
                     <p className="text-slate-500 text-sm">
-                      {searchValue ? "Không tìm thấy khách hàng phù hợp." : "Chưa có khách hàng nào."}
+                      {searchValue ? "Không tìm thấy khách hàng phù hợp." : "Chưa có dữ liệu khách hàng."}
                     </p>
                   </div>
                 </td>
@@ -181,7 +156,7 @@ const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, 
                   className={`border-b border-slate-100 divide-x divide-slate-100 hover:bg-blue-50/30 transition-colors duration-150 ${selectedIds.has(customer.id) ? "bg-blue-50/50" : ""}`}
                 >
                   {/* Checkbox */}
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-3.5">
                     <input
                       type="checkbox"
                       className="rounded"
@@ -190,105 +165,73 @@ const CustomerTable = forwardRef<any, CustomerTableProps>(({ onRefresh, onEdit, 
                     />
                   </td>
 
-                  {/* Mã KH */}
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 font-mono">
-                      {customer.code}
+                  {/* Mã HT (KH-001) */}
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-xs border border-blue-200 font-mono">
+                      {customer.system_code || `KH-${String(index + 1).padStart(3, '0')}`}
                     </span>
                   </td>
 
-                  {/* Tên KH */}
-                  <td className="px-4 py-4">
-                    <span className="font-medium text-slate-800 whitespace-nowrap">{customer.name}</span>
+                  {/* Mã KH */}
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-1.5">
+                      <Lock size={12} className="text-slate-400 shrink-0" />
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 font-mono">
+                        {customer.code}
+                      </span>
+                    </div>
                   </td>
 
-                  {/* Phân loại */}
-                  <td className="px-4 py-4">
-                    {customer.phan_loai ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
-                        PHAN_LOAI_COLORS[customer.phan_loai] || "bg-slate-50 text-slate-600 border-slate-200"
-                      }`}>
-                        {customer.phan_loai}
+                  {/* Tên KH */}
+                  <td className="px-4 py-3.5">
+                    <span className="font-semibold text-slate-800 whitespace-nowrap">{customer.name}</span>
+                  </td>
+
+                  {/* Tên Tiếng Anh */}
+                  <td className="px-4 py-3.5 text-xs text-slate-600">
+                    {customer.ten_tieng_anh ? (
+                      <span className="italic text-slate-700">{customer.ten_tieng_anh}</span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+
+                  {/* TTKD */}
+                  <td className="px-4 py-3.5">
+                    {customer.ttkd ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold text-xs border border-purple-200">
+                        {customer.ttkd}
                       </span>
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
 
-                  {/* Loại DN */}
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
-                      TYPE_COLORS[customer.type || ""] || "bg-slate-50 text-slate-600 border-slate-200"
-                    }`}>
-                      {customer.type || "—"}
-                    </span>
-                  </td>
-
-                  {/* Tình trạng */}
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                      customer.tinh_trang === "Active" || !customer.tinh_trang
-                        ? "bg-green-50 text-green-700"
-                        : "bg-red-50 text-red-600"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        customer.tinh_trang === "Active" || !customer.tinh_trang ? "bg-green-500" : "bg-red-400"
-                      }`} />
-                      {customer.tinh_trang || "Active"}
-                    </span>
-                  </td>
-
-                  {/* Khu vực */}
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
-                      KHU_VUC_COLORS[customer.khu_vuc || ""] || "bg-slate-50 text-slate-500"
-                    }`}>
-                      {customer.khu_vuc || "—"}
-                    </span>
-                  </td>
-
-                  {/* Địa chỉ */}
-                  <td className="px-4 py-4 text-slate-600 text-xs max-w-[140px]">
-                    <span className="truncate block" title={customer.address || ""}>{customer.address || "—"}</span>
-                  </td>
-
                   {/* Người phụ trách */}
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-3.5">
                     {customer.phu_trach ? (
                       <div className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${getAvatarColor(customer.phu_trach)}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${getAvatarColor(customer.phu_trach)}`}>
                           {getInitials(customer.phu_trach)}
                         </div>
-                        <span className="text-sm text-slate-700 whitespace-nowrap">{customer.phu_trach}</span>
-                      </div>
-                    ) : customer.contact_person ? (
-                      <div className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${getAvatarColor(customer.contact_person)}`}>
-                          {getInitials(customer.contact_person)}
-                        </div>
-                        <span className="text-sm text-slate-700 whitespace-nowrap">{customer.contact_person}</span>
+                        <span className="text-xs font-medium text-slate-700 whitespace-nowrap">{customer.phu_trach}</span>
                       </div>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-300">—</span>
                     )}
                   </td>
 
-                  {/* TTKD */}
-                  <td className="px-4 py-4">
-                    <span className="text-xs text-slate-600 font-medium">{customer.ttkd || "—"}</span>
-                  </td>
-
                   {/* Ghi chú */}
-                  <td className="px-4 py-4 text-xs text-slate-500 max-w-[120px]">
+                  <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[140px]">
                     <span className="truncate block" title={customer.ghi_chu || ""}>{customer.ghi_chu || "—"}</span>
                   </td>
 
                   {/* Thao tác */}
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-3.5">
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => onEdit?.(customer)}
-                        title="Chỉnh sửa"
+                        title="Chỉnh sửa TTKD & Người phụ trách"
                         className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
                       >
                         <Pencil size={14} />

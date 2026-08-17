@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Building2, Loader2, Search, ChevronDown, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, Building2, Loader2, Search, ChevronDown, CheckCircle2, AlertCircle, Lock } from "lucide-react";
 import { createCustomer, updateCustomer, checkCustomerCodeExists, Customer } from "@/lib/customer-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 
@@ -12,32 +12,17 @@ interface CustomerModalProps {
   editData?: Customer | null;
 }
 
-const LOAI_DN = ["BANK", "GOV", "CORP", "SME", "Corporate", "Individual", "Khác"];
-const KHU_VUC = ["Bắc", "Trung", "Nam"];
-const TINH_TRANG = ["Active", "Inactive"];
-const PHAN_LOAI_OPTIONS = [
-  { value: "End User", label: "End User", color: "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100" },
-  { value: "Partner", label: "Partner", color: "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100" },
-  { value: "Reseller", label: "Reseller", color: "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100" },
-  { value: "Internal", label: "Internal", color: "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100" },
-];
-
 const emptyForm = {
+  system_code: "",
   code: "",
   name: "",
-  type: "",
-  phan_loai: "",
-  tinh_trang: "Active",
-  khu_vuc: "",
-  address: "",
+  ten_tieng_anh: "",
   phu_trach: "",
   ttkd: "",
   ghi_chu: "",
-  email: "",
-  phone: "",
 };
 
-// Searchable dropdown for staff
+// Searchable dropdown for staff (Nhân sự)
 function StaffDropdown({
   value,
   onChange,
@@ -51,7 +36,6 @@ function StaffDropdown({
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -69,6 +53,7 @@ function StaffDropdown({
   );
 
   const getInitials = (name: string) => {
+    if (!name) return "?";
     const parts = name.trim().split(" ");
     return parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
@@ -78,7 +63,6 @@ function StaffDropdown({
 
   return (
     <div ref={ref} className="relative">
-      {/* Trigger */}
       <button
         type="button"
         onClick={() => { setOpen(!open); setQuery(""); }}
@@ -89,7 +73,7 @@ function StaffDropdown({
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${getColor(value)}`}>
               {getInitials(value)}
             </div>
-            <span className="text-slate-800">{value}</span>
+            <span className="text-slate-800 font-medium">{value}</span>
           </div>
         ) : (
           <span className="text-slate-400">-- Chọn người phụ trách --</span>
@@ -97,17 +81,15 @@ function StaffDropdown({
         <ChevronDown size={16} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          {/* Search box */}
           <div className="p-2 border-b border-slate-100">
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 autoFocus
                 type="text"
-                placeholder="Tìm nhân sự..."
+                placeholder="Tìm tên nhân sự..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
@@ -115,9 +97,7 @@ function StaffDropdown({
             </div>
           </div>
 
-          {/* List */}
-          <div className="max-h-44 overflow-y-auto">
-            {/* Clear option */}
+          <div className="max-h-48 overflow-y-auto">
             <button
               type="button"
               onClick={() => { onChange(""); setOpen(false); }}
@@ -171,29 +151,22 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
   const [codeOk, setCodeOk] = useState(false);
   const codeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load staff list
   useEffect(() => {
     if (isOpen) {
       fetchNhanSu().then(setStaffList).catch(console.error);
     }
   }, [isOpen]);
 
-  // Fill form when editing
   useEffect(() => {
     if (editData) {
       setFormData({
+        system_code: editData.system_code || "KH-001",
         code: editData.code || "",
         name: editData.name || "",
-        type: editData.type || "",
-        phan_loai: editData.phan_loai || "",
-        tinh_trang: editData.tinh_trang || "Active",
-        khu_vuc: editData.khu_vuc || "",
-        address: editData.address || "",
-        phu_trach: editData.phu_trach || editData.contact_person || "",
+        ten_tieng_anh: editData.ten_tieng_anh || "",
+        phu_trach: editData.phu_trach || "",
         ttkd: editData.ttkd || "",
         ghi_chu: editData.ghi_chu || "",
-        email: editData.email || "",
-        phone: editData.phone || "",
       });
     } else {
       setFormData(emptyForm);
@@ -203,7 +176,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
     setCodeOk(false);
   }, [editData, isOpen]);
 
-  // Debounce code check (only in create mode)
+  // Code check for new customers
   useEffect(() => {
     if (isEditMode) return;
     const code = formData.code.trim().toUpperCase();
@@ -225,7 +198,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
     return () => { if (codeTimerRef.current) clearTimeout(codeTimerRef.current); };
   }, [formData.code, isEditMode]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -241,7 +214,12 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
     try {
       let result: { success: boolean; error?: string };
       if (isEditMode && editData) {
-        result = await updateCustomer(editData.code, formData);
+        result = await updateCustomer(editData.code, {
+          ten_tieng_anh: formData.ten_tieng_anh,
+          phu_trach: formData.phu_trach,
+          ttkd: formData.ttkd,
+          ghi_chu: formData.ghi_chu,
+        });
       } else {
         result = await createCustomer(formData);
       }
@@ -265,15 +243,22 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
-              <Building2 size={18} className="text-blue-600" />
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+              <Building2 size={20} className="text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                {isEditMode ? "Chỉnh sửa khách hàng" : "Thêm khách hàng mới"}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {isEditMode ? "Thông tin khách hàng" : "Thêm khách hàng thủ công"}
+                </h2>
+                {formData.system_code && (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-mono text-xs font-bold border border-blue-200">
+                    {formData.system_code}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
-                {isEditMode ? `Đang sửa: ${editData?.code}` : "Nhập mã khách hàng"}
+                {isEditMode ? "Thông tin import từ Sheet được khóa bảo vệ. Có thể chỉnh sửa TTKD và Người phụ trách." : "Tự động gán mã hệ thống KH-00x"}
               </p>
             </div>
           </div>
@@ -288,236 +273,144 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">{error}</div>
           )}
 
-          {/* Mã KH + Tên KH */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Mã KH */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Mã khách hàng <span className="text-red-500">*</span>
-              </label>
-              {isEditMode ? (
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 font-mono">
+          {/* Section: Thông tin từ Sheet (Read-Only nếu là Edit Mode) */}
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Lock size={12} className="text-slate-400" /> Thông tin từ Sheet Import (Cố định)
+              </span>
+              {isEditMode && <span className="text-[11px] text-amber-600 font-medium">Read-Only</span>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Mã KH */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Mã Khách Hàng <span className="text-red-500">*</span>
+                </label>
+                {isEditMode ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl font-mono text-sm text-slate-700 font-bold">
+                    <Lock size={14} className="text-slate-400" />
                     {formData.code}
-                  </span>
-                  <span className="text-xs text-slate-400">(không thể đổi)</span>
-                </div>
-              ) : (
-                <div className="relative">
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="code"
+                      value={formData.code}
+                      onChange={handleChange}
+                      placeholder="VD: BANK-ACB, CORP-FPT..."
+                      required
+                      className={`w-full px-3 py-2 border rounded-xl outline-none text-sm font-mono transition ${
+                        codeError ? "border-red-400" : codeOk ? "border-green-400" : "border-slate-200"
+                      }`}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {codeChecking && <Loader2 size={14} className="animate-spin text-slate-400" />}
+                      {!codeChecking && codeOk && <CheckCircle2 size={14} className="text-green-500" />}
+                      {!codeChecking && codeError && <AlertCircle size={14} className="text-red-500" />}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tên KH / Tên Hiển Thị */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Tên Khách Hàng (Tên Hiển Thị) <span className="text-red-500">*</span>
+                </label>
+                {isEditMode ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium truncate">
+                    <Lock size={14} className="text-slate-400 shrink-0" />
+                    <span className="truncate">{formData.name}</span>
+                  </div>
+                ) : (
                   <input
                     type="text"
-                    name="code"
-                    value={formData.code}
+                    name="name"
+                    value={formData.name}
                     onChange={handleChange}
-                    placeholder="VD: BANK-ACB, CORP-FPT..."
+                    placeholder="Ngân hàng ACB, Công ty FPT..."
                     required
-                    className={`w-full px-3 py-2.5 border rounded-xl outline-none focus:ring-2 text-sm font-mono transition pr-9 ${
-                      codeError
-                        ? "border-red-400 focus:ring-red-400"
-                        : codeOk
-                        ? "border-green-400 focus:ring-green-400"
-                        : "border-slate-200 focus:ring-blue-500"
-                    }`}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-sm"
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {codeChecking && <Loader2 size={14} className="animate-spin text-slate-400" />}
-                    {!codeChecking && codeOk && <CheckCircle2 size={14} className="text-green-500" />}
-                    {!codeChecking && codeError && <AlertCircle size={14} className="text-red-500" />}
-                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tên Tiếng Anh */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Tên Tiếng Anh
+              </label>
+              {isEditMode ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium truncate">
+                  <Lock size={14} className="text-slate-400 shrink-0" />
+                  <span className="truncate">{formData.ten_tieng_anh || "—"}</span>
                 </div>
-              )}
-              {codeError && !isEditMode && (
-                <p className="mt-1 text-xs text-red-500">{codeError}</p>
-              )}
-              {codeOk && !isEditMode && (
-                <p className="mt-1 text-xs text-green-600">✓ Mã hợp lệ, có thể sử dụng.</p>
-              )}
-            </div>
-
-            {/* Tên KH */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Tên khách hàng <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Ngân hàng ACB, Công ty FPT..."
-                required
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-              />
-            </div>
-          </div>
-
-          {/* Phân loại — button group */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-              Phân loại khách hàng
-            </label>
-            <div className="flex items-center gap-2 flex-wrap">
-              {PHAN_LOAI_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, phan_loai: prev.phan_loai === opt.value ? "" : opt.value }))}
-                  className={`px-4 py-2 rounded-xl border text-xs font-semibold transition ${
-                    formData.phan_loai === opt.value
-                      ? opt.color + " ring-2 ring-offset-1 " + opt.color.split(" ").find(c => c.startsWith("border-"))
-                      : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-              {formData.phan_loai && (
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, phan_loai: "" }))}
-                  className="text-xs text-slate-400 hover:text-slate-600 underline ml-1"
-                >
-                  Xóa chọn
-                </button>
+              ) : (
+                <input
+                  type="text"
+                  name="ten_tieng_anh"
+                  value={formData.ten_tieng_anh}
+                  onChange={handleChange}
+                  placeholder="Asia Commercial Joint Stock Bank..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-sm"
+                />
               )}
             </div>
           </div>
 
-          {/* Row: Loại DN + Tình trạng */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Loại doanh nghiệp
-              </label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white appearance-none"
-              >
-                <option value="">-- Chọn loại DN --</option>
-                {LOAI_DN.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+          {/* Section: Thông tin Quản lý Nội bộ (Được phép Edit) */}
+          <div className="bg-white rounded-2xl p-4 border border-blue-100 shadow-xs space-y-3">
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider block">
+              ✏️ Thông tin Quản lý Nội bộ (Được chỉnh sửa)
+            </span>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* TTKD */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  TTKD (Trung tâm kinh doanh)
+                </label>
+                <input
+                  type="text"
+                  name="ttkd"
+                  value={formData.ttkd}
+                  onChange={handleChange}
+                  placeholder="TTKD1, TTKD2..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Người phụ trách (Dropdown Nhân sự) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Người phụ trách <span className="text-slate-400 font-normal">(bảng nhân sự)</span>
+                </label>
+                <StaffDropdown
+                  value={formData.phu_trach}
+                  onChange={(v) => setFormData((prev) => ({ ...prev, phu_trach: v }))}
+                  staffList={staffList}
+                />
+              </div>
             </div>
 
+            {/* Ghi chú */}
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Tình trạng
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Ghi chú bổ sung
               </label>
-              <select
-                name="tinh_trang"
-                value={formData.tinh_trang}
+              <textarea
+                name="ghi_chu"
+                value={formData.ghi_chu}
                 onChange={handleChange}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white appearance-none"
-              >
-                {TINH_TRANG.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Row: Khu vực + TTKD */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Khu vực
-              </label>
-              <select
-                name="khu_vuc"
-                value={formData.khu_vuc}
-                onChange={handleChange}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white appearance-none"
-              >
-                <option value="">-- Chọn khu vực --</option>
-                {KHU_VUC.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                TTKD
-              </label>
-              <input
-                type="text"
-                name="ttkd"
-                value={formData.ttkd}
-                onChange={handleChange}
-                placeholder="TTKD1, TTKD2..."
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                placeholder="Nhập ghi chú..."
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
               />
             </div>
-          </div>
-
-          {/* Địa chỉ */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-              Địa chỉ
-            </label>
-            <input
-              type="text"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              placeholder="Hà Nội, Đà Nẵng, TP. Hồ Chí Minh..."
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-            />
-          </div>
-
-          {/* Người phụ trách — searchable dropdown */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-              Người phụ trách
-              <span className="ml-2 text-slate-400 normal-case font-normal">(chọn từ danh sách nhân sự)</span>
-            </label>
-            <StaffDropdown
-              value={formData.phu_trach}
-              onChange={(v) => setFormData((prev) => ({ ...prev, phu_trach: v }))}
-              staffList={staffList}
-            />
-          </div>
-
-          {/* Row: Email + Phone */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="contact@company.com"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                Số điện thoại
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="0901234567"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-              />
-            </div>
-          </div>
-
-          {/* Ghi chú */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-              Ghi chú
-            </label>
-            <textarea
-              name="ghi_chu"
-              value={formData.ghi_chu}
-              onChange={handleChange}
-              placeholder="Ghi chú thêm..."
-              rows={2}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition resize-none"
-            />
           </div>
 
           {/* Buttons */}
@@ -532,10 +425,10 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, editData }: 
             <button
               type="submit"
               disabled={isLoading}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium transition disabled:opacity-50 text-sm flex items-center gap-2"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium transition disabled:opacity-50 text-sm flex items-center gap-2 shadow-sm"
             >
               {isLoading && <Loader2 size={15} className="animate-spin" />}
-              {isLoading ? "Đang lưu..." : isEditMode ? "Cập nhật" : "Thêm khách hàng"}
+              {isLoading ? "Đang lưu..." : isEditMode ? "Cập nhật thông tin" : "Tạo khách hàng"}
             </button>
           </div>
         </form>
