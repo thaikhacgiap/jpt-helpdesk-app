@@ -14,33 +14,65 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-// Helper to extract SheetRow items from 2D values array
+// Helper to extract SheetRow items from 2D values array with smart header detection & positional fallbacks
 function extractRowsFromValues(rows: any[][]): SheetRow[] {
-  if (!rows || rows.length < 2) return [];
+  if (!rows || rows.length < 1) return [];
 
-  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+  // 1. Smart Header Row Detection (Scan top 10 rows for actual header line)
+  let headerRowIdx = 0;
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const rowText = (rows[r] || []).map(cell => String(cell || "").toLowerCase()).join(" ");
+    if (rowText.includes("tên") || rowText.includes("mã") || rowText.includes("khách hàng") || rowText.includes("name") || rowText.includes("code")) {
+      headerRowIdx = r;
+      break;
+    }
+  }
+
+  const headerRow = rows[headerRowIdx] || [];
+  const headers = headerRow.map((h: any) => String(h || "").trim().toLowerCase());
+  
   const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
 
-  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
-  const displayNameIdx = getIndex(["tên hiển thị", "ten hien thi"]);
-  const fullNameIdx = getIndex(["tên khách hàng", "ten khach hang", "name"]);
-  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
+  let codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
+  let displayNameIdx = getIndex(["tên hiển thị", "ten hien thi"]);
+  let fullNameIdx = getIndex(["tên khách hàng", "ten khach hang", "tên công ty", "ten cong ty", "name"]);
+  let engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
+
+  // Positional fallbacks (Matching screenshot layout: A=Code, B=Name, C=DisplayName, F=EngName)
+  if (displayNameIdx < 0 && fullNameIdx < 0) {
+    fullNameIdx = 1;     // Col B: Tên khách hàng
+    displayNameIdx = 2;  // Col C: Tên hiển thị
+  }
+  if (codeIdx < 0) codeIdx = 0; // Col A: Mã khách hàng
+  if (engIdx < 0 && headerRow.length > 5) engIdx = 5; // Col F: Tên tiếng anh
 
   const result: SheetRow[] = [];
-  for (let i = 1; i < rows.length; i++) {
+  
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length === 0) continue;
 
-    const rowCode = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
-    const rowDisplayName = displayNameIdx >= 0 ? String(row[displayNameIdx] || "").trim() : "";
-    const rowFullName = fullNameIdx >= 0 ? String(row[fullNameIdx] || "").trim() : "";
-    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
+    const rowCode = codeIdx >= 0 && codeIdx < row.length ? String(row[codeIdx] || "").trim() : "";
+    const rowDisplayName = displayNameIdx >= 0 && displayNameIdx < row.length ? String(row[displayNameIdx] || "").trim() : "";
+    const rowFullName = fullNameIdx >= 0 && fullNameIdx < row.length ? String(row[fullNameIdx] || "").trim() : "";
+    const ten_tieng_anh = engIdx >= 0 && engIdx < row.length ? String(row[engIdx] || "").trim() : "";
 
-    // Name priority: Tên hiển thị -> Tên khách hàng
-    const name = rowDisplayName || rowFullName;
+    // Name priority: Tên hiển thị -> Tên khách hàng -> any text cell in row
+    let name = rowDisplayName || rowFullName;
+    if (!name) {
+      for (let c = 0; c < Math.min(row.length, 6); c++) {
+        const val = String(row[c] || "").trim();
+        if (val && !val.toLowerCase().startsWith("tên") && !val.toLowerCase().startsWith("mã") && val.length > 2) {
+          name = val;
+          break;
+        }
+      }
+    }
+
     const code = rowCode || `AUTO-${i}`;
 
-    if (name) {
+    // Skip if row is a repeated header or blank
+    if (name && !name.toLowerCase().startsWith("tên khách hàng") && !name.toLowerCase().startsWith("tên hiển thị")) {
       result.push({ code, name, ten_tieng_anh });
     }
   }
