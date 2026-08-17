@@ -49,13 +49,16 @@ export default function CustomersPage() {
       const sheetUrl = localStorage.getItem("jpt_customer_sheet_url") || "";
       const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
 
+      const clientEmail = localStorage.getItem("jpt_google_client_email") || "";
+      const privateKey = localStorage.getItem("jpt_google_private_key") || "";
+
       if (!enabled || !sheetUrl) return;
 
       try {
         const res = await fetch("/api/customers/sync-sheets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sheetUrl }),
+          body: JSON.stringify({ sheetUrl, clientEmail, privateKey }),
         });
         const data = await res.json();
         if (data.success) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw, Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink } from "lucide-react";
+import { X, Upload, AlertCircle, CheckCircle2, Loader2, Download, RefreshCw, Link as LinkIcon, Clock, Copy, Check, FileSpreadsheet, ExternalLink, ShieldCheck, Key, UserCheck } from "lucide-react";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
 
 interface ImportModalProps {
@@ -28,8 +28,12 @@ const SAMPLE_CSV = `"Mã Khách Hàng","Tên Hiển Thị","Tên Tiếng Anh"
 export default function CustomerImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
   const [activeTab, setActiveTab] = useState<"sheets" | "csv">("sheets");
 
-  // Google Sheets state
+  // Google Sheets & Service Account User Credentials state
   const [sheetUrl, setSheetUrl] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [showAuthConfig, setShowAuthConfig] = useState(false);
+
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
@@ -43,8 +47,9 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Auto Sync Settings
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
-  const [autoSyncInterval, setAutoSyncInterval] = useState(15); // minutes
+  const [autoSyncInterval, setAutoSyncInterval] = useState(15);
   const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // CSV Import state
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -52,16 +57,23 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
   const [fileName, setFileName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const jsonKeyFileRef = useRef<HTMLInputElement>(null);
 
   // Load saved settings from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedUrl = localStorage.getItem("jpt_customer_sheet_url") || "";
+      const savedEmail = localStorage.getItem("jpt_google_client_email") || "";
+      const savedKey = localStorage.getItem("jpt_google_private_key") || "";
       const savedAutoSync = localStorage.getItem("jpt_customer_auto_sync") === "true";
       const savedInterval = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
+      
       setSheetUrl(savedUrl);
+      setClientEmail(savedEmail);
+      setPrivateKey(savedKey);
       setAutoSyncEnabled(savedAutoSync);
       setAutoSyncInterval(savedInterval);
+      if (savedEmail && savedKey) setShowAuthConfig(true);
     }
   }, []);
 
@@ -79,9 +91,33 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     onClose();
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // 1. Google Sheets Sync Logic
-  // ─────────────────────────────────────────────────────────────
+  // Handle JSON Key File Upload (from Google Cloud Console)
+  const handleJsonKeyUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        if (json.client_email && json.private_key) {
+          setClientEmail(json.client_email);
+          setPrivateKey(json.private_key);
+          localStorage.setItem("jpt_google_client_email", json.client_email);
+          localStorage.setItem("jpt_google_private_key", json.private_key);
+          setShowAuthConfig(true);
+          alert(`Đã nhận diện thành công tài khoản Google User: ${json.client_email}`);
+        } else {
+          alert("File JSON không chứa thông tin client_email hoặc private_key hợp lệ.");
+        }
+      } catch (err) {
+        alert("Không thể đọc file JSON Google Service Account Credentials.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Sync Google Sheets Now
   const handleSyncSheetsNow = async () => {
     if (!sheetUrl.trim()) {
       alert("Vui lòng nhập link Google Sheet.");
@@ -91,8 +127,10 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     setSyncing(true);
     setSyncResult(null);
 
-    // Save URL and AutoSync preferences
+    // Save preferences
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
+    localStorage.setItem("jpt_google_client_email", clientEmail.trim());
+    localStorage.setItem("jpt_google_private_key", privateKey.trim());
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
 
@@ -100,7 +138,11 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
       const res = await fetch("/api/customers/sync-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetUrl: sheetUrl.trim() }),
+        body: JSON.stringify({
+          sheetUrl: sheetUrl.trim(),
+          clientEmail: clientEmail.trim(),
+          privateKey: privateKey.trim(),
+        }),
       });
 
       const data = await res.json();
@@ -162,9 +204,14 @@ function autoSyncToHelpdesk() {
     setTimeout(() => setCopiedScript(false), 2000);
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // 2. CSV Parsing & Import Logic
-  // ─────────────────────────────────────────────────────────────
+  const copyEmail = () => {
+    if (!clientEmail) return;
+    navigator.clipboard.writeText(clientEmail);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2000);
+  };
+
+  // CSV Parsing
   const parseCSV = (text: string): ParsedRow[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return [];
@@ -253,7 +300,7 @@ function autoSyncToHelpdesk() {
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">Import & Đồng bộ Khách hàng</h2>
-              <p className="text-xs text-slate-500">Tự động đồng bộ từ Google Sheet hoặc file CSV</p>
+              <p className="text-xs text-slate-500">Tự động đồng bộ qua Google User Account hoặc File CSV</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 hover:bg-slate-100 rounded-lg transition">
@@ -272,7 +319,7 @@ function autoSyncToHelpdesk() {
             }`}
           >
             <RefreshCw size={16} className={syncing ? "animate-spin text-green-600" : ""} />
-            Đồng bộ Google Sheet (Tự động 1 chiều)
+            Đồng bộ Google Sheet (Tài khoản Google User)
           </button>
           <button
             onClick={() => setActiveTab("csv")}
@@ -292,11 +339,12 @@ function autoSyncToHelpdesk() {
           {/* TAB 1: GOOGLE SHEETS SYNC */}
           {activeTab === "sheets" && (
             <div className="space-y-5">
+
               {/* Sheet Link Input Box */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Đường link Google Sheet (Link Chia Sẻ)
+                    Đường link Google Sheet
                   </label>
                   {sheetUrl.trim() && (
                     <a
@@ -329,20 +377,113 @@ function autoSyncToHelpdesk() {
                     {syncing ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                   </button>
                 </div>
+              </div>
 
-                {/* Guide Box for Sharing Permission */}
-                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1.5 mt-2">
-                  <p className="font-bold flex items-center gap-1.5 text-blue-800">
-                    🔒 Cấu hình phân quyền trên Google Sheet để ứng dụng truy cập:
+              {/* SECTION: Google User Account Credentials Config */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck size={18} className="text-emerald-600" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">Cấu hình Tài khoản Google User Truy Cập</h4>
+                      <p className="text-xs text-slate-500">Đăng nhập tài khoản Google Service Account để đọc file bảo mật riêng tư</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowAuthConfig(!showAuthConfig)}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
+                  >
+                    {showAuthConfig ? "Ẩn cấu hình" : "Cấu hình Google User"}
+                  </button>
+                </div>
+
+                {showAuthConfig && (
+                  <div className="pt-3 border-t border-slate-100 space-y-3">
+                    {/* JSON Key Uploader */}
+                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">Tải file JSON Key từ Google Cloud</p>
+                        <p className="text-[11px] text-slate-500">Tự động điền email và private key</p>
+                      </div>
+                      <input
+                        ref={jsonKeyFileRef}
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={handleJsonKeyUpload}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => jsonKeyFileRef.current?.click()}
+                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <Upload size={13} /> Tải JSON Key
+                      </button>
+                    </div>
+
+                    {/* Email Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Google Service Account Client Email
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={clientEmail}
+                          onChange={e => {
+                            setClientEmail(e.target.value);
+                            localStorage.setItem("jpt_google_client_email", e.target.value);
+                          }}
+                          placeholder="jpt-helpdesk-bot@project-id.iam.gserviceaccount.com"
+                          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        {clientEmail && (
+                          <button
+                            onClick={copyEmail}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1 transition"
+                          >
+                            {copiedEmail ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                            {copiedEmail ? "Đã copy" : "Copy Email"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Private Key Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Google Private Key
+                      </label>
+                      <textarea
+                        value={privateKey}
+                        onChange={e => {
+                          setPrivateKey(e.target.value);
+                          localStorage.setItem("jpt_google_private_key", e.target.value);
+                        }}
+                        placeholder="-----BEGIN PRIVATE KEY-----\n..."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Instructions Box */}
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                    🔑 3 Bước Phân Quyền cho Tài Khoản Google User Truy Cập:
                   </p>
                   <ol className="list-decimal list-inside space-y-1 text-slate-700 font-medium pl-1">
-                    <li>Mở file Google Sheet của bạn $\rightarrow$ Bấm nút <strong>Chia sẻ (Share)</strong> ở góc trên cùng bên phải.</li>
-                    <li>Mục <em>Quyền truy cập chung (General access)</em>: Đổi từ <u>Hạn chế</u> sang <strong>Bất kỳ ai có đường liên kết (Anyone with the link)</strong>.</li>
-                    <li>Đặt quyền là <strong>Người xem (Viewer)</strong> $\rightarrow$ Bấm <strong>Sao chép đường liên kết (Copy link)</strong> và dán vào ô trên.</li>
+                    <li>
+                      {clientEmail ? (
+                        <>Copy Email tài khoản Google User: <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-300 font-mono font-bold text-slate-900">{clientEmail}</code></>
+                      ) : (
+                        <>Nhập hoặc tải file JSON mã hóa Email tài khoản Google User bên trên.</>
+                      )}
+                    </li>
+                    <li>Mở file Google Sheet của bạn $\rightarrow$ Bấm nút <strong>Chia sẻ (Share)</strong> ở góc trên bên phải.</li>
+                    <li>Dán Email tài khoản Google trên vào ô chia sẻ, chọn quyền <strong>Người xem (Viewer)</strong> $\rightarrow$ Bấm <strong>Gửi (Send)</strong>. File Google Sheet của bạn được bảo mật tuyệt đối!</li>
                   </ol>
-                  <p className="text-[11px] text-slate-500 pt-1 border-t border-blue-200/60 mt-1">
-                    • Bảng bắt buộc gồm 3 tên cột: <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Mã Khách Hàng</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Tên Hiển Thị</code>, <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-slate-800">Tên Tiếng Anh</code>.
-                  </p>
                 </div>
               </div>
 

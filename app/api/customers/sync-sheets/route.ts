@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
+import { google } from "googleapis";
 
 interface SheetRow {
   code: string;
@@ -7,15 +8,65 @@ interface SheetRow {
   ten_tieng_anh?: string;
 }
 
-// Helper function to parse CSV text into row objects
+// Extract spreadsheet ID from Google Sheet URL
+function extractSpreadsheetId(url: string): string | null {
+  const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
+// Fetch spreadsheet values via official Google Sheets API v4 using Service Account User Credentials
+async function fetchFromGoogleSheetsAPI(
+  spreadsheetId: string,
+  clientEmail: string,
+  privateKey: string
+): Promise<SheetRow[]> {
+  const formattedKey = privateKey.replace(/\\n/g, "\n");
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: formattedKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+  
+  // Fetch values from first tab (A1:Z2000)
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "A1:Z2000",
+  });
+
+  const rows = response.data.values;
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h: any) => String(h).trim().toLowerCase());
+  const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
+
+  const codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
+  const nameIdx = getIndex(["tên hiển thị", "ten hien thi", "tên khách hàng", "ten khach hang", "name"]);
+  const engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
+
+  const result: SheetRow[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const code = codeIdx >= 0 ? String(row[codeIdx] || "").trim() : "";
+    const name = nameIdx >= 0 ? String(row[nameIdx] || "").trim() : "";
+    const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] || "").trim() : "";
+
+    if (code && name) {
+      result.push({ code, name, ten_tieng_anh });
+    }
+  }
+
+  return result;
+}
+
+// Helper function to parse CSV text into row objects (fallback)
 function parseCSV(text: string): SheetRow[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
 
-  // Parse header line
   const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
   
-  // Find matching column indices for "Mã Khách Hàng", "Tên Hiển Thị", "Tên Tiếng Anh"
   const getIndex = (keys: string[]) => {
     return headers.findIndex(h => keys.some(k => h.includes(k)));
   };
@@ -40,14 +91,12 @@ function parseCSV(text: string): SheetRow[] {
   return rows;
 }
 
-// Convert various Google Sheet URLs to published CSV URL format
 function getCsvUrl(inputUrl: string): string {
   let url = inputUrl.trim();
   if (url.includes("/pub?") || url.endsWith("&output=csv") || url.endsWith("output=csv")) {
     return url;
   }
   
-  // Extract spreadsheet ID
   const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
   if (match && match[1]) {
     const spreadsheetId = match[1];
@@ -60,26 +109,46 @@ function getCsvUrl(inputUrl: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sheetUrl, data: rawRows } = body;
+    const { sheetUrl, clientEmail, privateKey, data: rawRows } = body;
 
-    let rowsToProcess: { code: string; name: string; ten_tieng_anh?: string }[] = [];
+    let rowsToProcess: SheetRow[] = [];
 
     // Case 1: Direct JSON rows array passed (from Webhook or Client)
     if (Array.isArray(rawRows) && rawRows.length > 0) {
       rowsToProcess = rawRows.map(r => ({
-        code: r["Mã Khách Hàng"] || r.code || r.ma_khach_hang || "",
-        name: r["Tên Hiển Thị"] || r.name || r.ten_hien_thi || "",
-        ten_tieng_anh: r["Tên Tiếng Anh"] || r.ten_tieng_anh || "",
+        code: String(r["Mã Khách Hàng"] || r.code || r.ma_khach_hang || "").trim(),
+        name: String(r["Tên Hiển Thị"] || r.name || r.ten_hien_thi || "").trim(),
+        ten_tieng_anh: String(r["Tên Tiếng Anh"] || r.ten_tieng_anh || "").trim(),
       })).filter(r => r.code && r.name);
     } 
-    // Case 2: Fetch CSV from Google Sheet URL
+    // Case 2: Fetch via Official Google Sheets API using Service Account User Credentials
+    else if (sheetUrl && clientEmail && privateKey) {
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) {
+        return NextResponse.json({
+          success: false,
+          error: "Không thể nhận diện Spreadsheet ID từ đường link Google Sheet.",
+        }, { status: 400 });
+      }
+
+      try {
+        rowsToProcess = await fetchFromGoogleSheetsAPI(spreadsheetId, clientEmail, privateKey);
+      } catch (authErr: any) {
+        console.error("Google Service Account Auth Error:", authErr);
+        return NextResponse.json({
+          success: false,
+          error: `Lỗi xác thực Google Account (${authErr.message}). Hãy chắc chắn đã bấm Chia sẻ (Share) file Google Sheet cho email tài khoản: ${clientEmail}`,
+        }, { status: 400 });
+      }
+    }
+    // Case 3: Public CSV Fetch (Fallback)
     else if (sheetUrl) {
       const csvUrl = getCsvUrl(sheetUrl);
       const res = await fetch(csvUrl, { cache: "no-store" });
       if (!res.ok) {
         return NextResponse.json({
           success: false,
-          error: `Không thể kết nối đến Google Sheet (HTTP status: ${res.status}). Vui lòng kiểm tra quyền truy cập công khai của Sheet.`,
+          error: `Không thể kết nối đến Google Sheet (HTTP status: ${res.status}). Vui lòng nhập thông tin Email Tài khoản Google (Service Account) hoặc kiểm tra quyền truy cập.`,
         }, { status: 400 });
       }
 
@@ -131,25 +200,5 @@ export async function POST(req: NextRequest) {
       success: false,
       error: err.message || String(err),
     }, { status: 500 });
-  }
-}
-
-export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get("sheetUrl");
-  if (!url) {
-    return NextResponse.json({ success: false, error: "Missing sheetUrl query parameter." }, { status: 400 });
-  }
-
-  try {
-    const csvUrl = getCsvUrl(url);
-    const res = await fetch(csvUrl, { cache: "no-store" });
-    if (!res.ok) {
-      return NextResponse.json({ success: false, error: `Failed to fetch CSV: ${res.statusText}` }, { status: 400 });
-    }
-    const text = await res.text();
-    const rows = parseCSV(text);
-    return NextResponse.json({ success: true, count: rows.length, sample: rows.slice(0, 5) });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
