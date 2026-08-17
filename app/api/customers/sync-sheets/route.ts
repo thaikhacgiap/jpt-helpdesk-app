@@ -26,11 +26,35 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
     clientId || undefined,
     clientSecret || undefined
   );
-  
+
+  let rToken = refreshToken?.trim();
+  let aToken = accessToken?.trim();
+
+  // Automatic token type detection: Refresh Token in Google OAuth 2.0 starts with "1//"
+  if (aToken && (aToken.startsWith("1//") || aToken.startsWith("1/"))) {
+    rToken = aToken;
+    aToken = undefined;
+  }
+
   oauth2Client.setCredentials({
-    access_token: accessToken || undefined,
-    refresh_token: refreshToken || undefined,
+    access_token: aToken || undefined,
+    refresh_token: rToken || undefined,
   });
+
+  // If we have a refresh_token, automatically request/exchange for a fresh live access_token
+  if (rToken) {
+    try {
+      const tokenRes = await oauth2Client.getAccessToken();
+      if (tokenRes && tokenRes.token) {
+        oauth2Client.setCredentials({
+          access_token: tokenRes.token,
+          refresh_token: rToken,
+        });
+      }
+    } catch (refreshErr: any) {
+      console.error("Error refreshing Google OAuth token:", refreshErr?.message || refreshErr);
+    }
+  }
 
   const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 

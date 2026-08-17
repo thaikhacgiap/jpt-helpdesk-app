@@ -166,8 +166,9 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
       const payload: any = { sheetUrl: sheetUrl.trim() };
 
       if (authType === "user_oauth") {
-        payload.userAccessToken = userAccessToken.trim();
-        payload.userRefreshToken = userRefreshToken.trim();
+        const tokenInput = userAccessToken.trim();
+        payload.userAccessToken = tokenInput;
+        payload.userRefreshToken = userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : "");
         payload.userClientId = userClientId.trim();
         payload.userClientSecret = userClientSecret.trim();
       } else {
