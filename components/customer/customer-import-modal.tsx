@@ -44,7 +44,15 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0); // 0-100 animated
+  const [syncProgress, setSyncProgress] = useState(0); // 0-100 for bar width
+  const [syncStats, setSyncStats] = useState<{
+    processed: number;
+    total: number;
+    created: number;
+    updated: number;
+    errors: number;
+    name: string;
+  } | null>(null);
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
     total?: number;
@@ -90,6 +98,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     setFileName("");
     setSyncResult(null);
     setSyncProgress(0);
+    setSyncStats(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -106,7 +115,8 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
     setSyncing(true);
     setSyncResult(null);
-    setSyncProgress(0);
+    setSyncProgress(5);
+    setSyncStats(null);
 
     // Save settings
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
@@ -117,54 +127,98 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
 
-    // Animate progress bar while waiting for server
-    let animFrame = 0;
-    const animInterval = setInterval(() => {
-      animFrame += 1;
-      // Ramp up to ~90% smoothly, hold there until done
-      setSyncProgress(p => p < 88 ? Math.min(88, p + (animFrame < 10 ? 3 : animFrame < 30 ? 1.5 : 0.3)) : p);
-    }, 200);
+    const tokenInput = userAccessToken.trim();
+    const payload = {
+      sheetUrl: sheetUrl.trim(),
+      userAccessToken: tokenInput,
+      userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
+      userClientId: userClientId.trim(),
+      userClientSecret: userClientSecret.trim(),
+      stream: true, // request SSE streaming
+    };
 
     try {
-      const tokenInput = userAccessToken.trim();
-      const payload = {
-        sheetUrl: sheetUrl.trim(),
-        userAccessToken: tokenInput,
-        userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
-        userClientId: userClientId.trim(),
-        userClientSecret: userClientSecret.trim(),
-      };
-
       const res = await fetch("/api/customers/sync-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      clearInterval(animInterval);
-      setSyncProgress(100);
+      // Check if server returned SSE stream
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        // Non-streaming error response
+        let errMsg = "Lỗi đồng bộ.";
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+        setSyncResult({ success: false, message: errMsg });
+        setSyncProgress(0);
+        setSyncing(false);
+        return;
+      }
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ dữ liệu từ Google Sheet." });
+      if (contentType.includes("text/event-stream") && res.body) {
+        // ── SSE Streaming: read line-by-line ──
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === "start") {
+                setSyncStats({ processed: 0, total: event.total, created: 0, updated: 0, errors: 0, name: "" });
+                setSyncProgress(5);
+              } else if (event.type === "progress") {
+                const pct = event.total > 0 ? Math.round((event.processed / event.total) * 95) + 5 : 10;
+                setSyncProgress(pct);
+                setSyncStats({ processed: event.processed, total: event.total, created: event.created ?? 0, updated: event.updated ?? 0, errors: event.errors ?? 0, name: event.name || "" });
+              } else if (event.type === "done") {
+                setSyncProgress(100);
+                setSyncStats({ processed: event.total, total: event.total, created: event.created, updated: event.updated, errors: event.errors, name: "" });
+                setSyncResult({
+                  success: true,
+                  total: event.total,
+                  created: event.created,
+                  updated: event.updated,
+                  errors: event.errors,
+                  lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
+                });
+                onSuccess();
+              }
+            } catch {}
+          }
+        }
       } else {
-        setSyncResult({
-          success: true,
-          total: data.total,
-          created: data.created,
-          updated: data.updated,
-          errors: data.errors,
-          lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
-        });
-        onSuccess();
+        // ── Non-streaming fallback ──
+        const data = await res.json();
+        setSyncProgress(100);
+        if (!data.success) {
+          setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ." });
+        } else {
+          setSyncResult({
+            success: true,
+            total: data.total,
+            created: data.created,
+            updated: data.updated,
+            errors: data.errors,
+            lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
+          });
+          onSuccess();
+        }
       }
     } catch (err: any) {
-      clearInterval(animInterval);
       setSyncResult({ success: false, message: err.message || "Lỗi kết nối máy chủ." });
     } finally {
       setSyncing(false);
-      // Keep 100% for a moment then hide
-      setTimeout(() => setSyncProgress(0), 1500);
+      setTimeout(() => { setSyncProgress(0); setSyncStats(null); }, 2000);
     }
   };
 
@@ -416,25 +470,51 @@ function autoSyncToHelpdesk() {
               {/* ====== SYNC PROGRESS BAR ====== */}
               {syncing && syncProgress > 0 && (
                 <div className="bg-white border border-green-200 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>
-                      {syncProgress < 100 ? "Đang đồng bộ dữ liệu khách hàng lên Supabase..." : "Hoàn tất đồng bộ!"}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>
+                        {syncProgress < 100
+                          ? syncStats?.total
+                            ? `Đang đồng bộ... ${syncStats.processed} / ${syncStats.total}`
+                            : "Đang kết nối Google Sheets..."
+                          : "Hoàn tất đồng bộ! ✓"}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg">
+                      {syncProgress < 100
+                        ? syncStats?.total
+                          ? `${syncStats.processed} / ${syncStats.total}`
+                          : `${Math.round(syncProgress)}%`
+                        : "✓ Xong"}
                     </span>
-                    <span className="ml-auto font-bold">{Math.round(syncProgress)}%</span>
                   </div>
 
                   {/* Progress bar */}
                   <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-500 ease-out"
+                      className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-300 ease-out"
                       style={{ width: `${syncProgress}%` }}
                     />
                   </div>
 
-                  <p className="text-[11px] text-slate-500">
-                    Server đang đọc Google Sheets và ghi trực tiếp vào Supabase database...
-                  </p>
+                  {/* Live stats row */}
+                  {syncStats && syncStats.total > 0 && (
+                    <div className="flex flex-wrap gap-4 text-xs">
+                      <span className="text-slate-500 truncate max-w-[200px]">
+                        📄 {syncStats.name || "Đang xử lý..."}
+                      </span>
+                      <span className="ml-auto flex gap-3 shrink-0">
+                        <span className="text-green-600 font-semibold">+{syncStats.created} tạo mới</span>
+                        <span className="text-blue-600 font-semibold">↺{syncStats.updated} cập nhật</span>
+                        {syncStats.errors > 0 && <span className="text-red-500 font-semibold">✗{syncStats.errors} lỗi</span>}
+                      </span>
+                    </div>
+                  )}
+
+                  {(!syncStats || syncStats.total === 0) && (
+                    <p className="text-[11px] text-slate-500">Đang đọc dữ liệu từ Google Sheets...</p>
+                  )}
                 </div>
               )}
 
