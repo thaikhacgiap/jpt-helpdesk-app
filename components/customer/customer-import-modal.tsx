@@ -45,20 +45,33 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0); // 0-100 for bar width
+  const [previewing, setPreviewing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   const [syncStats, setSyncStats] = useState<{
     processed: number;
     total: number;
     created: number;
     updated: number;
+    removed: number;
     errors: number;
     name: string;
+  } | null>(null);
+  const [previewData, setPreviewData] = useState<{
+    sheetTotal: number;
+    dbTotal: number;
+    diff: {
+      add: { count: number; rows: any[] };
+      update: { count: number; rows: any[] };
+      remove: { count: number; rows: any[] };
+    };
+    noChanges: boolean;
   } | null>(null);
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
     total?: number;
     created?: number;
     updated?: number;
+    removed?: number;
     errors?: number;
     message?: string;
     lastSyncedAt?: string;
@@ -101,6 +114,8 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     setSyncResult(null);
     setSyncProgress(0);
     setSyncStats(null);
+    setPreviewData(null);
+    setPreviewing(false);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -109,18 +124,19 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     onClose();
   };
 
-  const handleSyncSheetsNow = async () => {
-    if (!sheetUrl.trim()) {
-      alert("Vui lòng nhập link Google Sheet.");
-      return;
-    }
+  const buildPayload = () => {
+    const tokenInput = userAccessToken.trim();
+    return {
+      sheetUrl: sheetUrl.trim(),
+      sheetName: sheetName.trim() || "Account",
+      userAccessToken: tokenInput,
+      userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
+      userClientId: userClientId.trim(),
+      userClientSecret: userClientSecret.trim(),
+    };
+  };
 
-    setSyncing(true);
-    setSyncResult(null);
-    setSyncProgress(5);
-    setSyncStats(null);
-
-    // Save settings
+  const saveSettings = () => {
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
     localStorage.setItem("jpt_customer_sheet_name", sheetName.trim() || "Account");
     localStorage.setItem("jpt_google_user_access_token", userAccessToken.trim());
@@ -129,92 +145,103 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     localStorage.setItem("jpt_google_user_client_secret", userClientSecret.trim());
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
+  };
 
-    const tokenInput = userAccessToken.trim();
-    const payload = {
-      sheetUrl: sheetUrl.trim(),
-      sheetName: sheetName.trim() || "Account",
-      userAccessToken: tokenInput,
-      userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
-      userClientId: userClientId.trim(),
-      userClientSecret: userClientSecret.trim(),
-      stream: true,
-    };
-
+  // ── STEP 1: Preview / Dry-run ─────────────────────────────────
+  const handlePreview = async () => {
+    if (!sheetUrl.trim()) { alert("Vui lòng nhập link Google Sheet."); return; }
+    saveSettings();
+    setPreviewing(true);
+    setPreviewData(null);
+    setSyncResult(null);
     try {
       const res = await fetch("/api/customers/sync-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...buildPayload(), mode: "preview" }),
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setSyncResult({ success: false, message: data.error || "Lỗi kiểm tra." });
+      } else {
+        setPreviewData(data);
+      }
+    } catch (err: any) {
+      setSyncResult({ success: false, message: err.message || "Lỗi kết nối." });
+    } finally {
+      setPreviewing(false);
+    }
+  };
 
-      // Check if server returned SSE stream
+  // ── STEP 2: Sync only diff rows (SSE streaming) ───────────────
+  const handleSyncDiff = async () => {
+    if (!previewData) return;
+    saveSettings();
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncProgress(5);
+    setSyncStats(null);
+    try {
+      const res = await fetch("/api/customers/sync-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...buildPayload(), mode: "sync_diff", stream: true }),
+      });
       const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
-        // Non-streaming error response
         let errMsg = "Lỗi đồng bộ.";
         try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
         setSyncResult({ success: false, message: errMsg });
         setSyncProgress(0);
-        setSyncing(false);
         return;
       }
-
       if (contentType.includes("text/event-stream") && res.body) {
-        // ── SSE Streaming: read line-by-line ──
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
-
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             try {
               const event = JSON.parse(line.slice(6));
               if (event.type === "start") {
-                setSyncStats({ processed: 0, total: event.total, created: 0, updated: 0, errors: 0, name: "" });
+                setSyncStats({ processed: 0, total: event.total, created: 0, updated: 0, removed: 0, errors: 0, name: "" });
                 setSyncProgress(5);
               } else if (event.type === "progress") {
                 const pct = event.total > 0 ? Math.round((event.processed / event.total) * 95) + 5 : 10;
                 setSyncProgress(pct);
-                setSyncStats({ processed: event.processed, total: event.total, created: event.created ?? 0, updated: event.updated ?? 0, errors: event.errors ?? 0, name: event.name || "" });
+                setSyncStats({ processed: event.processed, total: event.total, created: event.created ?? 0, updated: event.updated ?? 0, removed: event.removed ?? 0, errors: event.errors ?? 0, name: event.name || "" });
               } else if (event.type === "done") {
                 setSyncProgress(100);
-                setSyncStats({ processed: event.total, total: event.total, created: event.created, updated: event.updated, errors: event.errors, name: "" });
+                setSyncStats({ processed: event.total, total: event.total, created: event.created, updated: event.updated, removed: event.removed ?? 0, errors: event.errors, name: "" });
                 setSyncResult({
                   success: true,
                   total: event.total,
                   created: event.created,
                   updated: event.updated,
+                  removed: event.removed,
                   errors: event.errors,
                   lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
                 });
+                setPreviewData(null); // clear preview after done
                 onSuccess();
               }
             } catch {}
           }
         }
       } else {
-        // ── Non-streaming fallback ──
         const data = await res.json();
         setSyncProgress(100);
         if (!data.success) {
           setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ." });
         } else {
-          setSyncResult({
-            success: true,
-            total: data.total,
-            created: data.created,
-            updated: data.updated,
-            errors: data.errors,
-            lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
-          });
+          setSyncResult({ success: true, total: data.total, created: data.created, updated: data.updated, removed: data.removed, errors: data.errors, lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN") });
+          setPreviewData(null);
           onSuccess();
         }
       }
@@ -390,12 +417,12 @@ function autoSyncToHelpdesk() {
                     />
                   </div>
                   <button
-                    onClick={handleSyncSheetsNow}
-                    disabled={syncing || !sheetUrl.trim()}
-                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    onClick={handlePreview}
+                    disabled={previewing || syncing || !sheetUrl.trim()}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2 shadow-sm disabled:opacity-50 whitespace-nowrap"
                   >
-                    {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    {syncing ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+                    {previewing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    {previewing ? "Đang kiểm tra..." : "Kiểm tra thay đổi"}
                   </button>
                 </div>
                 {/* Sheet Tab Name */}
@@ -483,6 +510,120 @@ function autoSyncToHelpdesk() {
                 )}
               </div>
 
+              {/* ====== PREVIEW: Kiểm tra đang chạy ====== */}
+              {previewing && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-center gap-3 text-blue-700">
+                  <Loader2 size={18} className="animate-spin shrink-0" />
+                  <div>
+                    <p className="font-semibold text-sm">Đang kiểm tra dữ liệu...</p>
+                    <p className="text-xs text-blue-500 mt-0.5">Đang so sánh Google Sheets với Supabase database</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ====== PREVIEW RESULT: Diff Panel ====== */}
+              {previewData && !syncing && (
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                  {/* Header */}
+                  <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">📊 Kết quả kiểm tra</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Sheet: <strong>{previewData.sheetTotal}</strong> bản ghi &nbsp;·&nbsp;
+                        Supabase: <strong>{previewData.dbTotal}</strong> bản ghi
+                      </p>
+                    </div>
+                    <button onClick={() => setPreviewData(null)} className="text-slate-400 hover:text-slate-600 text-xs">✕ Đóng</button>
+                  </div>
+
+                  {previewData.noChanges ? (
+                    <div className="px-5 py-6 text-center">
+                      <div className="text-3xl mb-2">✅</div>
+                      <p className="font-semibold text-green-700">Dữ liệu đã đồng bộ hoàn toàn</p>
+                      <p className="text-xs text-slate-500 mt-1">Không có thay đổi nào giữa Sheet và Supabase.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Diff Summary Cards */}
+                      <div className="grid grid-cols-3 divide-x divide-slate-100">
+                        <div className="px-4 py-4 text-center">
+                          <div className="text-2xl font-black text-green-600">{previewData.diff.add.count}</div>
+                          <div className="text-xs font-semibold text-slate-600 mt-1">🟢 Mới</div>
+                          <div className="text-[11px] text-slate-400">Thêm vào Supabase</div>
+                        </div>
+                        <div className="px-4 py-4 text-center">
+                          <div className="text-2xl font-black text-blue-600">{previewData.diff.update.count}</div>
+                          <div className="text-xs font-semibold text-slate-600 mt-1">🔵 Thay đổi</div>
+                          <div className="text-[11px] text-slate-400">Cập nhật lại</div>
+                        </div>
+                        <div className="px-4 py-4 text-center">
+                          <div className="text-2xl font-black text-orange-500">{previewData.diff.remove.count}</div>
+                          <div className="text-xs font-semibold text-slate-600 mt-1">🟠 Bị xóa</div>
+                          <div className="text-[11px] text-slate-400">Đặt Inactive</div>
+                        </div>
+                      </div>
+
+                      {/* Sample lists */}
+                      <div className="px-5 pb-4 space-y-3 max-h-52 overflow-y-auto border-t border-slate-100 pt-3">
+                        {previewData.diff.add.count > 0 && (
+                          <div>
+                            <p className="text-xs font-bold text-green-700 mb-1.5">Mới ({previewData.diff.add.count}):</p>
+                            {previewData.diff.add.rows.slice(0, 5).map((r: any, i: number) => (
+                              <div key={i} className="text-xs text-slate-600 flex gap-2 py-0.5">
+                                <span className="font-mono text-slate-400 shrink-0">{r.code}</span>
+                                <span className="truncate">{r.name}</span>
+                              </div>
+                            ))}
+                            {previewData.diff.add.count > 5 && <p className="text-[11px] text-slate-400">...và {previewData.diff.add.count - 5} bản ghi khác</p>}
+                          </div>
+                        )}
+                        {previewData.diff.update.count > 0 && (
+                          <div>
+                            <p className="text-xs font-bold text-blue-700 mb-1.5">Thay đổi ({previewData.diff.update.count}):</p>
+                            {previewData.diff.update.rows.slice(0, 5).map((r: any, i: number) => (
+                              <div key={i} className="text-xs py-0.5">
+                                <span className="font-mono text-slate-400">{r.code}</span>
+                                <span className="ml-2 line-through text-slate-400">{r.old_name}</span>
+                                <span className="ml-2 text-blue-700 font-semibold">→ {r.name}</span>
+                              </div>
+                            ))}
+                            {previewData.diff.update.count > 5 && <p className="text-[11px] text-slate-400">...và {previewData.diff.update.count - 5} bản ghi khác</p>}
+                          </div>
+                        )}
+                        {previewData.diff.remove.count > 0 && (
+                          <div>
+                            <p className="text-xs font-bold text-orange-600 mb-1.5">Bị xóa khỏi Sheet ({previewData.diff.remove.count}):</p>
+                            {previewData.diff.remove.rows.slice(0, 5).map((r: any, i: number) => (
+                              <div key={i} className="text-xs text-slate-500 flex gap-2 py-0.5">
+                                <span className="font-mono text-slate-400 shrink-0">{r.code}</span>
+                                <span className="truncate line-through">{r.name}</span>
+                                <span className="text-orange-500 shrink-0">(→ Inactive)</span>
+                              </div>
+                            ))}
+                            {previewData.diff.remove.count > 5 && <p className="text-[11px] text-slate-400">...và {previewData.diff.remove.count - 5} bản ghi khác</p>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sync Diff Button */}
+                      <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center gap-3">
+                        <button
+                          onClick={handleSyncDiff}
+                          disabled={syncing}
+                          className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow disabled:opacity-50"
+                        >
+                          <RefreshCw size={15} />
+                          Đồng bộ {previewData.diff.add.count + previewData.diff.update.count + previewData.diff.remove.count} thay đổi
+                        </button>
+                        <button onClick={() => setPreviewData(null)} className="px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition">
+                          Bỏ qua
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* ====== SYNC PROGRESS BAR ====== */}
               {syncing && syncProgress > 0 && (
                 <div className="bg-white border border-green-200 rounded-2xl p-5 space-y-3">
@@ -523,6 +664,7 @@ function autoSyncToHelpdesk() {
                       <span className="ml-auto flex gap-3 shrink-0">
                         <span className="text-green-600 font-semibold">+{syncStats.created} tạo mới</span>
                         <span className="text-blue-600 font-semibold">↺{syncStats.updated} cập nhật</span>
+                        {(syncStats.removed ?? 0) > 0 && <span className="text-orange-500 font-semibold">⊘{syncStats.removed} inactive</span>}
                         {syncStats.errors > 0 && <span className="text-red-500 font-semibold">✗{syncStats.errors} lỗi</span>}
                       </span>
                     </div>
