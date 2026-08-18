@@ -18,7 +18,7 @@ function extractSpreadsheetId(url: string): string | null {
 function extractRowsFromValues(rows: any[][]): SheetRow[] {
   if (!rows || rows.length < 1) return [];
 
-  // 1. Smart Header Row Detection (Scan top 10 rows for actual header line)
+  // Smart Header Row Detection (Scan top 10 rows)
   let headerRowIdx = 0;
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const rowText = (rows[r] || []).map(cell => String(cell || "").toLowerCase()).join(" ");
@@ -30,29 +30,30 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
 
   const headerRow = rows[headerRowIdx] || [];
   const headers = headerRow.map((h: any) => String(h || "").trim().toLowerCase());
-  
+
   const getIndex = (keys: string[]) => headers.findIndex((h: string) => keys.some(k => h.includes(k)));
 
   let codeIdx = getIndex(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
-  let displayNameIdx = getIndex(["tên hiển thị", "ten hien thi"]);
-  let fullNameIdx = getIndex(["tên khách hàng", "ten khach hang", "tên công ty", "ten cong ty", "name"]);
+  // Priority: Tên khách hàng (col B - actual company name) over Tên hiển thị (col C - formatted "(CODE)-Name")
+  let fullNameIdx = getIndex(["tên khách hàng", "ten khach hang", "tên công ty", "ten cong ty"]);
+  let displayNameIdx = getIndex(["tên hiển thị", "ten hien thi", "name"]);
   let engIdx = getIndex(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
 
-  // Positional fallbacks
-  if (displayNameIdx < 0 && fullNameIdx < 0) {
-    fullNameIdx = 1;
-    displayNameIdx = 2;
-  }
-  if (codeIdx < 0) codeIdx = 0;
-  if (engIdx < 0 && headerRow.length > 5) engIdx = 5;
+  // Positional fallbacks for Account sheet layout: A=Code, B=TênKH, C=TênHiểnThị
+  if (codeIdx < 0) codeIdx = 0;       // Col A: Mã khách hàng
+  if (fullNameIdx < 0) fullNameIdx = 1; // Col B: Tên khách hàng (primary)
+  if (displayNameIdx < 0) displayNameIdx = 2; // Col C: Tên hiển thị (secondary)
+  if (engIdx < 0 && headerRow.length > 5) engIdx = 5; // Col F: Tên tiếng anh
 
   const result: SheetRow[] = [];
-  
+
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const row = rows[i] || [];
-    const displayName = String(row[displayNameIdx] ?? "").trim();
+    // Use Tên khách hàng (col B) as primary name - it's clean company name
+    // Fall back to Tên hiển thị only if col B is empty
     const fullName = String(row[fullNameIdx] ?? "").trim();
-    const name = displayName || fullName;
+    const displayName = String(row[displayNameIdx] ?? "").trim();
+    const name = fullName || displayName;
     if (!name) continue;
 
     const rawCode = String(row[codeIdx] ?? "").trim();
@@ -71,7 +72,8 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
   accessToken?: string,
   refreshToken?: string,
   clientId?: string,
-  clientSecret?: string
+  clientSecret?: string,
+  sheetName?: string
 ): Promise<SheetRow[]> {
   const oauth2Client = new google.auth.OAuth2(
     clientId || undefined,
@@ -92,7 +94,7 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
     refresh_token: rToken || undefined,
   });
 
-  // If refresh token available, exchange for fresh access token
+  // If refresh token + credentials available, exchange for fresh access token
   if (rToken && clientId && clientSecret) {
     try {
       const tokenRes = await oauth2Client.getAccessToken();
@@ -104,14 +106,14 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
       }
     } catch (refreshErr: any) {
       console.error("Error refreshing token:", refreshErr?.message);
-      // Continue with whatever token we have
     }
   }
 
   const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+  const range = sheetName ? `${sheetName}!A1:Z2000` : "A1:Z2000";
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "A1:Z2000",
+    range,
   });
 
   return extractRowsFromValues(response.data.values || []);
@@ -121,7 +123,8 @@ async function fetchFromGoogleSheetsAPIUserOAuth(
 async function fetchFromGoogleSheetsAPIServiceAccount(
   spreadsheetId: string,
   clientEmail: string,
-  privateKey: string
+  privateKey: string,
+  sheetName?: string
 ): Promise<SheetRow[]> {
   const formattedKey = privateKey.replace(/\\n/g, "\n");
   const auth = new google.auth.JWT({
@@ -131,9 +134,10 @@ async function fetchFromGoogleSheetsAPIServiceAccount(
   });
 
   const sheets = google.sheets({ version: "v4", auth });
+  const range = sheetName ? `${sheetName}!A1:Z2000` : "A1:Z2000";
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "A1:Z2000",
+    range,
   });
 
   return extractRowsFromValues(response.data.values || []);
@@ -160,6 +164,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       sheetUrl,
+      sheetName,        // e.g. "Account" - tab name in the spreadsheet
       clientEmail,
       privateKey,
       userAccessToken,
@@ -167,7 +172,7 @@ export async function POST(req: NextRequest) {
       userClientId,
       userClientSecret,
       data: rawRows,
-      stream, // if true → SSE streaming response
+      stream,
     } = body;
 
     let rowsToProcess: SheetRow[] = [];
@@ -191,7 +196,7 @@ export async function POST(req: NextRequest) {
       }
       try {
         rowsToProcess = await fetchFromGoogleSheetsAPIUserOAuth(
-          spreadsheetId, userAccessToken, userRefreshToken, userClientId, userClientSecret
+          spreadsheetId, userAccessToken, userRefreshToken, userClientId, userClientSecret, sheetName
         );
       } catch (authErr: any) {
         const msg = authErr?.message || String(authErr);
@@ -209,7 +214,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Không thể nhận diện Spreadsheet ID từ link Google Sheet." }, { status: 400 });
       }
       try {
-        rowsToProcess = await fetchFromGoogleSheetsAPIServiceAccount(spreadsheetId, clientEmail, privateKey);
+        rowsToProcess = await fetchFromGoogleSheetsAPIServiceAccount(spreadsheetId, clientEmail, privateKey, sheetName);
       } catch (authErr: any) {
         return NextResponse.json({
           success: false,

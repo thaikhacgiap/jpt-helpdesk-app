@@ -34,6 +34,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetName, setSheetName] = useState("Account"); // Sheet tab name
 
   // Real Google User OAuth 2.0 Credentials
   const [userAccessToken, setUserAccessToken] = useState("");
@@ -79,6 +80,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
   useEffect(() => {
     if (typeof window !== "undefined") {
       setSheetUrl(localStorage.getItem("jpt_customer_sheet_url") || "");
+      setSheetName(localStorage.getItem("jpt_customer_sheet_name") || "Account");
       setUserAccessToken(localStorage.getItem("jpt_google_user_access_token") || "");
       setUserRefreshToken(localStorage.getItem("jpt_google_user_refresh_token") || "");
       setUserClientId(localStorage.getItem("jpt_google_user_client_id") || "");
@@ -120,6 +122,7 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
 
     // Save settings
     localStorage.setItem("jpt_customer_sheet_url", sheetUrl.trim());
+    localStorage.setItem("jpt_customer_sheet_name", sheetName.trim() || "Account");
     localStorage.setItem("jpt_google_user_access_token", userAccessToken.trim());
     localStorage.setItem("jpt_google_user_refresh_token", userRefreshToken.trim());
     localStorage.setItem("jpt_google_user_client_id", userClientId.trim());
@@ -130,11 +133,12 @@ export default function CustomerImportModal({ isOpen, onClose, onSuccess }: Impo
     const tokenInput = userAccessToken.trim();
     const payload = {
       sheetUrl: sheetUrl.trim(),
+      sheetName: sheetName.trim() || "Account",
       userAccessToken: tokenInput,
       userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
       userClientId: userClientId.trim(),
       userClientSecret: userClientSecret.trim(),
-      stream: true, // request SSE streaming
+      stream: true,
     };
 
     try {
@@ -363,7 +367,7 @@ function autoSyncToHelpdesk() {
           {activeTab === "sheets" && (
             <div className="space-y-5">
 
-              {/* Sheet URL */}
+              {/* Sheet URL + Tab Name */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Đường link Google Sheet</label>
@@ -393,6 +397,18 @@ function autoSyncToHelpdesk() {
                     {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                     {syncing ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                   </button>
+                </div>
+                {/* Sheet Tab Name */}
+                <div className="flex items-center gap-3 pt-1">
+                  <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Tên sheet tab:</label>
+                  <input
+                    type="text"
+                    value={sheetName}
+                    onChange={e => { setSheetName(e.target.value); localStorage.setItem("jpt_customer_sheet_name", e.target.value); }}
+                    placeholder="Account"
+                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <p className="text-[11px] text-slate-400 whitespace-nowrap">Tên tab dưới cùng của Sheet (VD: Account, Sheet1)</p>
                 </div>
               </div>
 
