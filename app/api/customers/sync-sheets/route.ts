@@ -40,6 +40,11 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// ─── Normalize for comparison ──────────────────────────────────
+function norm(s: string) {
+  return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 // ─── Sanitize and safely format customer code ─────────────────
 function sanitizeCustomerCode(rawCode: string, fallbackCode: string): string {
   let c = (rawCode || "").trim().toUpperCase();
@@ -187,12 +192,7 @@ async function fetchAllDbCustomers(admin: SupabaseClient) {
   return all;
 }
 
-// ─── Normalize for comparison ──────────────────────────────────
-function norm(s: string) {
-  return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-// ─── Compute diff with DIRECT dbId mapping ────────────────────
+// ─── Compute diff with SANITIZED CODE and DIRECT dbId mapping ─
 function computeDiff(
   sheetRows: SheetRow[],
   dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>
@@ -212,12 +212,13 @@ function computeDiff(
   const toUpdate: DiffRow[] = [];
 
   for (const row of sheetRows) {
-    const nc = norm(row.code);
+    const isAuto = !row.code || row.code.toUpperCase().startsWith("AUTO-");
+    const sanitizedCode = sanitizeCustomerCode(row.code, isAuto ? "" : row.code);
+    const nc = norm(sanitizedCode);
     const nn = norm(row.name);
-    const isAuto = nc.startsWith("auto-") || nc === "";
 
-    // Match priority: real code -> then name
-    const dbRow = (!isAuto ? dbByCode.get(nc) : undefined) ?? dbByName.get(nn);
+    // Match priority: sanitized real code -> then full name
+    const dbRow = (!isAuto && nc ? dbByCode.get(nc) : undefined) ?? dbByName.get(nn);
 
     if (!dbRow) {
       toAdd.push(row);
@@ -226,7 +227,7 @@ function computeDiff(
       const nameChanged = norm(dbRow.name) !== nn;
       const engChanged = norm(dbRow.ten_tieng_anh || "") !== norm(row.ten_tieng_anh || "");
       const addrChanged = norm(dbRow.address || "") !== norm(row.address || "");
-      const codeChanged = !isAuto && norm(dbRow.code) !== nc;
+      const codeChanged = !isAuto && nc && norm(dbRow.code) !== nc;
 
       if (nameChanged || engChanged || addrChanged || codeChanged) {
         toUpdate.push({
@@ -282,7 +283,7 @@ async function executeSync(
       // Check if code already exists in DB to prevent Unique Constraint failure
       const { data: existingWithCode } = await admin.from("customers").select("id").eq("code", code).maybeSingle();
       if (existingWithCode) {
-        // If code already exists, try updating that record instead of failing
+        // If code already exists, update that record
         const { error: updErr } = await admin.from("customers").update({
           name: row.name.trim(),
           ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
@@ -321,8 +322,7 @@ async function executeSync(
         const { error: insErr } = await admin.from("customers").insert([insertPayload]);
 
         if (insErr) {
-          // If error is value too long, retry with system_code as code
-          if (insErr.message.includes("too long")) {
+          if (insErr.message.includes("too long") || insErr.message.includes("unique")) {
             insertPayload.code = system_code.slice(0, 48);
             const { error: retryErr } = await admin.from("customers").insert([insertPayload]);
             if (retryErr) {
@@ -330,7 +330,7 @@ async function executeSync(
                 type: "insert",
                 name: row.name,
                 code,
-                message: `Lỗi độ dài ký tự khi thêm mới`,
+                message: `Lỗi thêm mới bản ghi vào database`,
                 detail: retryErr.message,
               };
               errorLog.push(errItem);
@@ -389,10 +389,19 @@ async function executeSync(
         payload.code = sanitizeCustomerCode(row.code, `AUTO-${targetId.slice(0, 8)}`);
       }
 
+      // Check if desired code is already held by ANOTHER customer
+      if (payload.code) {
+        const { data: codeHolder } = await admin.from("customers").select("id").eq("code", payload.code).maybeSingle();
+        if (codeHolder && codeHolder.id !== targetId) {
+          // Temporarily free the code from the other holder to avoid unique collision
+          await admin.from("customers").update({ code: `TMP-${codeHolder.id.slice(0, 8)}` }).eq("id", codeHolder.id);
+        }
+      }
+
       const { error: updErr } = await admin.from("customers").update(payload).eq("id", targetId);
 
       if (updErr) {
-        // If failed due to duplicate code constraint or value too long, retry updating without changing code
+        // Fallback retry without changing code if any conflict remains
         if (updErr.message.includes("unique") || updErr.message.includes("duplicate") || updErr.message.includes("too long")) {
           delete payload.code;
           const { error: retryErr } = await admin.from("customers").update(payload).eq("id", targetId);
