@@ -6,11 +6,15 @@ interface SheetRow {
   code: string;
   name: string;
   ten_tieng_anh?: string;
+  tax_code?: string;
+  address?: string;
 }
 
 interface DiffRow extends SheetRow {
   old_name?: string;
   old_ten_tieng_anh?: string;
+  old_address?: string;
+  old_code?: string;
 }
 
 // ─── Service Role Admin Client ────────────────────────────────
@@ -47,12 +51,16 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
   let codeIdx     = idx(["mã khách hàng", "ma khach hang", "code", "mã kh"]);
   let fullNameIdx = idx(["tên khách hàng", "ten khach hang", "tên công ty", "ten cong ty"]);
   let displayIdx  = idx(["tên hiển thị", "ten hien thi", "name"]);
+  let taxIdx      = idx(["mã số thuế", "ma so thue", "mst", "tax"]);
+  let addressIdx  = idx(["địa chỉ", "dia chi", "address"]);
   let engIdx      = idx(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
 
-  // Positional fallbacks for Account sheet: A=Code, B=TênKH, C=TênHiểnThị
+  // Positional fallbacks for Account sheet: A=Code, B=TênKH, C=TênHiểnThị, D=MST, E=Địa chỉ
   if (codeIdx < 0)     codeIdx = 0;
   if (fullNameIdx < 0) fullNameIdx = 1;
   if (displayIdx < 0)  displayIdx = 2;
+  if (taxIdx < 0 && headerRow.length > 3) taxIdx = 3;
+  if (addressIdx < 0 && headerRow.length > 4) addressIdx = 4;
 
   const result: SheetRow[] = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
@@ -63,8 +71,11 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
     if (!name) continue;
 
     const code = String(row[codeIdx] ?? "").trim() || `AUTO-${i}`;
+    const tax_code = taxIdx >= 0 ? String(row[taxIdx] ?? "").trim() : "";
+    const address = addressIdx >= 0 ? String(row[addressIdx] ?? "").trim() : "";
     const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] ?? "").trim() : "";
-    result.push({ code, name, ten_tieng_anh });
+
+    result.push({ code, name, ten_tieng_anh, tax_code, address });
   }
   return result;
 }
@@ -81,13 +92,15 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
       code: String(r["Mã Khách Hàng"] || r["Mã khách hàng"] || r.code || `AUTO-${i + 1}`).trim(),
       name: String(r["Tên Khách Hàng"] || r["Tên khách hàng"] || r["Tên Hiển Thị"] || r.name || "").trim(),
       ten_tieng_anh: String(r["Tên Tiếng Anh"] || r.ten_tieng_anh || "").trim(),
+      tax_code: String(r["Mã Số Thuế"] || r["Mã số thuế"] || r.tax_code || "").trim(),
+      address: String(r["Địa Chỉ"] || r["Địa chỉ"] || r.address || "").trim(),
     })).filter((r: SheetRow) => r.name);
   }
 
   const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
   if (!spreadsheetId) throw new Error("Không thể nhận diện Spreadsheet ID từ link Google Sheet.");
 
-  const range = sheetName ? `${sheetName}!A1:Z2000` : "A1:Z2000";
+  const range = sheetName ? `${sheetName}!A1:Z3000` : "A1:Z3000";
 
   // Case 2: Google User OAuth
   if (userAccessToken || userRefreshToken) {
@@ -116,19 +129,30 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
     return extractRowsFromValues(res.data.values || []);
   }
 
-  throw new Error("Chưa cấu hình phương thức xác thực (Token hoặc Service Account).");
+  throw new Error("Chưa cấu hình thông tin xác thực Google (Token hoặc Service Account).");
 }
 
 // ─── Fetch ALL DB customers ────────────────────────────────────
 async function fetchAllDbCustomers(admin: SupabaseClient) {
   const PAGE_SIZE = 1000;
-  let all: Array<{ id: string; code: string; name: string; ten_tieng_anh: string; system_code: string }> = [];
+  let all: Array<{ id: string; code: string; name: string; ten_tieng_anh: string; system_code: string; address: string; ghi_chu: string }> = [];
   let from = 0;
   while (true) {
-    const { data, error } = await admin.from("customers").select("id, code, name, ten_tieng_anh, system_code").range(from, from + PAGE_SIZE - 1);
+    const { data, error } = await admin
+      .from("customers")
+      .select("id, code, name, ten_tieng_anh, system_code, address, ghi_chu")
+      .range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error("Không thể đọc Supabase: " + error.message);
     if (!data || data.length === 0) break;
-    all = all.concat(data.map((r: any) => ({ id: r.id, code: r.code || "", name: r.name || "", ten_tieng_anh: r.ten_tieng_anh || "", system_code: r.system_code || "" })));
+    all = all.concat(data.map((r: any) => ({
+      id: r.id,
+      code: r.code || "",
+      name: r.name || "",
+      ten_tieng_anh: r.ten_tieng_anh || "",
+      system_code: r.system_code || "",
+      address: r.address || "",
+      ghi_chu: r.ghi_chu || "",
+    })));
     if (data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
@@ -140,20 +164,11 @@ function norm(s: string) {
   return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-// ─── Get next system code ──────────────────────────────────────
-async function getNextSystemCode(admin: SupabaseClient): Promise<string> {
-  const { data } = await admin.from("customers").select("system_code").not("system_code", "is", null);
-  const nums = (data || []).map((r: any) => parseInt((r.system_code || "").replace("KH-", ""), 10)).filter((n: number) => !isNaN(n));
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-  return `KH-${String(next).padStart(3, "0")}`;
-}
-
 // ─── Compute diff using in-memory maps ────────────────────────
 function computeDiff(
   sheetRows: SheetRow[],
-  dbRows: ReturnType<typeof fetchAllDbCustomers> extends Promise<infer T> ? T : never
+  dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>
 ) {
-  // Build lookup: prefer code match, fallback to name
   const dbByCode = new Map<string, typeof dbRows[0]>();
   const dbByName = new Map<string, typeof dbRows[0]>();
   const matchedIds = new Set<string>();
@@ -179,36 +194,45 @@ function computeDiff(
       toAdd.push(row);
     } else {
       matchedIds.add(dbRow.id);
-      const changed = norm(dbRow.name) !== nn
-        || norm(dbRow.ten_tieng_anh || "") !== norm(row.ten_tieng_anh || "")
-        || (!isAuto && norm(dbRow.code) !== nc);
-      if (changed) {
-        toUpdate.push({ ...row, old_name: dbRow.name, old_ten_tieng_anh: dbRow.ten_tieng_anh });
+      const nameChanged = norm(dbRow.name) !== nn;
+      const engChanged = norm(dbRow.ten_tieng_anh || "") !== norm(row.ten_tieng_anh || "");
+      const addrChanged = norm(dbRow.address || "") !== norm(row.address || "");
+      const codeChanged = !isAuto && norm(dbRow.code) !== nc;
+
+      if (nameChanged || engChanged || addrChanged || codeChanged) {
+        toUpdate.push({
+          ...row,
+          old_name: dbRow.name,
+          old_ten_tieng_anh: dbRow.ten_tieng_anh,
+          old_address: dbRow.address,
+          old_code: dbRow.code,
+        });
       }
     }
   }
 
+  // Dữ liệu dư thừa trên DB không có trong Sheet
   const toRemove = dbRows.filter(r => !matchedIds.has(r.id)).map(r => ({ id: r.id, code: r.code, name: r.name }));
   return { toAdd, toUpdate, toRemove };
 }
 
-// ─── Batch upsert using in-memory DB map (no per-row SELECT) ──
-async function syncRows(
+// ─── Batch sync execution ─────────────────────────────────────
+async function executeSync(
   admin: SupabaseClient,
   toAdd: SheetRow[],
   toUpdate: DiffRow[],
   toRemove: Array<{ id: string; code: string; name: string }>,
   dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>,
+  hardDeleteOrphans: boolean,
   onProgress: (processed: number, total: number, name: string, created: number, updated: number, errors: number) => void
 ): Promise<{ created: number; updated: number; removed: number; errors: number }> {
   const total = toAdd.length + toUpdate.length + toRemove.length;
   let processed = 0, created = 0, updated = 0, removed = 0, errors = 0;
 
-  // Build id lookup by name (for update without re-fetching)
   const idByCode = new Map(dbRows.map(r => [norm(r.code), r.id]));
   const idByName = new Map(dbRows.map(r => [norm(r.name), r.id]));
 
-  // ── INSERT new rows ────────────────────────────────────────────
+  // ── 1. INSERT new rows ─────────────────────────────────────────
   let sysCodeCounter: number | null = null;
   const getNextSysCodeFast = async () => {
     if (sysCodeCounter === null) {
@@ -227,18 +251,28 @@ async function syncRows(
       const system_code = await getNextSysCodeFast();
       const code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : system_code;
       const { error } = await admin.from("customers").insert([{
-        system_code, code,
+        system_code,
+        code,
         name: row.name.trim(),
         ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+        address: row.address?.trim() || null,
+        ghi_chu: row.tax_code ? `MST: ${row.tax_code}` : null,
         tinh_trang: "Active",
       }]);
-      if (error) { console.error("INSERT error:", error.message, "code:", code); errors++; }
-      else created++;
-    } catch (e: any) { console.error("INSERT exception:", e.message); errors++; }
+      if (error) {
+        console.error("INSERT error:", error.message, "code:", code);
+        errors++;
+      } else {
+        created++;
+      }
+    } catch (e: any) {
+      console.error("INSERT exception:", e.message);
+      errors++;
+    }
     processed++;
   }
 
-  // ── UPDATE changed rows (using in-memory id lookup) ───────────
+  // ── 2. UPDATE changed rows ─────────────────────────────────────
   for (const row of toUpdate) {
     onProgress(processed, total, row.name, created, updated, errors);
     try {
@@ -251,29 +285,60 @@ async function syncRows(
         const payload: any = {
           name: row.name.trim(),
           ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+          address: row.address?.trim() || null,
           tinh_trang: "Active",
           updated_at: new Date().toISOString(),
         };
+        if (row.tax_code) payload.ghi_chu = `MST: ${row.tax_code}`;
         if (!isAuto) payload.code = row.code.trim().toUpperCase();
+
         const { error } = await admin.from("customers").update(payload).eq("id", existingId);
-        if (error) { console.error("UPDATE error:", error.message, "id:", existingId); errors++; }
-        else updated++;
-      } else { errors++; }
-    } catch (e: any) { console.error("UPDATE exception:", e.message); errors++; }
+        if (error) {
+          console.error("UPDATE error:", error.message, "id:", existingId);
+          errors++;
+        } else {
+          updated++;
+        }
+      } else {
+        errors++;
+      }
+    } catch (e: any) {
+      console.error("UPDATE exception:", e.message);
+      errors++;
+    }
     processed++;
   }
 
-  // ── Mark removed as Inactive ───────────────────────────────────
-  // Batch in chunks of 100
-  const removeChunks = [];
-  for (let i = 0; i < toRemove.length; i += 50) removeChunks.push(toRemove.slice(i, i + 50));
-  for (const chunk of removeChunks) {
-    onProgress(processed, total, `[Inactive] ${chunk[0]?.name || ""}`, created, updated, errors);
-    const ids = chunk.map(r => r.id);
-    const { error } = await admin.from("customers").update({ tinh_trang: "Inactive" }).in("id", ids);
-    if (error) { console.error("INACTIVE batch error:", error.message); errors += chunk.length; }
-    else removed += chunk.length;
-    processed += chunk.length;
+  // ── 3. REMOVE or INACTIVATE orphan rows ────────────────────────
+  if (toRemove.length > 0) {
+    const chunks = [];
+    for (let i = 0; i < toRemove.length; i += 50) chunks.push(toRemove.slice(i, i + 50));
+
+    for (const chunk of chunks) {
+      onProgress(processed, total, `[Xử lý thừa] ${chunk[0]?.name || ""}`, created, updated, errors);
+      const ids = chunk.map(r => r.id);
+
+      if (hardDeleteOrphans) {
+        // Xóa hoàn toàn để DB giống 100% Google Sheet
+        const { error } = await admin.from("customers").delete().in("id", ids);
+        if (error) {
+          console.error("DELETE batch error:", error.message);
+          errors += chunk.length;
+        } else {
+          removed += chunk.length;
+        }
+      } else {
+        // Đặt Inactive
+        const { error } = await admin.from("customers").update({ tinh_trang: "Inactive" }).in("id", ids);
+        if (error) {
+          console.error("INACTIVE batch error:", error.message);
+          errors += chunk.length;
+        } else {
+          removed += chunk.length;
+        }
+      }
+      processed += chunk.length;
+    }
   }
 
   return { created, updated, removed, errors };
@@ -283,19 +348,28 @@ async function syncRows(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { mode = "sync" } = body;
+    const { mode = "sync", hardDeleteOrphans = true } = body;
 
-    // ── PREVIEW: compare Sheet vs DB, return diff ────────────────
+    // ── PREVIEW: compare Sheet vs DB ────────────────────────────
     if (mode === "preview") {
       let sheetRows: SheetRow[];
-      try { sheetRows = await fetchSheetRows(body); }
-      catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
-      if (!sheetRows.length) return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu trong Google Sheet." }, { status: 400 });
+      try {
+        sheetRows = await fetchSheetRows(body);
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+      }
+
+      if (!sheetRows.length) {
+        return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu hợp lệ trong Google Sheet." }, { status: 400 });
+      }
 
       const admin = getAdmin();
       let dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>;
-      try { dbRows = await fetchAllDbCustomers(admin); }
-      catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
+      try {
+        dbRows = await fetchAllDbCustomers(admin);
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+      }
 
       const { toAdd, toUpdate, toRemove } = computeDiff(sheetRows, dbRows);
 
@@ -305,94 +379,85 @@ export async function POST(req: NextRequest) {
         sheetTotal: sheetRows.length,
         dbTotal: dbRows.length,
         diff: {
-          add:    { count: toAdd.length,    rows: toAdd.slice(0, 20) },
-          update: { count: toUpdate.length, rows: toUpdate.slice(0, 20) },
-          remove: { count: toRemove.length, rows: toRemove.slice(0, 20) },
+          add:    { count: toAdd.length,    rows: toAdd.slice(0, 30) },
+          update: { count: toUpdate.length, rows: toUpdate.slice(0, 30) },
+          remove: { count: toRemove.length, rows: toRemove.slice(0, 30) },
         },
         noChanges: !toAdd.length && !toUpdate.length && !toRemove.length,
       });
     }
 
-    // ── SYNC DIFF: write only changed rows with SSE ──────────────
-    if (mode === "sync_diff") {
-      let sheetRows: SheetRow[];
-      try { sheetRows = await fetchSheetRows(body); }
-      catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
-
-      const admin = getAdmin();
-      let dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>;
-      try { dbRows = await fetchAllDbCustomers(admin); }
-      catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
-
-      const { toAdd, toUpdate, toRemove } = computeDiff(sheetRows, dbRows);
-      const total = toAdd.length + toUpdate.length + toRemove.length;
-
-      if (total === 0) {
-        return NextResponse.json({ success: true, total: 0, created: 0, updated: 0, removed: 0, message: "Không có thay đổi." });
-      }
-
-      const encoder = new TextEncoder();
-      const readable = new ReadableStream({
-        async start(controller) {
-          const send = (obj: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-          send({ type: "start", total, toAdd: toAdd.length, toUpdate: toUpdate.length, toRemove: toRemove.length });
-
-          const result = await syncRows(admin, toAdd, toUpdate, toRemove, dbRows, (processed, total, name, created, updated, errors) => {
-            send({ type: "progress", processed, total, name, created, updated, errors });
-          });
-
-          send({ type: "done", total, ...result });
-          controller.close();
-        },
-      });
-
-      return new Response(readable, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
-      });
+    // ── SYNC DIFF / FULL SYNC with SSE ───────────────────────────
+    let sheetRows: SheetRow[];
+    try {
+      sheetRows = await fetchSheetRows(body);
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 400 });
     }
 
-    // ── DEFAULT SYNC: full sync (no diff) ────────────────────────
-    let rowsToProcess: SheetRow[];
-    try { rowsToProcess = await fetchSheetRows(body); }
-    catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
-
-    if (!rowsToProcess.length) {
-      return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu. Kiểm tra cột: 'Tên Khách Hàng', 'Mã Khách Hàng'." }, { status: 400 });
+    if (!sheetRows.length) {
+      return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu hợp lệ từ Google Sheet." }, { status: 400 });
     }
 
     const admin = getAdmin();
     let dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>;
-    try { dbRows = await fetchAllDbCustomers(admin); }
-    catch (err: any) { return NextResponse.json({ success: false, error: err.message }, { status: 400 }); }
+    try {
+      dbRows = await fetchAllDbCustomers(admin);
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+    }
 
-    // For full sync: treat ALL sheet rows as "toAdd or toUpdate"
-    const { toAdd, toUpdate, toRemove } = computeDiff(rowsToProcess, dbRows);
+    const { toAdd, toUpdate, toRemove } = computeDiff(sheetRows, dbRows);
     const total = toAdd.length + toUpdate.length + toRemove.length;
-    const { stream } = body;
 
-    if (stream) {
-      const encoder = new TextEncoder();
-      const readable = new ReadableStream({
-        async start(controller) {
-          const send = (obj: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-          send({ type: "start", total: rowsToProcess.length });
-
-          const result = await syncRows(admin, toAdd, toUpdate, toRemove, dbRows, (processed, total, name, created, updated, errors) => {
-            send({ type: "progress", processed, total: rowsToProcess.length, name, created, updated, errors });
-          });
-
-          send({ type: "done", total: rowsToProcess.length, ...result });
-          controller.close();
-        },
-      });
-      return new Response(readable, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
+    if (total === 0) {
+      return NextResponse.json({
+        success: true,
+        total: 0,
+        created: 0,
+        updated: 0,
+        removed: 0,
+        message: "Dữ liệu trên Supabase đã hoàn toàn trùng khớp với Google Sheet.",
       });
     }
 
-    // Non-streaming
-    const result = await syncRows(admin, toAdd, toUpdate, toRemove, dbRows, () => {});
-    return NextResponse.json({ success: true, total: rowsToProcess.length, ...result, lastSyncedAt: new Date().toISOString() });
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const send = (obj: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        send({
+          type: "start",
+          total,
+          toAdd: toAdd.length,
+          toUpdate: toUpdate.length,
+          toRemove: toRemove.length,
+          sheetTotal: sheetRows.length,
+        });
+
+        const result = await executeSync(
+          admin,
+          toAdd,
+          toUpdate,
+          toRemove,
+          dbRows,
+          Boolean(hardDeleteOrphans),
+          (processed, totalCount, name, created, updated, errors) => {
+            send({ type: "progress", processed, total: totalCount, name, created, updated, errors });
+          }
+        );
+
+        send({ type: "done", total, sheetTotal: sheetRows.length, ...result });
+        controller.close();
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
 
   } catch (err: any) {
     console.error("sync-sheets error:", err);
