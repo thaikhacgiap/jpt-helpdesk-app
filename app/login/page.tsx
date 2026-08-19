@@ -194,14 +194,15 @@ export default function LoginPage() {
         .login-logo-hero {
           position: relative;
           display: inline-block;
-          margin-bottom: 30px;
-          padding: 20px 22px;
+          margin-bottom: 28px;
+          padding: 16px 20px;
+          border-radius: 20px;
         }
         .login-logo-hero::before {
           content: "";
           position: absolute;
-          inset: -10px;
-          border-radius: 26px;
+          inset: -6px;
+          border-radius: 24px;
           background: radial-gradient(60% 90% at 30% 20%, rgba(62, 123, 255, 0.45), transparent 70%),
                      radial-gradient(60% 90% at 80% 80%, rgba(147, 88, 255, 0.4), transparent 70%);
           filter: blur(18px);
@@ -212,7 +213,7 @@ export default function LoginPage() {
           content: "";
           position: absolute;
           inset: 0;
-          border-radius: 22px;
+          border-radius: 20px;
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.14);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 20px 50px rgba(10, 15, 44, 0.5);
@@ -220,10 +221,11 @@ export default function LoginPage() {
         }
         .login-logo-hero img {
           display: block;
-          height: 46px;
+          height: 52px;
           width: auto;
           max-width: 100%;
-          filter: drop-shadow(0 0 26px rgba(120, 160, 255, 0.55));
+          mix-blend-mode: screen;
+          filter: drop-shadow(0 0 22px rgba(62, 123, 255, 0.75));
         }
 
         h1.login-headline {

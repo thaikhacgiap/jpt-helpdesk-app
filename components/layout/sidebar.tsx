@@ -86,13 +86,15 @@ export default function Sidebar() {
       <div>
         {/* LOGO */}
         <div className="mb-6 px-1">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-6 h-6 bg-teal-500 rounded-md flex items-center justify-center shadow-xs">
-              <span className="text-white text-xs font-bold">⚙</span>
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 flex items-center justify-center">
+              <img src="/jpt-logo.png" alt="JPT Logo" className="h-7 w-auto max-w-[80px] object-contain" style={{ mixBlendMode: 'screen' }} />
             </div>
-            <h1 className="text-lg font-extrabold text-white tracking-tight">IT Helpdesk</h1>
+            <div className="flex flex-col">
+              <h1 className="text-sm font-black text-white tracking-tight leading-none">Helpdesk</h1>
+              <span className="text-[9px] text-cyan-400 font-bold uppercase tracking-wider mt-0.5">Portal & Management</span>
+            </div>
           </div>
-          <p className="text-xs text-gray-400 ml-8 font-mono">v4.0</p>
         </div>
 
         {/* DASHBOARD (STANDALONE AT TOP OUTSIDE DỊCH VỤ) */}
