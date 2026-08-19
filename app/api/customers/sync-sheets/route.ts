@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { google } from "googleapis";
+import { fetchGoogleSheetRows } from "@/lib/google-sheets-reader";
 
 export interface SheetRow {
   code: string;
@@ -159,7 +159,7 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
 
 // ─── Fetch sheet rows ─────────────────────────────────────────
 async function fetchSheetRows(body: any): Promise<SheetRow[]> {
-  const { sheetUrl, sheetName, clientEmail, privateKey,
+  const { sheetUrl, sheetName,
           userAccessToken, userRefreshToken, userClientId, userClientSecret,
           data: rawRows } = body;
 
@@ -177,34 +177,20 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
   const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
   if (!spreadsheetId) throw new Error("Không thể nhận diện Spreadsheet ID từ link Google Sheet.");
 
-  const range = sheetName ? `${sheetName}!A1:Z3000` : "A1:Z3000";
+  const fetchRes = await fetchGoogleSheetRows({
+    spreadsheetId,
+    sheetName: sheetName || "Customer",
+    userAccessToken,
+    userRefreshToken,
+    userClientId,
+    userClientSecret,
+  });
 
-  if (userAccessToken || userRefreshToken) {
-    const oauth2Client = new google.auth.OAuth2(userClientId || undefined, userClientSecret || undefined);
-    let rToken = (userRefreshToken || "").trim();
-    let aToken = (userAccessToken || "").trim();
-    if (aToken && (aToken.startsWith("1//") || aToken.startsWith("1/"))) { rToken = aToken; aToken = ""; }
-    oauth2Client.setCredentials({ access_token: aToken || undefined, refresh_token: rToken || undefined });
-    if (rToken && userClientId && userClientSecret) {
-      try { const t = await oauth2Client.getAccessToken(); if (t?.token) oauth2Client.setCredentials({ access_token: t.token, refresh_token: rToken }); } catch {}
-    }
-    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-    return extractRowsFromValues(res.data.values || []);
+  if (!fetchRes.success || !fetchRes.rows) {
+    throw new Error(fetchRes.error || `Không thể đọc dữ liệu từ Google Sheet tab "${sheetName}".`);
   }
 
-  if (clientEmail && privateKey) {
-    const auth = new google.auth.JWT({
-      email: clientEmail,
-      key: privateKey.replace(/\\n/g, "\n"),
-      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-    });
-    const sheets = google.sheets({ version: "v4", auth });
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-    return extractRowsFromValues(res.data.values || []);
-  }
-
-  throw new Error("Chưa cấu hình thông tin xác thực Google (Token hoặc Service Account).");
+  return extractRowsFromValues(fetchRes.rows);
 }
 
 // ─── Auto Clean Database Duplicates (Step 1 of Sync) ───────────

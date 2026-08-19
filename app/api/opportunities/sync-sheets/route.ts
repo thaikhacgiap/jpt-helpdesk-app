@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { google } from "googleapis";
+import { fetchGoogleSheetRows } from "@/lib/google-sheets-reader";
 
 export interface OppSheetRow {
   code: string;
@@ -185,34 +185,21 @@ async function fetchOppSheetRows(body: any): Promise<OppSheetRow[]> {
   if (!spreadsheetId) throw new Error("Không thể nhận diện Spreadsheet ID từ link Google Sheet.");
 
   const targetTab = sheetName || "Opportunity";
-  const range = `${targetTab}!A1:Z3000`;
 
-  if (userAccessToken || userRefreshToken) {
-    const oauth2Client = new google.auth.OAuth2(userClientId || undefined, userClientSecret || undefined);
-    let rToken = (userRefreshToken || "").trim();
-    let aToken = (userAccessToken || "").trim();
-    if (aToken && (aToken.startsWith("1//") || aToken.startsWith("1/"))) { rToken = aToken; aToken = ""; }
-    oauth2Client.setCredentials({ access_token: aToken || undefined, refresh_token: rToken || undefined });
-    if (rToken && userClientId && userClientSecret) {
-      try { const t = await oauth2Client.getAccessToken(); if (t?.token) oauth2Client.setCredentials({ access_token: t.token, refresh_token: rToken }); } catch {}
-    }
-    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
-    try {
-      const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-      return extractOppRowsFromValues(res.data.values || []);
-    } catch (sheetErr: any) {
-      // Fallback: search for sheet tab with opportunity in name
-      const meta = await sheets.spreadsheets.get({ spreadsheetId });
-      const found = (meta.data.sheets || []).find(s => s.properties?.title?.toLowerCase().includes("opp"));
-      if (found?.properties?.title) {
-        const res2 = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${found.properties.title}!A1:Z3000` });
-        return extractOppRowsFromValues(res2.data.values || []);
-      }
-      throw sheetErr;
-    }
+  const fetchRes = await fetchGoogleSheetRows({
+    spreadsheetId,
+    sheetName: targetTab,
+    userAccessToken,
+    userRefreshToken,
+    userClientId,
+    userClientSecret,
+  });
+
+  if (!fetchRes.success || !fetchRes.rows) {
+    throw new Error(fetchRes.error || `Không thể đọc dữ liệu từ Google Sheet tab "${targetTab}".`);
   }
 
-  throw new Error("Chưa cấu hình Token xác thực tài khoản Google.");
+  return extractOppRowsFromValues(fetchRes.rows);
 }
 
 // ─── Fetch All DB Opportunities ───────────────────────────────

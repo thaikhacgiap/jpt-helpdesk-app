@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { fetchGoogleSheetRows } from "@/lib/google-sheets-reader";
 
 export const dynamic = "force-dynamic";
 
@@ -11,46 +12,6 @@ function extractSpreadsheetId(url: string): string | null {
 function cleanText(val: any): string {
   if (val === undefined || val === null) return "";
   return String(val).trim();
-}
-
-async function refreshUserAccessToken(
-  refreshToken: string,
-  clientId?: string,
-  clientSecret?: string
-): Promise<string> {
-  const effectiveClientId =
-    clientId?.trim() ||
-    process.env.GOOGLE_DRIVE_CLIENT_ID ||
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
-    "";
-  const effectiveClientSecret =
-    clientSecret?.trim() ||
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
-    "";
-
-  if (!effectiveClientId || !effectiveClientSecret) {
-    throw new Error("Thiếu Google Client ID hoặc Client Secret để làm mới token.");
-  }
-
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: effectiveClientId,
-      client_secret: effectiveClientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok || !data.access_token) {
-    throw new Error(
-      `Làm mới Access Token thất bại: ${data.error_description || data.error || res.statusText}`
-    );
-  }
-
-  return data.access_token;
 }
 
 export async function POST(req: Request) {
@@ -76,43 +37,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Link Google Sheet không hợp lệ." }, { status: 400 });
     }
 
-    let token = userAccessToken?.trim() || "";
+    const fetchResult = await fetchGoogleSheetRows({
+      spreadsheetId,
+      sheetName,
+      userAccessToken,
+      userRefreshToken,
+      userClientId,
+      userClientSecret,
+    });
 
-    if (!token && userRefreshToken?.trim()) {
-      try {
-        token = await refreshUserAccessToken(userRefreshToken.trim(), userClientId, userClientSecret);
-      } catch (err: any) {
-        return NextResponse.json({ success: false, error: err.message }, { status: 401 });
-      }
+    if (!fetchResult.success || !fetchResult.rows) {
+      return NextResponse.json(
+        { success: false, error: fetchResult.error || "Không thể đọc dữ liệu từ Google Sheet." },
+        { status: fetchResult.statusCode || 400 }
+      );
     }
 
-    const fetchSheetData = async (accessToken: string) => {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A1:Z5000`;
-      return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    };
-
-    let sheetsRes = await fetchSheetData(token);
-
-    if (sheetsRes.status === 401 && userRefreshToken?.trim()) {
-      try {
-        token = await refreshUserAccessToken(userRefreshToken.trim(), userClientId, userClientSecret);
-        sheetsRes = await fetchSheetData(token);
-      } catch (err: any) {
-        return NextResponse.json({ success: false, error: "Token hết hạn: " + err.message }, { status: 401 });
-      }
-    }
-
-    if (!sheetsRes.ok) {
-      let msg = `Không thể đọc sheet tab "${sheetName}".`;
-      try {
-        const errJson = await sheetsRes.json();
-        if (errJson?.error?.message) msg += ` Chi tiết: ${errJson.error.message}`;
-      } catch {}
-      return NextResponse.json({ success: false, error: msg }, { status: sheetsRes.status });
-    }
-
-    const sheetData = await sheetsRes.json();
-    const rawRows: string[][] = sheetData.values || [];
+    const rawRows: string[][] = fetchResult.rows;
 
     if (rawRows.length <= 1) {
       return NextResponse.json({ success: true, total: 0, created: 0, updated: 0, noChanges: true });
