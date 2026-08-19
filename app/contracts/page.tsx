@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import ContractTable from "@/components/contracts/contract-table";
@@ -8,11 +8,10 @@ import ContractModal from "@/components/contracts/new-contract-modal";
 import ContractImportModal from "@/components/contracts/contract-import-modal";
 import {
   Plus, Download, Search,
-  FileText, Building2,
-  RefreshCw, FileSpreadsheet, UserCheck, CheckCircle2, Target
+  FileText, Users, Target, UsersRound, UserCheck,
+  FileSpreadsheet, RefreshCw, CheckCircle2, ShieldCheck, Clock
 } from "lucide-react";
 import { fetchContracts, Contract } from "@/lib/contract-operations";
-import { Users, UsersRound } from "lucide-react";
 
 const INFO_NAV_TABS = [
   { href: "/customers", label: "Khách hàng", icon: Users },
@@ -27,20 +26,21 @@ export default function ContractsPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [editData, setEditData] = useState<Contract | null>(null);
   const [search, setSearch] = useState("");
-  const [stats, setStats] = useState({ total: 0, activeCount: 0, withPhuTrach: 0, lastSync: "" });
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [stats, setStats] = useState({ total: 0, active: 0, customers: 0, lastSync: "" });
   const tableRef = useRef<any>(null);
 
   const loadStats = async () => {
     const data = await fetchContracts();
-    const activeCount = data.filter(c => (c.status || "").toLowerCase().includes("active") || (c.status || "").toLowerCase().includes("hiệu lực")).length;
-    const withPhuTrach = data.filter(c => (c.owner_name && c.owner_name.trim() !== "") || (c.phu_trach && c.phu_trach.trim() !== "")).length;
+    const active = data.filter(c => (c.status || "active").toLowerCase().includes("active") || (c.status || "").toLowerCase().includes("hiệu lực")).length;
+    const uniqueCustomers = new Set(data.map(c => c.customer).filter(Boolean)).size;
     const lastSyncTime = localStorage.getItem("jpt_contract_last_sync_time") || "Chưa đồng bộ";
-    setStats({ total: data.length, activeCount, withPhuTrach, lastSync: lastSyncTime });
+    setStats({ total: data.length, active, customers: uniqueCustomers, lastSync: lastSyncTime });
   };
 
   useEffect(() => { loadStats(); }, []);
 
-  // Background Auto-Sync
+  // Background Auto-Sync Timer Effect
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
 
@@ -48,9 +48,10 @@ export default function ContractsPage() {
       const isExplicitlyDisabled = localStorage.getItem("jpt_customer_auto_sync") === "false";
       if (isExplicitlyDisabled) return;
 
-      const sheetUrl = localStorage.getItem("jpt_contract_sheet_url") ||
+      const sheetUrl =
+        localStorage.getItem("jpt_contract_sheet_url") ||
         localStorage.getItem("jpt_customer_sheet_url") ||
-        localStorage.getItem("jpt_opp_sheet_url") ||
+        localStorage.getItem("jpt_master_sheet_url") ||
         "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit";
 
       const userAccessToken = localStorage.getItem("jpt_google_user_access_token") || "";
@@ -84,11 +85,10 @@ export default function ContractsPage() {
           loadStats();
         }
       } catch (err) {
-        console.error("Contract auto sync error:", err);
+        console.error("Auto sync contract error:", err);
       }
     };
 
-    // Run initial auto sync if credentials exist
     checkAndRunAutoSync(true);
 
     const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
@@ -119,13 +119,27 @@ export default function ContractsPage() {
     setEditData(null);
   };
 
-  // Export CSV
+  // Export CSV 14 columns
   const handleExport = async () => {
     const data: Contract[] = tableRef.current?.getAllData?.() || await fetchContracts();
     if (data.length === 0) { alert("Không có dữ liệu để xuất."); return; }
 
-    const headers = ["code", "contract_no", "name", "customer_name", "contract_type", "signed_date", "value", "status", "owner_name", "description"];
-    const labelRow = ["Mã HĐ", "Số Hợp Đồng", "Tên Hợp Đồng", "Khách Hàng", "Loại Hợp Đồng", "Ngày Ký", "Giá Trị", "Trạng Thái", "Người Phụ Trách", "Ghi Chú"];
+    const labelRow = [
+      "CONTRACT NO",
+      "PROJECT ID",
+      "STATUS",
+      "SIGNED DATE",
+      "EXPIRY DATE",
+      "SERVICE",
+      "CONTRACT TYPE",
+      "DESCRIPTION",
+      "SUPPLIER",
+      "END USER",
+      "CUSTOMER",
+      "AM",
+      "TEAM",
+      "FY"
+    ];
 
     const escape = (v: string | null | undefined) => {
       if (!v) return "";
@@ -136,16 +150,20 @@ export default function ContractsPage() {
     const lines = [
       labelRow.join(","),
       ...data.map(c => [
-        escape(c.code),
         escape(c.contract_no),
-        escape(c.name),
-        escape(c.customer_name),
-        escape(c.contract_type),
-        escape(c.signed_date),
-        escape(c.value),
+        escape(c.project_id),
         escape(c.status),
-        escape(c.owner_name || c.phu_trach),
-        escape(c.description || c.ghi_chu),
+        escape(c.signed_date),
+        escape(c.expiry_date),
+        escape(c.service),
+        escape(c.contract_type),
+        escape(c.description),
+        escape(c.supplier),
+        escape(c.end_user),
+        escape(c.customer),
+        escape(c.am),
+        escape(c.team),
+        escape(c.fy),
       ].join(","))
     ];
 
@@ -165,7 +183,7 @@ export default function ContractsPage() {
         <div className="shrink-0 mb-3">
           <Header
             title="Quản lý Thông Tin"
-            description="Hồ sơ hợp đồng pháp lý, loại hợp đồng, thời hạn và giá trị"
+            description="Theo dõi toàn bộ hợp đồng dịch vụ, bảo trì và dự án công ty"
             navTabs={INFO_NAV_TABS}
           />
         </div>
@@ -177,10 +195,10 @@ export default function ContractsPage() {
               <div>
                 <p className="text-[11px] text-slate-500 font-medium">Tổng Hợp đồng</p>
                 <p className="text-xl font-bold text-slate-800 mt-0.5">{stats.total}</p>
-                <p className="text-[11px] text-slate-400">Hồ sơ pháp lý</p>
+                <p className="text-[11px] text-slate-400">Toàn bộ hồ sơ</p>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <FileText size={16} className="text-indigo-600" />
+              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                <FileText size={16} className="text-purple-600" />
               </div>
             </div>
           </div>
@@ -189,11 +207,11 @@ export default function ContractsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] text-slate-500 font-medium">Đang Hiệu Lực</p>
-                <p className="text-xl font-bold text-emerald-600 mt-0.5">{stats.activeCount}</p>
-                <p className="text-[11px] text-emerald-500">Đang triển khai</p>
+                <p className="text-xl font-bold text-emerald-600 mt-0.5">{stats.active}</p>
+                <p className="text-[11px] text-emerald-500">Trạng thái Active</p>
               </div>
               <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 size={16} className="text-emerald-600" />
+                <ShieldCheck size={16} className="text-emerald-600" />
               </div>
             </div>
           </div>
@@ -201,19 +219,19 @@ export default function ContractsPage() {
           <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[11px] text-slate-500 font-medium">Đã gán Phụ trách</p>
-                <p className="text-xl font-bold text-blue-600 mt-0.5">{stats.withPhuTrach}</p>
-                <p className="text-[11px] text-blue-500">Nhân sự quản lý</p>
+                <p className="text-[11px] text-slate-500 font-medium">Khách Hàng Ký Kết</p>
+                <p className="text-xl font-bold text-blue-600 mt-0.5">{stats.customers}</p>
+                <p className="text-[11px] text-blue-500">Doanh nghiệp đối tác</p>
               </div>
               <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <UserCheck size={16} className="text-blue-600" />
+                <Users size={16} className="text-blue-600" />
               </div>
             </div>
           </div>
 
           <div
             onClick={() => setIsImportOpen(true)}
-            className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm hover:border-indigo-300 hover:shadow-md transition cursor-pointer group"
+            className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm hover:border-purple-300 hover:shadow-md transition cursor-pointer group"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -221,20 +239,20 @@ export default function ContractsPage() {
                 {stats.lastSync && stats.lastSync !== "Chưa đồng bộ" ? (
                   <>
                     <div className="flex items-center gap-1 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                      <p className="text-xs font-bold text-indigo-700">Đã đồng bộ</p>
+                      <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                      <p className="text-xs font-bold text-purple-700">Đã đồng bộ</p>
                     </div>
                     <p className="text-[10px] text-slate-500 font-mono truncate max-w-[140px]">{stats.lastSync}</p>
                   </>
                 ) : (
                   <>
                     <p className="text-xs font-bold text-slate-600 mt-1">Chưa đồng bộ</p>
-                    <p className="text-[10px] text-indigo-600 font-medium">Tự động 1 chiều</p>
+                    <p className="text-[10px] text-purple-600 font-medium">Lọc trùng: CONTRACT NO</p>
                   </>
                 )}
               </div>
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center transition">
-                <RefreshCw size={16} className="text-indigo-600 group-hover:rotate-180 transition duration-500" />
+              <div className="w-8 h-8 rounded-lg bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition">
+                <RefreshCw size={16} className="text-purple-600 group-hover:rotate-180 transition duration-500" />
               </div>
             </div>
           </div>
@@ -247,7 +265,7 @@ export default function ContractsPage() {
             <button
               onClick={handleNewClick}
               id="btn-new-contract"
-              className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-sm"
+              className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition shadow-sm"
             >
               <Plus size={15} />
               Thêm hợp đồng
@@ -256,23 +274,35 @@ export default function ContractsPage() {
             <div className="relative">
               <input
                 type="text"
-                id="search-contract"
+                id="search-contracts"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm theo mã, số HĐ, tên, khách hàng, phụ trách..."
-                className="w-80 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-sm"
+                placeholder="Tìm theo CONTRACT NO, PROJECT ID, Customer, AM, Team, FY..."
+                className="w-80 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition shadow-sm"
               />
               <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="Active">Active (Hiệu lực)</option>
+              <option value="Pending">Pending (Chờ duyệt)</option>
+              <option value="Hết hạn">Hết hạn</option>
+              <option value="Thanh lý">Thanh lý</option>
+            </select>
           </div>
 
           {/* Right */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsImportOpen(true)}
-              className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition shadow-sm"
+              className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold transition shadow-sm"
             >
-              <FileSpreadsheet size={15} className="text-indigo-600" />
+              <FileSpreadsheet size={15} className="text-purple-600" />
               Đồng bộ Google Sheet / Import
             </button>
 
@@ -293,6 +323,7 @@ export default function ContractsPage() {
             onRefresh={handleModalSuccess}
             onEdit={handleEdit}
             searchValue={search}
+            statusFilter={statusFilter}
           />
         </div>
       </div>

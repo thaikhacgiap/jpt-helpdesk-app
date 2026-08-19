@@ -7,14 +7,12 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertCircle,
-  Clock,
   RefreshCw,
   Link as LinkIcon,
   Loader2,
   ExternalLink,
-  User,
-  AlertTriangle,
-  FileText
+  FileText,
+  AlertTriangle
 } from "lucide-react";
 import { upsertContractFromImport } from "@/lib/contract-operations";
 
@@ -22,14 +20,6 @@ interface ContractImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-}
-
-interface SyncErrorItem {
-  type: "insert" | "update";
-  name: string;
-  code?: string;
-  message: string;
-  detail?: string;
 }
 
 export default function ContractImportModal({
@@ -48,7 +38,6 @@ export default function ContractImportModal({
   const [userRefreshToken, setUserRefreshToken] = useState("");
   const [userClientId, setUserClientId] = useState("");
   const [userClientSecret, setUserClientSecret] = useState("");
-  const [showAuthConfig, setShowAuthConfig] = useState(false);
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
@@ -62,8 +51,6 @@ export default function ContractImportModal({
     errors: number;
     name: string;
   } | null>(null);
-
-  const [syncErrorLog, setSyncErrorLog] = useState<SyncErrorItem[]>([]);
 
   const [previewData, setPreviewData] = useState<{
     sheetTotal: number;
@@ -95,7 +82,11 @@ export default function ContractImportModal({
   // Load saved settings
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedUrl = localStorage.getItem("jpt_contract_sheet_url") || localStorage.getItem("jpt_customer_sheet_url") || "";
+      const savedUrl =
+        localStorage.getItem("jpt_contract_sheet_url") ||
+        localStorage.getItem("jpt_customer_sheet_url") ||
+        localStorage.getItem("jpt_master_sheet_url") ||
+        "";
       const savedSheetName = localStorage.getItem("jpt_contract_sheet_name") || "Contract";
       const savedToken = localStorage.getItem("jpt_google_user_access_token") || "";
       const savedRefreshToken = localStorage.getItem("jpt_google_user_refresh_token") || "";
@@ -108,10 +99,6 @@ export default function ContractImportModal({
       setUserRefreshToken(savedRefreshToken);
       setUserClientId(savedClientId);
       setUserClientSecret(savedClientSecret);
-
-      if (savedToken || savedRefreshToken || savedClientId) {
-        setShowAuthConfig(true);
-      }
     }
   }, [isOpen]);
 
@@ -131,7 +118,6 @@ export default function ContractImportModal({
     setSyncStats(null);
     setPreviewData(null);
     setPreviewing(false);
-    setSyncErrorLog([]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -162,7 +148,6 @@ export default function ContractImportModal({
     setPreviewing(true);
     setPreviewData(null);
     setSyncResult(null);
-    setSyncErrorLog([]);
 
     try {
       const res = await fetch("/api/contracts/sync-sheets", {
@@ -190,7 +175,6 @@ export default function ContractImportModal({
     setSyncResult(null);
     setSyncProgress(5);
     setSyncStats(null);
-    setSyncErrorLog([]);
 
     try {
       const res = await fetch("/api/contracts/sync-sheets", {
@@ -250,25 +234,8 @@ export default function ContractImportModal({
                   errors: event.errors ?? 0,
                   name: event.name || "",
                 });
-
-                if (event.errorItem) {
-                  setSyncErrorLog(prev => [...prev, event.errorItem]);
-                }
               } else if (event.type === "done") {
                 setSyncProgress(100);
-                setSyncStats({
-                  processed: event.total,
-                  total: event.total,
-                  created: event.created,
-                  updated: event.updated,
-                  errors: event.errors,
-                  name: "",
-                });
-
-                if (event.errorLog && Array.isArray(event.errorLog)) {
-                  setSyncErrorLog(event.errorLog);
-                }
-
                 const syncTime = event.lastSyncedAt || new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
                 localStorage.setItem("jpt_contract_last_sync_time", syncTime);
                 localStorage.setItem("jpt_contract_sync_status", "Đã đồng bộ");
@@ -299,7 +266,6 @@ export default function ContractImportModal({
         if (!data.success) {
           setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ." });
         } else {
-          if (data.errorLog) setSyncErrorLog(data.errorLog);
           setSyncResult({
             success: (data.errors ?? 0) === 0,
             total: data.total,
@@ -323,7 +289,7 @@ export default function ContractImportModal({
     }
   };
 
-  // CSV
+  // CSV Import
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -354,19 +320,32 @@ export default function ContractImportModal({
     let errorCount = 0;
 
     for (const r of csvRows) {
-      const name = r["Tên Hợp Đồng"] || r["Tên hợp đồng"] || r.name || "";
-      const code = r["Mã Hợp Đồng"] || r["Mã hợp đồng"] || r.code || `CTR-${Date.now().toString().slice(-4)}`;
-      if (!name) continue;
+      const contractNo =
+        r["CONTRACT NO"] ||
+        r["Contract No"] ||
+        r["contract_no"] ||
+        r["Mã Hợp Đồng"] ||
+        r["Mã hợp đồng"] ||
+        r["Số hợp đồng"] ||
+        "";
+
+      if (!contractNo.trim()) continue;
 
       const res = await upsertContractFromImport({
-        code,
-        contract_no: r["Số Hợp Đồng"] || r["Số HĐ"] || r.contract_no || "",
-        name,
-        contract_type: r["Loại Hợp Đồng"] || r.contract_type || "Hợp đồng dịch vụ",
-        customer_name: r["Khách Hàng"] || r["customer_name"] || "",
-        signed_date: r["Ngày Ký"] || r["signed_date"] || "",
-        value: r["Giá Trị"] || r["value"] || "",
-        owner_name: r["Người Phụ Trách"] || r["owner_name"] || "",
+        contract_no: contractNo,
+        project_id: r["PROJECT ID"] || r["Project ID"] || r["project_id"] || r["Mã dự án"] || "",
+        status: r["STATUS"] || r["Status"] || r["Trạng thái"] || "Active",
+        signed_date: r["SIGNED DATE"] || r["Signed Date"] || r["signed_date"] || r["Ngày ký"] || "",
+        expiry_date: r["EXPIRY DATE"] || r["Expiry Date"] || r["expiry_date"] || r["Ngày hết hạn"] || "",
+        service: r["SERVICE"] || r["Service"] || r["service"] || r["Dịch vụ"] || "",
+        contract_type: r["CONTRACT TYPE"] || r["Contract Type"] || r["contract_type"] || r["Loại hợp đồng"] || "Hợp đồng dịch vụ",
+        description: r["DESCRIPTION"] || r["Description"] || r["description"] || r["Mô tả"] || "",
+        supplier: r["SUPPLIER"] || r["Supplier"] || r["supplier"] || r["Nhà cung cấp"] || "",
+        end_user: r["END USER"] || r["End User"] || r["end_user"] || r["Người dùng cuối"] || "",
+        customer: r["CUSTOMER"] || r["Customer"] || r["customer"] || r["Khách hàng"] || "",
+        am: r["AM"] || r["am"] || r["Phụ trách"] || "",
+        team: r["TEAM"] || r["Team"] || r["team"] || r["Nhóm"] || "",
+        fy: r["FY"] || r["fy"] || r["Năm tài chính"] || "",
       });
 
       if (res.success) {
@@ -400,14 +379,14 @@ export default function ContractImportModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50/70 via-white to-blue-50/40">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-2xl shadow-sm">
+            <div className="p-2.5 bg-purple-100 text-purple-700 rounded-2xl shadow-sm">
               <FileText size={22} />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Đồng bộ Hợp đồng (Contract)</h3>
-              <p className="text-xs text-slate-500">Cập nhật và thêm mới hợp đồng từ Google Sheets vào hệ thống</p>
+              <h3 className="text-lg font-bold text-slate-800">Đồng bộ Hợp đồng (Contracts)</h3>
+              <p className="text-xs text-slate-500">Đồng bộ 1 chiều từ Google Sheets tab Contract theo 14 trường chuẩn</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition">
@@ -426,7 +405,7 @@ export default function ContractImportModal({
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition border-b-2 -mb-[2px] ${
                 activeTab === tab.id
-                  ? "bg-white text-indigo-700 border-indigo-600 shadow-sm"
+                  ? "bg-white text-purple-700 border-purple-600 shadow-sm"
                   : "text-slate-500 border-transparent hover:text-slate-800"
               }`}
             >
@@ -446,7 +425,7 @@ export default function ContractImportModal({
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Đường link Google Sheet</label>
                   {sheetUrl.trim() && (
                     <a href={sheetUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">
+                      className="text-xs font-semibold text-purple-600 hover:underline flex items-center gap-1">
                       <ExternalLink size={13} /> Mở Google Sheet
                     </a>
                   )}
@@ -462,13 +441,13 @@ export default function ContractImportModal({
                         localStorage.setItem("jpt_contract_sheet_url", e.target.value);
                       }}
                       placeholder="https://docs.google.com/spreadsheets/d/1uo-bOv9u.../edit"
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
                   <button
                     onClick={handlePreview}
                     disabled={previewing || syncing || !sheetUrl.trim()}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2 shadow-sm disabled:opacity-50 whitespace-nowrap"
+                    className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2 shadow-sm disabled:opacity-50 whitespace-nowrap"
                   >
                     {previewing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                     {previewing ? "Đang kiểm tra..." : "Kiểm tra thay đổi"}
@@ -485,22 +464,22 @@ export default function ContractImportModal({
                       localStorage.setItem("jpt_contract_sheet_name", e.target.value);
                     }}
                     placeholder="Contract"
-                    className="w-40 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold text-slate-800"
+                    className="w-40 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-1 focus:ring-purple-500 font-bold text-slate-800"
                   />
-                  <p className="text-[11px] text-slate-400">Tên tab dưới cùng của Google Sheet (mặc định: <strong>Contract</strong>)</p>
+                  <p className="text-[11px] text-slate-400">Khóa lọc trùng: <strong>CONTRACT NO</strong> (mặc định tab: <strong>Contract</strong>)</p>
                 </div>
               </div>
 
               {/* Preview Diff */}
               {previewData && !syncing && (
-                <div className="bg-white border-2 border-indigo-200 rounded-2xl overflow-hidden shadow-lg">
-                  <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-200 flex items-center justify-between">
+                <div className="bg-white border-2 border-purple-200 rounded-2xl overflow-hidden shadow-lg">
+                  <div className="px-5 py-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-purple-200 flex items-center justify-between">
                     <div>
                       <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         📊 Kết quả so sánh (Google Sheets ➔ Supabase)
                       </h4>
                       <p className="text-xs text-slate-600 mt-0.5">
-                        Google Sheet tab Contract: <strong className="text-indigo-700 font-mono text-sm">{previewData.sheetTotal}</strong> bản ghi &nbsp;·&nbsp;
+                        Google Sheet tab Contract: <strong className="text-purple-700 font-mono text-sm">{previewData.sheetTotal}</strong> bản ghi &nbsp;·&nbsp;
                         Hệ thống hiện tại: <strong className="text-slate-700 font-mono text-sm">{previewData.dbTotal}</strong> bản ghi
                       </p>
                     </div>
@@ -532,7 +511,7 @@ export default function ContractImportModal({
                         <button
                           onClick={handleSyncNow}
                           disabled={syncing}
-                          className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                          className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
                         >
                           <RefreshCw size={17} />
                           Tiến hành đồng bộ ({previewData.diff.add.count + previewData.diff.update.count} thay đổi)
@@ -548,19 +527,19 @@ export default function ContractImportModal({
 
               {/* Progress */}
               {syncing && syncProgress > 0 && (
-                <div className="bg-white border-2 border-indigo-400 rounded-2xl p-5 space-y-3 shadow-lg">
+                <div className="bg-white border-2 border-purple-400 rounded-2xl p-5 space-y-3 shadow-lg">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-bold text-indigo-800">
-                      <Loader2 size={18} className="animate-spin text-indigo-600" />
+                    <div className="flex items-center gap-2 text-sm font-bold text-purple-800">
+                      <Loader2 size={18} className="animate-spin text-purple-600" />
                       <span>{syncProgress < 100 ? "Đang đồng bộ hợp đồng từ Google Sheet..." : "Hoàn tất đồng bộ! ✓"}</span>
                     </div>
-                    <span className="text-xs font-black text-indigo-800 bg-indigo-100 border border-indigo-300 px-3 py-1 rounded-xl">
+                    <span className="text-xs font-black text-purple-800 bg-purple-100 border border-purple-300 px-3 py-1 rounded-xl">
                       {Math.round(syncProgress)}%
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-200">
                     <div
-                      className="bg-gradient-to-r from-indigo-500 via-blue-500 to-teal-500 h-2.5 rounded-full transition-all duration-300 ease-out"
+                      className="bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500 h-2.5 rounded-full transition-all duration-300 ease-out"
                       style={{ width: `${syncProgress}%` }}
                     />
                   </div>
@@ -595,12 +574,12 @@ export default function ContractImportModal({
               {step === "upload" && (
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 hover:bg-indigo-50/20"
+                  className="border-2 border-dashed border-slate-300 hover:border-purple-500 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 hover:bg-purple-50/20"
                 >
                   <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
                   <Upload size={36} className="mx-auto text-slate-400 mb-3" />
                   <p className="text-sm font-bold text-slate-700">Nhấn để chọn file CSV Hợp đồng</p>
-                  <p className="text-xs text-slate-500 mt-1">Hỗ trợ các cột: Mã hợp đồng, Số hợp đồng, Tên hợp đồng, Khách hàng, Loại hợp đồng, Giá trị, Phụ trách...</p>
+                  <p className="text-xs text-slate-500 mt-1">Hỗ trợ 14 cột: CONTRACT NO, PROJECT ID, STATUS, SIGNED DATE, EXPIRY DATE, SERVICE, CONTRACT TYPE, DESCRIPTION, SUPPLIER, END USER, CUSTOMER, AM, TEAM, FY</p>
                 </div>
               )}
 
@@ -615,7 +594,7 @@ export default function ContractImportModal({
                     <button
                       onClick={handleImportCSV}
                       disabled={importing}
-                      className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition flex items-center gap-2 shadow-sm disabled:opacity-50"
+                      className="px-5 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition flex items-center gap-2 shadow-sm disabled:opacity-50"
                     >
                       {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                       {importing ? "Đang nhập..." : `Nhập ${csvRows.length} hợp đồng`}
@@ -628,7 +607,7 @@ export default function ContractImportModal({
                 <div className="p-5 bg-green-50 rounded-2xl border border-green-200 text-center space-y-3">
                   <CheckCircle2 size={36} className="mx-auto text-green-600" />
                   <h4 className="font-bold text-green-900">Nhập dữ liệu thành công!</h4>
-                  <button onClick={reset} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition">
+                  <button onClick={reset} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition">
                     Nhập thêm file khác
                   </button>
                 </div>
