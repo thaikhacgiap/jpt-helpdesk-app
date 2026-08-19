@@ -152,36 +152,15 @@ export default function CustomersPage() {
 
   return (
     <MainLayout>
-      {/* Header */}
+      {/* Header with Unified Navigation Tabs */}
       <Header
         title="Quản lý Khách hàng"
         description="Danh sách khách hàng, mã hệ thống, TTKD và người phụ trách"
+        navTabs={INFO_NAV_TABS}
       />
 
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 mb-6 bg-white px-4 pt-2 rounded-xl shadow-sm">
-        {INFO_NAV_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = tab.href === "/customers";
-          return (
-            <a
-              key={tab.href}
-              href={tab.href}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-lg transition border-b-2 -mb-[2px] ${
-                isActive
-                  ? "text-blue-600 border-blue-600 bg-blue-50/50"
-                  : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"
-              }`}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </a>
-          );
-        })}
-      </div>
-
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
