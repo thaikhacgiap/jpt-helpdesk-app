@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Pencil, Trash2, Phone, Smartphone, Mail } from "lucide-react";
+import { Pencil, Trash2, Phone, Smartphone, Mail, MapPin, UsersRound, Loader2 } from "lucide-react";
 import { fetchContacts, deleteContact, Contact } from "@/lib/contact-operations";
 
 interface ContactTableProps {
@@ -27,7 +27,11 @@ const ContactTable = forwardRef<any, ContactTableProps>(({ onEdit, onRefresh, se
     }
   };
 
-  useImperativeHandle(ref, () => ({ loadContacts }));
+  useImperativeHandle(ref, () => ({
+    loadContacts,
+    getAllData: () => contacts,
+  }));
+
   useEffect(() => { loadContacts(); }, []);
 
   const filtered = contacts.filter(c => {
@@ -40,7 +44,9 @@ const ContactTable = forwardRef<any, ContactTableProps>(({ onEdit, onRefresh, se
       c.customer_name?.toLowerCase().includes(q) ||
       c.bo_phan?.toLowerCase().includes(q) ||
       c.chuc_danh?.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q)
+      c.email?.toLowerCase().includes(q) ||
+      c.so_di_dong?.toLowerCase().includes(q) ||
+      c.so_may_ban?.toLowerCase().includes(q)
     );
   });
 
@@ -62,159 +68,161 @@ const ContactTable = forwardRef<any, ContactTableProps>(({ onEdit, onRefresh, se
     const p = name.trim().split(" ");
     return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase();
   };
-  const avatarColors = ["bg-teal-500","bg-blue-500","bg-purple-500","bg-orange-500","bg-pink-500","bg-indigo-500"];
+
+  const avatarColors = ["bg-teal-500","bg-blue-500","bg-purple-500","bg-orange-500","bg-pink-500","bg-indigo-500","bg-rose-500"];
   const getColor = (n: string) => avatarColors[(n?.charCodeAt(0) || 0) % avatarColors.length];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-left text-xs text-slate-500 font-semibold uppercase tracking-wider">
-              <th className="px-4 py-3 w-10">
-                <input type="checkbox" className="rounded" />
-              </th>
-              <th className="px-4 py-3 whitespace-nowrap">Mã liên hệ</th>
-              <th className="px-4 py-3 whitespace-nowrap">Mã khách hàng</th>
-              <th className="px-4 py-3 whitespace-nowrap">Họ và tên</th>
-              <th className="px-4 py-3 whitespace-nowrap">Bộ phận</th>
-              <th className="px-4 py-3 whitespace-nowrap">Chức danh</th>
-              <th className="px-4 py-3 whitespace-nowrap">Số máy bàn</th>
-              <th className="px-4 py-3 whitespace-nowrap">Số di động</th>
-              <th className="px-4 py-3 whitespace-nowrap">Email</th>
-              <th className="px-4 py-3 whitespace-nowrap">Địa chỉ</th>
-              <th className="px-4 py-3 whitespace-nowrap">Ghi chú</th>
-              <th className="px-4 py-3 text-center whitespace-nowrap">Thao tác</th>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <table className="w-full text-xs border-separate border-spacing-0 table-fixed">
+          <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+            <tr>
+              <th className="w-10 px-2 py-2 text-center text-slate-400 font-semibold uppercase text-[10px]">#</th>
+              <th className="w-24 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Mã LH</th>
+              <th className="w-48 px-3 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Họ và tên</th>
+              <th className="w-44 px-3 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Khách hàng</th>
+              <th className="w-28 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Bộ phận</th>
+              <th className="w-28 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Chức danh</th>
+              <th className="w-28 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Số di động</th>
+              <th className="w-28 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Máy bàn</th>
+              <th className="w-40 px-2.5 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Email</th>
+              <th className="w-44 px-3 py-2 text-left font-semibold text-slate-600 uppercase text-[10px] tracking-wider">Địa chỉ</th>
+              <th className="w-16 px-2 py-2 text-center font-semibold text-slate-600 uppercase text-[10px] tracking-wider sticky right-0 bg-slate-50">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={12} className="py-16 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-slate-400 text-sm">Đang tải...</span>
+                <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Loader2 size={24} className="animate-spin text-teal-500" />
+                    <p className="text-xs">Đang tải danh sách liên hệ...</p>
                   </div>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-16 text-center">
-                  <div className="text-4xl mb-2">📋</div>
-                  <p className="text-slate-400 text-sm">
-                    {searchValue ? "Không tìm thấy liên hệ phù hợp." : "Chưa có liên hệ nào."}
-                  </p>
+                <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <UsersRound size={32} className="text-slate-300 stroke-[1.5]" />
+                    <p className="font-semibold text-slate-600 text-xs">Không có dữ liệu liên hệ</p>
+                    <p className="text-[11px] text-slate-400">Thêm mới hoặc đồng bộ liên hệ từ Google Sheets</p>
+                  </div>
                 </td>
               </tr>
             ) : (
               filtered.map((c, idx) => (
-                <tr key={c.id} className={`${idx < filtered.length - 1 ? "border-b border-slate-100" : ""} hover:bg-blue-50/30 transition-colors`}>
-                  <td className="px-4 py-3.5">
-                    <input type="checkbox" className="rounded" />
-                  </td>
-
-                  {/* Mã liên hệ */}
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 font-semibold text-xs border border-teal-200 font-mono">
+                <tr key={c.id} className="hover:bg-slate-50/70 transition-colors group">
+                  <td className="px-2 py-2 text-center text-slate-400 text-[11px]">{idx + 1}</td>
+                  
+                  {/* Mã LH */}
+                  <td className="px-2.5 py-2">
+                    <span className="font-mono font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded text-[11px] border border-teal-200/60 block truncate">
                       {c.code}
                     </span>
                   </td>
 
-                  {/* Mã KH */}
-                  <td className="px-4 py-3.5">
-                    {c.customer_code ? (
-                      <div>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 font-mono">
-                          {c.customer_code}
-                        </span>
-                        {c.customer_name && (
-                          <p className="text-xs text-slate-400 mt-0.5 max-w-[120px] truncate">{c.customer_name}</p>
-                        )}
+                  {/* Họ và tên */}
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs ${getColor(c.ho_ten || "")}`}>
+                        {getInitials(c.ho_ten || "")}
+                      </div>
+                      <span className="font-semibold text-slate-800 truncate" title={c.ho_ten}>
+                        {c.ho_ten}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Khách hàng */}
+                  <td className="px-3 py-2">
+                    <span className="font-medium text-slate-700 truncate block" title={c.customer_name || c.customer_code || ""}>
+                      {c.customer_name || c.customer_code || <span className="text-slate-300">—</span>}
+                    </span>
+                  </td>
+
+                  {/* Bộ phận */}
+                  <td className="px-2.5 py-2">
+                    {c.bo_phan ? (
+                      <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded-md text-[11px] truncate block" title={c.bo_phan}>
+                        {c.bo_phan}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+
+                  {/* Chức danh */}
+                  <td className="px-2.5 py-2 text-slate-600 truncate font-medium" title={c.chuc_danh}>
+                    {c.chuc_danh || <span className="text-slate-300">—</span>}
+                  </td>
+
+                  {/* Số di động */}
+                  <td className="px-2.5 py-2">
+                    {c.so_di_dong ? (
+                      <div className="flex items-center gap-1 text-slate-600 font-mono text-[11px]" title={c.so_di_dong}>
+                        <Smartphone size={12} className="text-teal-500 shrink-0" />
+                        <span>{c.so_di_dong}</span>
                       </div>
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
 
-                  {/* Họ và tên */}
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${getColor(c.ho_ten)}`}>
-                        {getInitials(c.ho_ten)}
-                      </div>
-                      <span className="font-medium text-slate-800 whitespace-nowrap">{c.ho_ten}</span>
-                    </div>
-                  </td>
-
-                  {/* Bộ phận */}
-                  <td className="px-4 py-3.5">
-                    <span className="text-xs text-slate-600">{c.bo_phan || "—"}</span>
-                  </td>
-
-                  {/* Chức danh */}
-                  <td className="px-4 py-3.5">
-                    <span className="text-xs font-medium text-slate-700">{c.chuc_danh || "—"}</span>
-                  </td>
-
                   {/* Số máy bàn */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-2.5 py-2">
                     {c.so_may_ban ? (
-                      <div className="flex items-center gap-1 text-xs text-slate-600">
-                        <Phone size={11} className="text-slate-400" />
-                        {c.so_may_ban}
+                      <div className="flex items-center gap-1 text-slate-600 font-mono text-[11px]" title={c.so_may_ban}>
+                        <Phone size={12} className="text-slate-400 shrink-0" />
+                        <span>{c.so_may_ban}</span>
                       </div>
-                    ) : <span className="text-slate-300">—</span>}
-                  </td>
-
-                  {/* Số di động */}
-                  <td className="px-4 py-3.5">
-                    {c.so_di_dong ? (
-                      <div className="flex items-center gap-1 text-xs text-slate-600">
-                        <Smartphone size={11} className="text-slate-400" />
-                        {c.so_di_dong}
-                      </div>
-                    ) : <span className="text-slate-300">—</span>}
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
 
                   {/* Email */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-2.5 py-2">
                     {c.email ? (
-                      <a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                        <Mail size={11} />
-                        {c.email}
-                      </a>
-                    ) : <span className="text-slate-300">—</span>}
+                      <div className="flex items-center gap-1 text-slate-600 truncate" title={c.email}>
+                        <Mail size={12} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{c.email}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
 
                   {/* Địa chỉ */}
-                  <td className="px-4 py-3.5 text-xs text-slate-500 max-w-[130px]">
-                    <span className="truncate block" title={c.dia_chi || ""}>{c.dia_chi || "—"}</span>
-                  </td>
-
-                  {/* Ghi chú */}
-                  <td className="px-4 py-3.5 text-xs text-slate-400 max-w-[110px]">
-                    <span className="truncate block" title={c.ghi_chu || ""}>{c.ghi_chu || "—"}</span>
+                  <td className="px-3 py-2 text-slate-500 truncate" title={c.dia_chi}>
+                    {c.dia_chi ? (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={12} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{c.dia_chi}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
 
                   {/* Thao tác */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-2 py-2 text-center sticky right-0 bg-white group-hover:bg-slate-50/70">
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => onEdit?.(c)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition"
                         title="Chỉnh sửa"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
                       >
-                        <Pencil size={14} />
+                        <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => handleDelete(c)}
                         disabled={deletingId === c.id}
+                        className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
                         title="Xóa"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-40"
                       >
-                        {deletingId === c.id
-                          ? <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                          : <Trash2 size={14} />}
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>
@@ -225,12 +233,10 @@ const ContactTable = forwardRef<any, ContactTableProps>(({ onEdit, onRefresh, se
         </table>
       </div>
 
-      {/* Footer */}
-      {!loading && filtered.length > 0 && (
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
-          Hiển thị {filtered.length} / {contacts.length} liên hệ
-        </div>
-      )}
+      {/* Footer count */}
+      <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50/50">
+        <span>Hiển thị <strong className="text-slate-700">{filtered.length}</strong> / {contacts.length} liên hệ</span>
+      </div>
     </div>
   );
 });

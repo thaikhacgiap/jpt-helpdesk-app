@@ -16,6 +16,8 @@ export interface StorageConfig {
   sheet_master_url?: string;
   sheet_customer_tab?: string;
   sheet_opportunity_tab?: string;
+  sheet_contact_tab?: string;
+  sheet_nhan_su_tab?: string;
   sheet_contract_tab?: string;
   auto_subfolders: boolean;
   max_file_size_mb: number;
@@ -51,6 +53,8 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   sheet_master_url: "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit",
   sheet_customer_tab: "Customer",
   sheet_opportunity_tab: "Opportunity",
+  sheet_contact_tab: "Contact",
+  sheet_nhan_su_tab: "NhanSu",
   sheet_contract_tab: "Contract",
   auto_subfolders: true,
   max_file_size_mb: 50,
@@ -105,6 +109,8 @@ export async function saveStorageConfig(config: StorageConfig): Promise<{ succes
       if (config.sheet_master_url) {
         localStorage.setItem("jpt_customer_sheet_url", config.sheet_master_url);
         localStorage.setItem("jpt_opp_sheet_url", config.sheet_master_url);
+        localStorage.setItem("jpt_contact_sheet_url", config.sheet_master_url);
+        localStorage.setItem("jpt_nhan_su_sheet_url", config.sheet_master_url);
         localStorage.setItem("jpt_contract_sheet_url", config.sheet_master_url);
       }
       if (config.drive_client_id) {
@@ -124,6 +130,12 @@ export async function saveStorageConfig(config: StorageConfig): Promise<{ succes
       }
       if (config.sheet_opportunity_tab) {
         localStorage.setItem("jpt_opp_sheet_name", config.sheet_opportunity_tab);
+      }
+      if (config.sheet_contact_tab) {
+        localStorage.setItem("jpt_contact_sheet_name", config.sheet_contact_tab);
+      }
+      if (config.sheet_nhan_su_tab) {
+        localStorage.setItem("jpt_nhan_su_sheet_name", config.sheet_nhan_su_tab);
       }
       if (config.sheet_contract_tab) {
         localStorage.setItem("jpt_contract_sheet_name", config.sheet_contract_tab);

@@ -668,11 +668,11 @@ export default function SystemPage() {
                             className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-hidden font-mono bg-white"
                           />
                           <p className="text-[10px] text-slate-500">
-                            Các module Khách hàng, Cơ hội, Hợp đồng sẽ tự động đọc từ đường link này nếu không có cấu hình riêng.
+                            Các module Khách hàng, Cơ hội, Liên hệ, Nhân sự, Hợp đồng sẽ tự động đọc từ đường link này nếu không có cấu hình riêng.
                           </p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 pt-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-slate-700">Tab Khách Hàng</label>
                             <input
@@ -680,7 +680,7 @@ export default function SystemPage() {
                               value={storageConfig.sheet_customer_tab || "Customer"}
                               onChange={(e) => setStorageConfig({ ...storageConfig, sheet_customer_tab: e.target.value })}
                               placeholder="Customer"
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
                             />
                           </div>
 
@@ -691,7 +691,29 @@ export default function SystemPage() {
                               value={storageConfig.sheet_opportunity_tab || "Opportunity"}
                               onChange={(e) => setStorageConfig({ ...storageConfig, sheet_opportunity_tab: e.target.value })}
                               placeholder="Opportunity"
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-slate-700">Tab Liên Hệ</label>
+                            <input
+                              type="text"
+                              value={storageConfig.sheet_contact_tab || "Contact"}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, sheet_contact_tab: e.target.value })}
+                              placeholder="Contact"
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-slate-700">Tab Nhân Sự</label>
+                            <input
+                              type="text"
+                              value={storageConfig.sheet_nhan_su_tab || "NhanSu"}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, sheet_nhan_su_tab: e.target.value })}
+                              placeholder="NhanSu"
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
                             />
                           </div>
 
@@ -702,7 +724,7 @@ export default function SystemPage() {
                               value={storageConfig.sheet_contract_tab || "Contract"}
                               onChange={(e) => setStorageConfig({ ...storageConfig, sheet_contract_tab: e.target.value })}
                               placeholder="Contract"
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
                             />
                           </div>
                         </div>
