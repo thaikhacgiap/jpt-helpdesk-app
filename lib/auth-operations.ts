@@ -41,14 +41,14 @@ const SEED_GROUPS: UserGroup[] = [
     name: "Ban Giám Đốc",
     description: "Quyền quản lý toàn diện hệ thống IT Helpdesk",
     role: "Admin",
-    permissions: ["/dashboard", "/requests", "/tickets", "/maintenance", "/projects", "/customers", "/contacts", "/nhan-su", "/contracts", "/sla", "/users", "/settings"]
+    permissions: ["/dashboard", "/requests", "/tickets", "/maintenance", "/projects", "/customers", "/opportunities", "/contacts", "/nhan-su", "/contracts", "/sla", "/users", "/settings"]
   },
   {
     id: "g-2",
     name: "Quản lý Dự án (PM)",
     description: "Cấp độ quản lý phân phối dự án và theo dõi hợp đồng",
     role: "PM",
-    permissions: ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts"]
+    permissions: ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/opportunities", "/contracts"]
   },
   {
     id: "g-3",
@@ -255,7 +255,7 @@ export function hasAccess(role: UserSession["role"], pathname: string): boolean 
 
   // Static Fallback
   if (role === "PM") {
-    const pmAllowedPaths = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts", "/notifications"];
+    const pmAllowedPaths = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/opportunities", "/contracts", "/notifications"];
     return pmAllowedPaths.some(p => path === p || path.startsWith(p + "/"));
   }
 

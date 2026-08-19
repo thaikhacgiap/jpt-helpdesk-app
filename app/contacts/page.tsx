@@ -9,11 +9,12 @@ import {
   Plus, Search, Download, Upload,
   UsersRound, Building2, Phone, Mail,
 } from "lucide-react";
-import { Users, UserCheck, FileText } from "lucide-react";
+import { Users, UserCheck, FileText, Target } from "lucide-react";
 import { fetchContacts, Contact } from "@/lib/contact-operations";
 
 const INFO_NAV_TABS = [
   { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/opportunities", label: "Cơ hội", icon: Target },
   { href: "/contacts", label: "Liên hệ", icon: UsersRound },
   { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
   { href: "/contracts", label: "Hợp đồng", icon: FileText }

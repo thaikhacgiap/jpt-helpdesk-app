@@ -188,11 +188,11 @@ export default function Sidebar() {
             </p>
 
             <div className="space-y-1">
-              {(showLink("/customers") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts")) && (
+              {(showLink("/customers") || showLink("/opportunities") || showLink("/contacts") || showLink("/nhan-su") || showLink("/contracts")) && (
                 <Link
                   href="/customers"
                   className={menuItemClass({
-                    isActive: ["/customers", "/contacts", "/nhan-su", "/contracts"].some(path => pathname.startsWith(path)),
+                    isActive: ["/customers", "/opportunities", "/contacts", "/nhan-su", "/contracts"].some(path => pathname.startsWith(path)),
                   })}
                 >
                   <FolderOpen size={18} className="shrink-0" />

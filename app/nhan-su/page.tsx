@@ -6,11 +6,12 @@ import Header from "@/components/layout/header";
 import NhanSuToolbar from "@/components/nhan-su/nhan-su-toolbar";
 import NhanSuTable from "@/components/nhan-su/nhan-su-table";
 import NhanSuModal from "@/components/nhan-su/nhan-su-modal";
-import { Users, UsersRound, UserCheck, FileText } from "lucide-react";
+import { Users, UsersRound, UserCheck, FileText, Target } from "lucide-react";
 import { NhanSu } from "@/lib/nhan-su-operations";
 
 const INFO_NAV_TABS = [
   { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/opportunities", label: "Cơ hội", icon: Target },
   { href: "/contacts", label: "Liên hệ", icon: UsersRound },
   { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
   { href: "/contracts", label: "Hợp đồng", icon: FileText }

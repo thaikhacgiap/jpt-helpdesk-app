@@ -9,10 +9,11 @@ import ContractTable from "@/components/contracts/contract-table";
 import ContractModal from "@/components/contracts/new-contract-modal";
 import type { Contract } from "@/lib/contract-operations";
 
-import { Users, UsersRound, UserCheck, FileText } from "lucide-react";
+import { Users, UsersRound, UserCheck, FileText, Target } from "lucide-react";
 
 const INFO_NAV_TABS = [
   { href: "/customers", label: "Khách hàng", icon: Users },
+  { href: "/opportunities", label: "Cơ hội", icon: Target },
   { href: "/contacts", label: "Liên hệ", icon: UsersRound },
   { href: "/nhan-su", label: "Nhân sự", icon: UserCheck },
   { href: "/contracts", label: "Hợp đồng", icon: FileText }
