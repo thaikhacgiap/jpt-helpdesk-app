@@ -155,7 +155,7 @@ export default function CustomersPage() {
       {/* Header */}
       <Header
         title="Quản lý Khách hàng"
-        subtitle="Danh sách khách hàng, mã hệ thống, TTKD và người phụ trách"
+        description="Danh sách khách hàng, mã hệ thống, TTKD và người phụ trách"
       />
 
       {/* Sub-Navigation Tabs */}
