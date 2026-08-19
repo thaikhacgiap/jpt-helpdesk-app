@@ -76,45 +76,53 @@ export async function upsertCustomerFromImport(item: {
       return { success: false, action: 'created', error: 'Thiếu Tên hiển thị/Tên khách hàng.' }
     }
 
-    // If code is empty or auto-generated placeholder, try matching existing by name first
     let existing: any = null
 
+    // 1. Match by exact code (skip AUTO- codes)
     if (code && !code.startsWith('AUTO-')) {
       const { data } = await supabase
         .from('customers')
         .select('id, system_code, code')
-        .eq('code', code)
+        .ilike('code', code)   // case-insensitive
         .maybeSingle()
       existing = data
     }
 
+    // 2. Fallback: match by name (case-insensitive)
     if (!existing) {
       const { data } = await supabase
         .from('customers')
         .select('id, system_code, code')
-        .eq('name', name)
+        .ilike('name', name)   // case-insensitive
         .maybeSingle()
       existing = data
     }
 
     if (existing) {
-      // Update existing record
+      // Update existing record - include code update
+      const updatePayload: any = {
+        name,
+        ten_tieng_anh: ten_tieng_anh || null,
+        tinh_trang: 'Active',  // re-activate if previously set Inactive
+        updated_at: new Date().toISOString(),
+      }
+      // Only update code if it's a real code (not AUTO-)
+      if (code && !code.startsWith('AUTO-')) {
+        updatePayload.code = code
+      }
+
       const { error } = await supabase
         .from('customers')
-        .update({
-          name: name,
-          ten_tieng_anh: ten_tieng_anh || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', existing.id)
 
       if (error) return { success: false, action: 'updated', error: error.message }
       return { success: true, action: 'updated' }
     } else {
-      // Insert new record with auto generated system_code (KH-001, KH-002...)
+      // Insert new record with auto-generated system_code
       const system_code = await getNextSystemCode()
       if (!code || code.startsWith('AUTO-')) {
-        code = system_code // Use generated system_code as customer code if missing
+        code = system_code
       }
 
       const { error } = await supabase

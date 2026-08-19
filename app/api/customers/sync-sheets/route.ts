@@ -138,40 +138,43 @@ async function fetchDbCustomers(): Promise<Array<{ id: string; code: string; nam
 }
 
 // ─── Compare Sheet vs DB ──────────────────────────────────────
+function normalize(s: string) {
+  return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function computeDiff(sheetRows: SheetRow[], dbRows: Array<{ id: string; code: string; name: string; ten_tieng_anh: string }>) {
-  const dbMap = new Map(dbRows.map(r => [r.code.trim().toUpperCase(), r]));
-  const sheetMap = new Map(sheetRows.map(r => [r.code.trim().toUpperCase(), r]));
+  // Build lookup maps with normalized keys
+  const dbByCode = new Map(dbRows.map(r => [normalize(r.code), r]));
+  const dbByName = new Map(dbRows.map(r => [normalize(r.name), r]));
+  // Track which DB IDs are matched by sheet data
+  const matchedDbIds = new Set<string>();
 
   const toAdd: SheetRow[] = [];
   const toUpdate: DiffRow[] = [];
-  const toRemove: Array<{ id: string; code: string; name: string }> = [];
 
-  // New or changed (in Sheet)
   for (const row of sheetRows) {
-    const key = row.code.trim().toUpperCase();
-    const dbRow = dbMap.get(key);
+    const normCode = normalize(row.code);
+    const normName = normalize(row.name);
+    const isAutoCode = normCode.startsWith("auto-") || normCode === "";
+
+    // Try matching: code first (if real code), then name
+    let dbRow = (!isAutoCode ? dbByCode.get(normCode) : undefined) ?? dbByName.get(normName);
+
     if (!dbRow) {
       toAdd.push(row);
     } else {
-      const nameChanged = dbRow.name.trim() !== row.name.trim();
-      const engChanged = (dbRow.ten_tieng_anh || "").trim() !== (row.ten_tieng_anh || "").trim();
-      if (nameChanged || engChanged) {
-        toUpdate.push({
-          ...row,
-          old_name: dbRow.name,
-          old_ten_tieng_anh: dbRow.ten_tieng_anh,
-        });
+      matchedDbIds.add(dbRow.id);
+      const nameChanged = normalize(dbRow.name) !== normName;
+      const engChanged = normalize(dbRow.ten_tieng_anh || "") !== normalize(row.ten_tieng_anh || "");
+      const codeChanged = !isAutoCode && normalize(dbRow.code) !== normCode;
+      if (nameChanged || engChanged || codeChanged) {
+        toUpdate.push({ ...row, old_name: dbRow.name, old_ten_tieng_anh: dbRow.ten_tieng_anh });
       }
     }
   }
 
-  // Removed (in DB but not in Sheet)
-  for (const dbRow of dbRows) {
-    const key = dbRow.code.trim().toUpperCase();
-    if (!sheetMap.has(key)) {
-      toRemove.push({ id: dbRow.id, code: dbRow.code, name: dbRow.name });
-    }
-  }
+  // Removed: in DB but not matched by any sheet row
+  const toRemove = dbRows.filter(r => !matchedDbIds.has(r.id)).map(r => ({ id: r.id, code: r.code, name: r.name }));
 
   return { toAdd, toUpdate, toRemove };
 }
