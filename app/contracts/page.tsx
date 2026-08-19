@@ -44,22 +44,26 @@ export default function ContractsPage() {
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
 
-    const checkAndRunAutoSync = async () => {
-      const enabled = localStorage.getItem("jpt_customer_auto_sync") === "true";
-      const sheetUrl = localStorage.getItem("jpt_contract_sheet_url") || localStorage.getItem("jpt_customer_sheet_url") || "";
-      const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
+    const checkAndRunAutoSync = async (isInitial = false) => {
+      const isExplicitlyDisabled = localStorage.getItem("jpt_customer_auto_sync") === "false";
+      if (isExplicitlyDisabled) return;
+
+      const sheetUrl = localStorage.getItem("jpt_contract_sheet_url") ||
+        localStorage.getItem("jpt_customer_sheet_url") ||
+        localStorage.getItem("jpt_opp_sheet_url") ||
+        "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit";
 
       const userAccessToken = localStorage.getItem("jpt_google_user_access_token") || "";
       const userRefreshToken = localStorage.getItem("jpt_google_user_refresh_token") || "";
       const userClientId = localStorage.getItem("jpt_google_user_client_id") || "";
       const userClientSecret = localStorage.getItem("jpt_google_user_client_secret") || "";
 
-      if (!enabled || !sheetUrl) return;
+      if (!userAccessToken && !userRefreshToken) return;
 
       try {
         const payload: any = {
           sheetUrl,
-          sheetName: "Contract",
+          sheetName: localStorage.getItem("jpt_contract_sheet_name") || "Contract",
           userAccessToken,
           userRefreshToken,
           userClientId,
@@ -84,12 +88,11 @@ export default function ContractsPage() {
       }
     };
 
-    const enabled = localStorage.getItem("jpt_customer_auto_sync") === "true";
-    const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
+    // Run initial auto sync if credentials exist
+    checkAndRunAutoSync(true);
 
-    if (enabled) {
-      timer = setInterval(checkAndRunAutoSync, intervalMin * 60 * 1000);
-    }
+    const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
+    timer = setInterval(() => checkAndRunAutoSync(false), intervalMin * 60 * 1000);
 
     return () => {
       if (timer) clearInterval(timer);
