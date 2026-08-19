@@ -246,11 +246,18 @@ export async function POST(req: NextRequest) {
       }
 
       // SSE streaming
-      const { stream } = body;
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
+
+      // Helper: get next system_code KH-XXX using service role client
+      async function getNextCode(): Promise<string> {
+        const { data } = await supabase.from("customers").select("system_code").not("system_code", "is", null);
+        const nums = (data || []).map((r: any) => parseInt((r.system_code || "").replace("KH-", ""), 10)).filter((n: number) => !isNaN(n));
+        const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+        return `KH-${String(next).padStart(3, "0")}`;
+      }
 
       const encoder = new TextEncoder();
       const readable = new ReadableStream({
@@ -264,30 +271,73 @@ export async function POST(req: NextRequest) {
           let created = 0, updated = 0, removed = 0, errors = 0;
           let processed = 0;
 
-          // Upsert new + changed rows
-          for (const row of rowsToSync) {
-            send({ type: "progress", processed, total, name: row.name });
+          // ── Upsert new rows (INSERT) ─────────────────────────────
+          for (const row of toAdd) {
+            send({ type: "progress", processed, total, name: row.name, created, updated, errors });
             try {
-              const res = await upsertCustomerFromImport(row);
-              if (res.success) {
-                if (res.action === "created") created++;
-                else updated++;
-              } else errors++;
-            } catch { errors++; }
+              const system_code = await getNextCode();
+              const code = (row.code && !row.code.toUpperCase().startsWith("AUTO-"))
+                ? row.code.trim().toUpperCase()
+                : system_code;
+              const { error } = await supabase.from("customers").insert([{
+                system_code,
+                code,
+                name: row.name.trim(),
+                ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+                tinh_trang: "Active",
+              }]);
+              if (error) { console.error("INSERT error:", error.message, "row:", row.code); errors++; }
+              else created++;
+            } catch (e: any) { console.error("INSERT exception:", e.message); errors++; }
             processed++;
           }
 
-          // Mark removed rows as Inactive (soft delete)
+          // ── Update changed rows (UPDATE) ────────────────────────
+          for (const row of toUpdate) {
+            send({ type: "progress", processed, total, name: row.name, created, updated, errors });
+            try {
+              // Find the record by code (case-insensitive) or name
+              const code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : null;
+              let existingId: string | null = null;
+
+              if (code) {
+                const { data } = await supabase.from("customers").select("id").ilike("code", code).maybeSingle();
+                existingId = data?.id || null;
+              }
+              if (!existingId) {
+                const { data } = await supabase.from("customers").select("id").ilike("name", row.name.trim()).maybeSingle();
+                existingId = data?.id || null;
+              }
+
+              if (existingId) {
+                const updatePayload: any = {
+                  name: row.name.trim(),
+                  ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+                  tinh_trang: "Active",
+                  updated_at: new Date().toISOString(),
+                };
+                if (code) updatePayload.code = code;
+                const { error } = await supabase.from("customers").update(updatePayload).eq("id", existingId);
+                if (error) { console.error("UPDATE error:", error.message, "row:", row.code); errors++; }
+                else updated++;
+              } else {
+                errors++;
+              }
+            } catch (e: any) { console.error("UPDATE exception:", e.message); errors++; }
+            processed++;
+          }
+
+          // ── Mark removed rows as Inactive ───────────────────────
           for (const row of toRemove) {
-            send({ type: "progress", processed, total, name: `[Xóa] ${row.name}` });
+            send({ type: "progress", processed, total, name: `[Inactive] ${row.name}`, created, updated, errors });
             try {
               const { error } = await supabase
                 .from("customers")
                 .update({ tinh_trang: "Inactive" })
                 .eq("id", row.id);
               if (!error) removed++;
-              else errors++;
-            } catch { errors++; }
+              else { console.error("INACTIVE error:", error.message, "id:", row.id); errors++; }
+            } catch (e: any) { console.error("INACTIVE exception:", e.message); errors++; }
             processed++;
           }
 
@@ -321,6 +371,53 @@ export async function POST(req: NextRequest) {
     }
 
     const total = rowsToProcess.length;
+
+    // Always use service role client for server-side writes
+    const sbAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    async function getNextSysCode(): Promise<string> {
+      const { data } = await sbAdmin.from("customers").select("system_code").not("system_code", "is", null);
+      const nums = (data || []).map((r: any) => parseInt((r.system_code || "").replace("KH-", ""), 10)).filter((n: number) => !isNaN(n));
+      const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+      return `KH-${String(next).padStart(3, "0")}`;
+    }
+
+    async function upsertRowAdmin(row: SheetRow): Promise<"created" | "updated" | "error"> {
+      try {
+        const code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : null;
+        const name = row.name.trim();
+
+        let existingId: string | null = null;
+        if (code) {
+          const { data } = await sbAdmin.from("customers").select("id").ilike("code", code).maybeSingle();
+          existingId = data?.id || null;
+        }
+        if (!existingId) {
+          const { data } = await sbAdmin.from("customers").select("id").ilike("name", name).maybeSingle();
+          existingId = data?.id || null;
+        }
+
+        if (existingId) {
+          const payload: any = { name, ten_tieng_anh: row.ten_tieng_anh?.trim() || null, tinh_trang: "Active", updated_at: new Date().toISOString() };
+          if (code) payload.code = code;
+          const { error } = await sbAdmin.from("customers").update(payload).eq("id", existingId);
+          if (error) { console.error("UPDATE error:", error.message); return "error"; }
+          return "updated";
+        } else {
+          const system_code = await getNextSysCode();
+          const { error } = await sbAdmin.from("customers").insert([{
+            system_code, code: code || system_code, name,
+            ten_tieng_anh: row.ten_tieng_anh?.trim() || null, tinh_trang: "Active",
+          }]);
+          if (error) { console.error("INSERT error:", error.message); return "error"; }
+          return "created";
+        }
+      } catch (e: any) { console.error("upsertRowAdmin exception:", e.message); return "error"; }
+    }
+
     const { stream } = body;
 
     if (stream) {
@@ -332,12 +429,11 @@ export async function POST(req: NextRequest) {
           let created = 0, updated = 0, errors = 0;
           for (let i = 0; i < rowsToProcess.length; i++) {
             const row = rowsToProcess[i];
-            send({ type: "progress", processed: i, total, name: row.name });
-            try {
-              const res = await upsertCustomerFromImport(row);
-              if (res.success) { if (res.action === "created") created++; else updated++; }
-              else errors++;
-            } catch { errors++; }
+            send({ type: "progress", processed: i, total, name: row.name, created, updated, errors });
+            const result = await upsertRowAdmin(row);
+            if (result === "created") created++;
+            else if (result === "updated") updated++;
+            else errors++;
           }
           send({ type: "done", total, created, updated, errors });
           controller.close();
@@ -351,11 +447,10 @@ export async function POST(req: NextRequest) {
     // Non-streaming fallback
     let createdCount = 0, updatedCount = 0, errorCount = 0;
     for (const row of rowsToProcess) {
-      try {
-        const res = await upsertCustomerFromImport(row);
-        if (res.success) { if (res.action === "created") createdCount++; else updatedCount++; }
-        else errorCount++;
-      } catch { errorCount++; }
+      const result = await upsertRowAdmin(row);
+      if (result === "created") createdCount++;
+      else if (result === "updated") updatedCount++;
+      else errorCount++;
     }
 
     return NextResponse.json({ success: true, total, created: createdCount, updated: updatedCount, errors: errorCount, lastSyncedAt: new Date().toISOString() });
