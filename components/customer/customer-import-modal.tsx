@@ -17,6 +17,9 @@ import {
   Trash2,
   Check,
   Sparkles,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { parseCustomerCSV, ParsedRow } from "@/lib/customer-csv-parser";
 import { upsertCustomerFromImport } from "@/lib/customer-operations";
@@ -25,6 +28,14 @@ interface CustomerImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+}
+
+interface SyncErrorItem {
+  type: "insert" | "update" | "remove";
+  name: string;
+  code?: string;
+  message: string;
+  detail?: string;
 }
 
 export default function CustomerImportModal({
@@ -62,6 +73,9 @@ export default function CustomerImportModal({
     errors: number;
     name: string;
   } | null>(null);
+
+  const [syncErrorLog, setSyncErrorLog] = useState<SyncErrorItem[]>([]);
+  const [showErrorLog, setShowErrorLog] = useState(true);
 
   const [previewData, setPreviewData] = useState<{
     sheetTotal: number;
@@ -150,6 +164,7 @@ export default function CustomerImportModal({
     setPreviewData(null);
     setPreviewing(false);
     setCleanupResult(null);
+    setSyncErrorLog([]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -182,6 +197,7 @@ export default function CustomerImportModal({
     setPreviewData(null);
     setSyncResult(null);
     setCleanupResult(null);
+    setSyncErrorLog([]);
 
     try {
       const res = await fetch("/api/customers/sync-sheets", {
@@ -209,6 +225,7 @@ export default function CustomerImportModal({
     setSyncResult(null);
     setSyncProgress(5);
     setSyncStats(null);
+    setSyncErrorLog([]);
 
     try {
       const res = await fetch("/api/customers/sync-sheets", {
@@ -246,6 +263,7 @@ export default function CustomerImportModal({
             if (!line.startsWith("data: ")) continue;
             try {
               const event = JSON.parse(line.slice(6));
+
               if (event.type === "start") {
                 setSyncStats({
                   processed: 0,
@@ -269,6 +287,10 @@ export default function CustomerImportModal({
                   errors: event.errors ?? 0,
                   name: event.name || "",
                 });
+
+                if (event.errorItem) {
+                  setSyncErrorLog(prev => [...prev, event.errorItem]);
+                }
               } else if (event.type === "done") {
                 setSyncProgress(100);
                 setSyncStats({
@@ -280,16 +302,25 @@ export default function CustomerImportModal({
                   errors: event.errors,
                   name: "",
                 });
+
+                if (event.errorLog && Array.isArray(event.errorLog)) {
+                  setSyncErrorLog(event.errorLog);
+                }
+
                 setSyncResult({
-                  success: true,
+                  success: (event.errors ?? 0) === 0,
                   total: event.sheetTotal || event.total,
                   created: event.created,
                   updated: event.updated,
                   removed: event.removed,
                   errors: event.errors,
                   lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
+                  message: (event.errors ?? 0) > 0 ? `Đã đồng bộ nhưng có ${event.errors} mục gặp sự cố. Xem phân tích lỗi bên dưới.` : undefined,
                 });
-                setPreviewData(null);
+
+                if ((event.errors ?? 0) === 0) {
+                  setPreviewData(null);
+                }
                 onSuccess();
               }
             } catch {}
@@ -301,8 +332,9 @@ export default function CustomerImportModal({
         if (!data.success) {
           setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ." });
         } else {
+          if (data.errorLog) setSyncErrorLog(data.errorLog);
           setSyncResult({
-            success: true,
+            success: (data.errors ?? 0) === 0,
             total: data.total,
             created: data.created,
             updated: data.updated,
@@ -310,7 +342,7 @@ export default function CustomerImportModal({
             errors: data.errors,
             lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
           });
-          setPreviewData(null);
+          if ((data.errors ?? 0) === 0) setPreviewData(null);
           onSuccess();
         }
       }
@@ -340,7 +372,6 @@ export default function CustomerImportModal({
       } else {
         setCleanupResult(`✅ ${data.message || `Đã dọn dẹp ${data.deleted} bản ghi trùng. Còn lại: ${data.kept}`}`);
         onSuccess();
-        // Tự động kiểm tra lại
         handlePreview();
       }
     } catch (e: any) {
@@ -389,7 +420,7 @@ export default function CustomerImportModal({
 
     setImporting(false);
     setSyncResult({
-      success: true,
+      success: errorCount === 0,
       total: rows.length,
       created: createdCount,
       updated: updatedCount,
@@ -685,13 +716,13 @@ function autoSyncToHelpdesk() {
                               🟢 Bản ghi mới ({previewData.diff.add.count}):
                             </p>
                             <div className="space-y-1 bg-green-50/40 p-2 rounded-xl border border-green-100">
-                              {previewData.diff.add.rows.slice(0, 6).map((r: any, i: number) => (
+                              {previewData.diff.add.rows.slice(0, 10).map((r: any, i: number) => (
                                 <div key={i} className="text-xs text-slate-700 flex gap-2 py-0.5">
                                   <span className="font-mono text-green-800 font-bold shrink-0">{r.code}</span>
                                   <span className="truncate">{r.name}</span>
                                 </div>
                               ))}
-                              {previewData.diff.add.count > 6 && <p className="text-[11px] text-slate-400 font-italic">...và {previewData.diff.add.count - 6} bản ghi khác</p>}
+                              {previewData.diff.add.count > 10 && <p className="text-[11px] text-slate-400 font-italic">...và {previewData.diff.add.count - 10} bản ghi khác</p>}
                             </div>
                           </div>
                         )}
@@ -702,13 +733,13 @@ function autoSyncToHelpdesk() {
                               🔵 Bản ghi có thay đổi ({previewData.diff.update.count}):
                             </p>
                             <div className="space-y-1 bg-blue-50/40 p-2 rounded-xl border border-blue-100">
-                              {previewData.diff.update.rows.slice(0, 6).map((r: any, i: number) => (
+                              {previewData.diff.update.rows.slice(0, 10).map((r: any, i: number) => (
                                 <div key={i} className="text-xs py-0.5 flex items-center gap-2">
                                   <span className="font-mono text-blue-800 font-bold shrink-0">{r.code}</span>
                                   <span className="truncate text-slate-800 font-semibold">{r.name}</span>
                                 </div>
                               ))}
-                              {previewData.diff.update.count > 6 && <p className="text-[11px] text-slate-400">...và {previewData.diff.update.count - 6} bản ghi khác</p>}
+                              {previewData.diff.update.count > 10 && <p className="text-[11px] text-slate-400">...và {previewData.diff.update.count - 10} bản ghi khác</p>}
                             </div>
                           </div>
                         )}
@@ -719,13 +750,13 @@ function autoSyncToHelpdesk() {
                               🔴 Bản ghi dư thừa trên Supabase ({previewData.diff.remove.count}):
                             </p>
                             <div className="space-y-1 bg-red-50/40 p-2 rounded-xl border border-red-100">
-                              {previewData.diff.remove.rows.slice(0, 6).map((r: any, i: number) => (
+                              {previewData.diff.remove.rows.slice(0, 10).map((r: any, i: number) => (
                                 <div key={i} className="text-xs text-slate-600 flex gap-2 py-0.5">
                                   <span className="font-mono text-slate-400 shrink-0">{r.code}</span>
                                   <span className="truncate line-through">{r.name}</span>
                                 </div>
                               ))}
-                              {previewData.diff.remove.count > 6 && <p className="text-[11px] text-slate-400">...và {previewData.diff.remove.count - 6} bản ghi khác</p>}
+                              {previewData.diff.remove.count > 10 && <p className="text-[11px] text-slate-400">...và {previewData.diff.remove.count - 10} bản ghi khác</p>}
                             </div>
                           </div>
                         )}
@@ -820,28 +851,69 @@ function autoSyncToHelpdesk() {
               {/* Sync Result Banner */}
               {syncResult && (
                 <div className={`p-5 rounded-2xl border text-sm shadow-sm ${
-                  syncResult.success ? "bg-green-50/90 border-green-300 text-green-900" : "bg-red-50 border-red-200 text-red-700"
+                  syncResult.success ? "bg-green-50/90 border-green-300 text-green-900" : "bg-amber-50 border-amber-300 text-amber-900"
                 }`}>
-                  {syncResult.success ? (
-                    <div>
-                      <div className="flex items-center gap-2 font-bold text-green-800 text-base">
-                        <CheckCircle2 size={20} className="text-green-600" /> Đồng bộ thành công 100%!
-                      </div>
-                      <div className="grid grid-cols-4 gap-2 mt-3 bg-white p-3.5 rounded-xl text-xs border border-green-200 shadow-sm">
-                        <div className="text-center">Tổng Google Sheet: <strong className="block text-sm text-slate-800">{syncResult.total}</strong></div>
-                        <div className="text-center">Tạo mới: <strong className="block text-sm text-green-600">+{syncResult.created}</strong></div>
-                        <div className="text-center">Cập nhật: <strong className="block text-sm text-blue-600">{syncResult.updated}</strong></div>
-                        <div className="text-center">Đã dọn dẹp/xóa: <strong className="block text-sm text-red-500">{syncResult.removed ?? 0}</strong></div>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2 text-right">Đồng bộ lúc: {syncResult.lastSyncedAt}</p>
+                  <div className="flex items-center gap-2 font-bold text-base">
+                    {syncResult.success ? (
+                      <CheckCircle2 size={20} className="text-green-600" />
+                    ) : (
+                      <AlertTriangle size={20} className="text-amber-600" />
+                    )}
+                    <span>{syncResult.success ? "Đồng bộ thành công hoàn toàn!" : "Kết quả đồng bộ (Có mục cần xử lý):"}</span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 mt-3 bg-white p-3.5 rounded-xl text-xs border border-slate-200 shadow-sm">
+                    <div className="text-center">Tổng Sheet: <strong className="block text-sm text-slate-800">{syncResult.total}</strong></div>
+                    <div className="text-center">Tạo mới: <strong className="block text-sm text-green-600">+{syncResult.created}</strong></div>
+                    <div className="text-center">Cập nhật: <strong className="block text-sm text-blue-600">{syncResult.updated}</strong></div>
+                    <div className="text-center">Lỗi / Chưa khớp: <strong className={`block text-sm ${syncResult.errors ? "text-red-600 font-bold" : "text-slate-400"}`}>{syncResult.errors ?? 0}</strong></div>
+                  </div>
+                  {syncResult.lastSyncedAt && (
+                    <p className="text-xs text-slate-500 mt-2 text-right">Hoàn tất lúc: {syncResult.lastSyncedAt}</p>
+                  )}
+                </div>
+              )}
+
+              {/* ====== ERROR ANALYSIS PANEL ====== */}
+              {syncErrorLog.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-2xl overflow-hidden shadow-md">
+                  <div
+                    onClick={() => setShowErrorLog(!showErrorLog)}
+                    className="px-5 py-3.5 bg-red-100/70 border-b border-red-200 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-red-800 font-bold text-xs">
+                      <AlertCircle size={17} className="text-red-600 shrink-0" />
+                      <span>🔍 Bảng Phân Tích Lỗi Chi Tiết ({syncErrorLog.length} mục)</span>
                     </div>
-                  ) : (
-                    <div className="flex items-start gap-2">
-                      <AlertCircle size={18} className="shrink-0 mt-0.5 text-red-600" />
-                      <div>
-                        <p className="font-bold">Lỗi đồng bộ:</p>
-                        <p className="mt-1 leading-relaxed">{syncResult.message}</p>
-                      </div>
+                    <button className="text-red-700 hover:text-red-900 p-1">
+                      {showErrorLog ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                  </div>
+
+                  {showErrorLog && (
+                    <div className="p-4 space-y-2.5 max-h-60 overflow-y-auto">
+                      {syncErrorLog.map((err, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded-xl border border-red-200 text-xs space-y-1 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase ${
+                                err.type === "insert" ? "bg-green-100 text-green-700" :
+                                err.type === "update" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
+                              }`}>
+                                {err.type}
+                              </span>
+                              {err.name}
+                            </span>
+                            {err.code && <span className="font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{err.code}</span>}
+                          </div>
+                          <p className="text-red-700 font-medium">{err.message}</p>
+                          {err.detail && (
+                            <p className="text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded font-mono break-all">
+                              Chi tiết kỹ thuật: {err.detail}
+                            </p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

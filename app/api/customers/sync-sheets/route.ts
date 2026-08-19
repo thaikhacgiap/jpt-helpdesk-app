@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 
-interface SheetRow {
+export interface SheetRow {
   code: string;
   name: string;
   ten_tieng_anh?: string;
@@ -10,11 +10,20 @@ interface SheetRow {
   address?: string;
 }
 
-interface DiffRow extends SheetRow {
+export interface DiffRow extends SheetRow {
+  dbId: string; // Direct ID of the record in Supabase to update
   old_name?: string;
   old_ten_tieng_anh?: string;
   old_address?: string;
   old_code?: string;
+}
+
+export interface SyncErrorItem {
+  type: "insert" | "update" | "remove";
+  name: string;
+  code?: string;
+  message: string;
+  detail?: string;
 }
 
 // ─── Service Role Admin Client ────────────────────────────────
@@ -70,7 +79,8 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
     const name = fullName || displayName;
     if (!name) continue;
 
-    const code = String(row[codeIdx] ?? "").trim() || `AUTO-${i}`;
+    const rawCode = String(row[codeIdx] ?? "").trim();
+    const code = rawCode || `AUTO-${i}`;
     const tax_code = taxIdx >= 0 ? String(row[taxIdx] ?? "").trim() : "";
     const address = addressIdx >= 0 ? String(row[addressIdx] ?? "").trim() : "";
     const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] ?? "").trim() : "";
@@ -164,7 +174,7 @@ function norm(s: string) {
   return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-// ─── Compute diff using in-memory maps ────────────────────────
+// ─── Compute diff with DIRECT dbId mapping ────────────────────
 function computeDiff(
   sheetRows: SheetRow[],
   dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>
@@ -188,6 +198,7 @@ function computeDiff(
     const nn = norm(row.name);
     const isAuto = nc.startsWith("auto-") || nc === "";
 
+    // Match priority: real code -> then name
     const dbRow = (!isAuto ? dbByCode.get(nc) : undefined) ?? dbByName.get(nn);
 
     if (!dbRow) {
@@ -202,6 +213,7 @@ function computeDiff(
       if (nameChanged || engChanged || addrChanged || codeChanged) {
         toUpdate.push({
           ...row,
+          dbId: dbRow.id, // Direct DB ID preserved!
           old_name: dbRow.name,
           old_ten_tieng_anh: dbRow.ten_tieng_anh,
           old_address: dbRow.address,
@@ -216,23 +228,20 @@ function computeDiff(
   return { toAdd, toUpdate, toRemove };
 }
 
-// ─── Batch sync execution ─────────────────────────────────────
+// ─── Robust Batch Sync Execution with Error Analysis ──────────
 async function executeSync(
   admin: SupabaseClient,
   toAdd: SheetRow[],
   toUpdate: DiffRow[],
   toRemove: Array<{ id: string; code: string; name: string }>,
-  dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>,
   hardDeleteOrphans: boolean,
-  onProgress: (processed: number, total: number, name: string, created: number, updated: number, errors: number) => void
-): Promise<{ created: number; updated: number; removed: number; errors: number }> {
+  onProgress: (processed: number, total: number, name: string, created: number, updated: number, errors: number, errorItem?: SyncErrorItem) => void
+): Promise<{ created: number; updated: number; removed: number; errors: number; errorLog: SyncErrorItem[] }> {
   const total = toAdd.length + toUpdate.length + toRemove.length;
   let processed = 0, created = 0, updated = 0, removed = 0, errors = 0;
+  const errorLog: SyncErrorItem[] = [];
 
-  const idByCode = new Map(dbRows.map(r => [norm(r.code), r.id]));
-  const idByName = new Map(dbRows.map(r => [norm(r.name), r.id]));
-
-  // ── 1. INSERT new rows ─────────────────────────────────────────
+  // Helper for generating next system code
   let sysCodeCounter: number | null = null;
   const getNextSysCodeFast = async () => {
     if (sysCodeCounter === null) {
@@ -245,66 +254,146 @@ async function executeSync(
     return code;
   };
 
+  // ── 1. INSERT new rows ─────────────────────────────────────────
   for (const row of toAdd) {
     onProgress(processed, total, row.name, created, updated, errors);
     try {
       const system_code = await getNextSysCodeFast();
-      const code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : system_code;
-      const { error } = await admin.from("customers").insert([{
-        system_code,
-        code,
-        name: row.name.trim(),
-        ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
-        address: row.address?.trim() || null,
-        ghi_chu: row.tax_code ? `MST: ${row.tax_code}` : null,
-        tinh_trang: "Active",
-      }]);
-      if (error) {
-        console.error("INSERT error:", error.message, "code:", code);
-        errors++;
-      } else {
-        created++;
-      }
-    } catch (e: any) {
-      console.error("INSERT exception:", e.message);
-      errors++;
-    }
-    processed++;
-  }
+      let code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : system_code;
 
-  // ── 2. UPDATE changed rows ─────────────────────────────────────
-  for (const row of toUpdate) {
-    onProgress(processed, total, row.name, created, updated, errors);
-    try {
-      const nc = norm(row.code);
-      const nn = norm(row.name);
-      const isAuto = nc.startsWith("auto-") || nc === "";
-      const existingId = (!isAuto ? idByCode.get(nc) : undefined) ?? idByName.get(nn);
-
-      if (existingId) {
-        const payload: any = {
+      // Check if code already exists in DB to prevent Unique Constraint failure
+      const { data: existingWithCode } = await admin.from("customers").select("id").eq("code", code).maybeSingle();
+      if (existingWithCode) {
+        // If code already exists, try updating that record instead of failing
+        const { error: updErr } = await admin.from("customers").update({
           name: row.name.trim(),
           ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
           address: row.address?.trim() || null,
+          ghi_chu: row.tax_code ? `MST: ${row.tax_code}` : null,
           tinh_trang: "Active",
           updated_at: new Date().toISOString(),
-        };
-        if (row.tax_code) payload.ghi_chu = `MST: ${row.tax_code}`;
-        if (!isAuto) payload.code = row.code.trim().toUpperCase();
+        }).eq("id", existingWithCode.id);
 
-        const { error } = await admin.from("customers").update(payload).eq("id", existingId);
-        if (error) {
-          console.error("UPDATE error:", error.message, "id:", existingId);
+        if (updErr) {
+          const errItem: SyncErrorItem = {
+            type: "insert",
+            name: row.name,
+            code,
+            message: `Trùng mã [${code}] và không thể cập nhật`,
+            detail: updErr.message,
+          };
+          errorLog.push(errItem);
           errors++;
+          onProgress(processed, total, row.name, created, updated, errors, errItem);
         } else {
           updated++;
         }
       } else {
-        errors++;
+        // Normal INSERT
+        const { error: insErr } = await admin.from("customers").insert([{
+          system_code,
+          code,
+          name: row.name.trim(),
+          ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+          address: row.address?.trim() || null,
+          ghi_chu: row.tax_code ? `MST: ${row.tax_code}` : null,
+          tinh_trang: "Active",
+        }]);
+
+        if (insErr) {
+          const errItem: SyncErrorItem = {
+            type: "insert",
+            name: row.name,
+            code,
+            message: `Lỗi thêm mới bản ghi vào database`,
+            detail: insErr.message,
+          };
+          errorLog.push(errItem);
+          errors++;
+          onProgress(processed, total, row.name, created, updated, errors, errItem);
+        } else {
+          created++;
+        }
       }
     } catch (e: any) {
-      console.error("UPDATE exception:", e.message);
+      const errItem: SyncErrorItem = {
+        type: "insert",
+        name: row.name,
+        code: row.code,
+        message: `Ngoại lệ khi thêm mới`,
+        detail: e.message || String(e),
+      };
+      errorLog.push(errItem);
       errors++;
+      onProgress(processed, total, row.name, created, updated, errors, errItem);
+    }
+    processed++;
+  }
+
+  // ── 2. UPDATE changed rows (USING DIRECT dbId) ─────────────────
+  for (const row of toUpdate) {
+    onProgress(processed, total, row.name, created, updated, errors);
+    try {
+      const isAuto = row.code.toUpperCase().startsWith("AUTO-") || !row.code;
+      const targetId = row.dbId;
+
+      const payload: any = {
+        name: row.name.trim(),
+        ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
+        address: row.address?.trim() || null,
+        tinh_trang: "Active",
+        updated_at: new Date().toISOString(),
+      };
+      if (row.tax_code) payload.ghi_chu = `MST: ${row.tax_code}`;
+      if (!isAuto) payload.code = row.code.trim().toUpperCase();
+
+      const { error: updErr } = await admin.from("customers").update(payload).eq("id", targetId);
+
+      if (updErr) {
+        // If failed due to duplicate code constraint, retry updating without changing code
+        if (updErr.message.includes("unique") || updErr.message.includes("duplicate")) {
+          delete payload.code;
+          const { error: retryErr } = await admin.from("customers").update(payload).eq("id", targetId);
+          if (retryErr) {
+            const errItem: SyncErrorItem = {
+              type: "update",
+              name: row.name,
+              code: row.code,
+              message: `Lỗi cập nhật bản ghi [ID: ${targetId}]`,
+              detail: retryErr.message,
+            };
+            errorLog.push(errItem);
+            errors++;
+            onProgress(processed, total, row.name, created, updated, errors, errItem);
+          } else {
+            updated++;
+          }
+        } else {
+          const errItem: SyncErrorItem = {
+            type: "update",
+            name: row.name,
+            code: row.code,
+            message: `Lỗi cập nhật dữ liệu khách hàng`,
+            detail: updErr.message,
+          };
+          errorLog.push(errItem);
+          errors++;
+          onProgress(processed, total, row.name, created, updated, errors, errItem);
+        }
+      } else {
+        updated++;
+      }
+    } catch (e: any) {
+      const errItem: SyncErrorItem = {
+        type: "update",
+        name: row.name,
+        code: row.code,
+        message: `Ngoại lệ khi cập nhật`,
+        detail: e.message || String(e),
+      };
+      errorLog.push(errItem);
+      errors++;
+      onProgress(processed, total, row.name, created, updated, errors, errItem);
     }
     processed++;
   }
@@ -319,20 +408,32 @@ async function executeSync(
       const ids = chunk.map(r => r.id);
 
       if (hardDeleteOrphans) {
-        // Xóa hoàn toàn để DB giống 100% Google Sheet
-        const { error } = await admin.from("customers").delete().in("id", ids);
-        if (error) {
-          console.error("DELETE batch error:", error.message);
+        const { error: delErr } = await admin.from("customers").delete().in("id", ids);
+        if (delErr) {
+          const errItem: SyncErrorItem = {
+            type: "remove",
+            name: `${chunk.length} bản ghi dư thừa`,
+            message: `Lỗi xóa bản ghi dư thừa khỏi database`,
+            detail: delErr.message,
+          };
+          errorLog.push(errItem);
           errors += chunk.length;
+          onProgress(processed, total, "[Lỗi xóa]", created, updated, errors, errItem);
         } else {
           removed += chunk.length;
         }
       } else {
-        // Đặt Inactive
-        const { error } = await admin.from("customers").update({ tinh_trang: "Inactive" }).in("id", ids);
-        if (error) {
-          console.error("INACTIVE batch error:", error.message);
+        const { error: inactErr } = await admin.from("customers").update({ tinh_trang: "Inactive" }).in("id", ids);
+        if (inactErr) {
+          const errItem: SyncErrorItem = {
+            type: "remove",
+            name: `${chunk.length} bản ghi dư thừa`,
+            message: `Lỗi đặt trạng thái Inactive cho bản ghi dư thừa`,
+            detail: inactErr.message,
+          };
+          errorLog.push(errItem);
           errors += chunk.length;
+          onProgress(processed, total, "[Lỗi Inactive]", created, updated, errors, errItem);
         } else {
           removed += chunk.length;
         }
@@ -341,7 +442,7 @@ async function executeSync(
     }
   }
 
-  return { created, updated, removed, errors };
+  return { created, updated, removed, errors, errorLog };
 }
 
 // ─── POST Handler ─────────────────────────────────────────────
@@ -439,14 +540,27 @@ export async function POST(req: NextRequest) {
           toAdd,
           toUpdate,
           toRemove,
-          dbRows,
           Boolean(hardDeleteOrphans),
-          (processed, totalCount, name, created, updated, errors) => {
-            send({ type: "progress", processed, total: totalCount, name, created, updated, errors });
+          (processed, totalCount, name, created, updated, errors, errorItem) => {
+            send({
+              type: "progress",
+              processed,
+              total: totalCount,
+              name,
+              created,
+              updated,
+              errors,
+              errorItem: errorItem || null,
+            });
           }
         );
 
-        send({ type: "done", total, sheetTotal: sheetRows.length, ...result });
+        send({
+          type: "done",
+          total,
+          sheetTotal: sheetRows.length,
+          ...result,
+        });
         controller.close();
       },
     });
