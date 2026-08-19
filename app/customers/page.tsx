@@ -217,15 +217,30 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div
+          onClick={() => setIsImportOpen(true)}
+          className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-emerald-300 hover:shadow-md transition cursor-pointer group"
+        >
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-slate-500 font-medium">Google Sheet Sync</p>
-              <p className="text-xs font-bold text-slate-700 mt-2 truncate max-w-[130px]">{stats.lastSync}</p>
-              <p className="text-xs text-green-600 font-medium mt-1">Tự động 1 chiều</p>
+              {stats.lastSync && stats.lastSync !== "Chưa đồng bộ" ? (
+                <>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <p className="text-xs font-bold text-emerald-700">Đã đồng bộ</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-mono">{stats.lastSync}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-bold text-slate-600 mt-2">Chưa đồng bộ</p>
+                  <p className="text-[11px] text-emerald-600 font-medium mt-1">Tự động 1 chiều</p>
+                </>
+              )}
             </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <RefreshCw size={18} className="text-emerald-600" />
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition">
+              <RefreshCw size={18} className="text-emerald-600 group-hover:rotate-180 transition duration-500" />
             </div>
           </div>
         </div>

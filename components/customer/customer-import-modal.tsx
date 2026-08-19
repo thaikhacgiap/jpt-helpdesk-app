@@ -12,11 +12,7 @@ import {
   Link as LinkIcon,
   Loader2,
   ExternalLink,
-  Code2,
   User,
-  Trash2,
-  Check,
-  Sparkles,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -31,7 +27,7 @@ interface CustomerImportModalProps {
 }
 
 interface SyncErrorItem {
-  type: "insert" | "update" | "remove";
+  type: "insert" | "update";
   name: string;
   code?: string;
   message: string;
@@ -49,19 +45,16 @@ export default function CustomerImportModal({
   const [sheetUrl, setSheetUrl] = useState("");
   const [sheetName, setSheetName] = useState("Account");
 
-  // Real Google User OAuth 2.0 Credentials
+  // Google OAuth Credentials
   const [userAccessToken, setUserAccessToken] = useState("");
   const [userRefreshToken, setUserRefreshToken] = useState("");
   const [userClientId, setUserClientId] = useState("");
   const [userClientSecret, setUserClientSecret] = useState("");
   const [showAuthConfig, setShowAuthConfig] = useState(false);
-  const [hardDeleteOrphans, setHardDeleteOrphans] = useState(true);
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-  const [cleaningDuplicates, setCleaningDuplicates] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
 
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncStats, setSyncStats] = useState<{
@@ -69,9 +62,9 @@ export default function CustomerImportModal({
     total: number;
     created: number;
     updated: number;
-    removed: number;
     errors: number;
     name: string;
+    autoCleaned?: number;
   } | null>(null);
 
   const [syncErrorLog, setSyncErrorLog] = useState<SyncErrorItem[]>([]);
@@ -80,10 +73,10 @@ export default function CustomerImportModal({
   const [previewData, setPreviewData] = useState<{
     sheetTotal: number;
     dbTotal: number;
+    autoCleaned?: number;
     diff: {
       add: { count: number; rows: any[] };
       update: { count: number; rows: any[] };
-      remove: { count: number; rows: any[] };
     };
     noChanges: boolean;
   } | null>(null);
@@ -93,16 +86,15 @@ export default function CustomerImportModal({
     total?: number;
     created?: number;
     updated?: number;
-    removed?: number;
     errors?: number;
     message?: string;
     lastSyncedAt?: string;
+    autoCleaned?: number;
   } | null>(null);
 
   // Auto Sync Settings
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [autoSyncInterval, setAutoSyncInterval] = useState(15);
-  const [copiedScript, setCopiedScript] = useState(false);
 
   // CSV Import state
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -122,7 +114,6 @@ export default function CustomerImportModal({
       const savedClientSecret = localStorage.getItem("jpt_google_user_client_secret") || "";
       const savedAutoSync = localStorage.getItem("jpt_customer_auto_sync") === "true";
       const savedInterval = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
-      const savedHardDelete = localStorage.getItem("jpt_customer_hard_delete") !== "false";
 
       setSheetUrl(savedUrl);
       setSheetName(savedSheetName);
@@ -132,7 +123,6 @@ export default function CustomerImportModal({
       setUserClientSecret(savedClientSecret);
       setAutoSyncEnabled(savedAutoSync);
       setAutoSyncInterval(savedInterval);
-      setHardDeleteOrphans(savedHardDelete);
 
       if (savedToken || savedRefreshToken || savedClientId) {
         setShowAuthConfig(true);
@@ -150,7 +140,6 @@ export default function CustomerImportModal({
     localStorage.setItem("jpt_google_user_client_secret", userClientSecret.trim());
     localStorage.setItem("jpt_customer_auto_sync", String(autoSyncEnabled));
     localStorage.setItem("jpt_customer_auto_sync_interval", String(autoSyncInterval));
-    localStorage.setItem("jpt_customer_hard_delete", String(hardDeleteOrphans));
   };
 
   const reset = () => {
@@ -163,7 +152,6 @@ export default function CustomerImportModal({
     setSyncStats(null);
     setPreviewData(null);
     setPreviewing(false);
-    setCleanupResult(null);
     setSyncErrorLog([]);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -182,11 +170,10 @@ export default function CustomerImportModal({
       userRefreshToken: userRefreshToken.trim() || (tokenInput.startsWith("1//") ? tokenInput : ""),
       userClientId: userClientId.trim(),
       userClientSecret: userClientSecret.trim(),
-      hardDeleteOrphans,
     };
   };
 
-  // ── STEP 1: Preview / So sánh thay đổi ─────────────────────────
+  // ── STEP 1: Preview / So sánh thay đổi 1 chiều ─────────────────
   const handlePreview = async () => {
     if (!sheetUrl.trim()) {
       alert("Vui lòng nhập link Google Sheet.");
@@ -196,7 +183,6 @@ export default function CustomerImportModal({
     setPreviewing(true);
     setPreviewData(null);
     setSyncResult(null);
-    setCleanupResult(null);
     setSyncErrorLog([]);
 
     try {
@@ -218,7 +204,7 @@ export default function CustomerImportModal({
     }
   };
 
-  // ── STEP 2: Thực hiện Đồng bộ với SSE streaming ─────────────────
+  // ── STEP 2: Thực hiện Đồng bộ 1 chiều ──────────────────────────
   const handleSyncNow = async () => {
     saveSettings();
     setSyncing(true);
@@ -270,9 +256,9 @@ export default function CustomerImportModal({
                   total: event.total,
                   created: 0,
                   updated: 0,
-                  removed: 0,
                   errors: 0,
                   name: "",
+                  autoCleaned: event.autoCleaned,
                 });
                 setSyncProgress(5);
               } else if (event.type === "progress") {
@@ -283,7 +269,6 @@ export default function CustomerImportModal({
                   total: event.total,
                   created: event.created ?? 0,
                   updated: event.updated ?? 0,
-                  removed: event.removed ?? 0,
                   errors: event.errors ?? 0,
                   name: event.name || "",
                 });
@@ -298,24 +283,28 @@ export default function CustomerImportModal({
                   total: event.total,
                   created: event.created,
                   updated: event.updated,
-                  removed: event.removed ?? 0,
                   errors: event.errors,
                   name: "",
+                  autoCleaned: event.autoCleaned,
                 });
 
                 if (event.errorLog && Array.isArray(event.errorLog)) {
                   setSyncErrorLog(event.errorLog);
                 }
 
+                const syncTime = event.lastSyncedAt || new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
+                localStorage.setItem("jpt_customer_last_sync_time", syncTime);
+                localStorage.setItem("jpt_customer_sync_status", "Đã đồng bộ");
+
                 setSyncResult({
                   success: (event.errors ?? 0) === 0,
                   total: event.sheetTotal || event.total,
                   created: event.created,
                   updated: event.updated,
-                  removed: event.removed,
                   errors: event.errors,
-                  lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
-                  message: (event.errors ?? 0) > 0 ? `Đã đồng bộ nhưng có ${event.errors} mục gặp sự cố. Xem phân tích lỗi bên dưới.` : undefined,
+                  autoCleaned: event.autoCleaned,
+                  lastSyncedAt: syncTime,
+                  message: (event.errors ?? 0) > 0 ? `Đã đồng bộ nhưng có ${event.errors} mục gặp sự cố.` : undefined,
                 });
 
                 if ((event.errors ?? 0) === 0) {
@@ -329,6 +318,10 @@ export default function CustomerImportModal({
       } else {
         const data = await res.json();
         setSyncProgress(100);
+        const syncTime = data.lastSyncedAt || new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
+        localStorage.setItem("jpt_customer_last_sync_time", syncTime);
+        localStorage.setItem("jpt_customer_sync_status", "Đã đồng bộ");
+
         if (!data.success) {
           setSyncResult({ success: false, message: data.error || "Lỗi đồng bộ." });
         } else {
@@ -338,9 +331,9 @@ export default function CustomerImportModal({
             total: data.total,
             created: data.created,
             updated: data.updated,
-            removed: data.removed,
             errors: data.errors,
-            lastSyncedAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
+            autoCleaned: data.autoCleaned,
+            lastSyncedAt: syncTime,
           });
           if ((data.errors ?? 0) === 0) setPreviewData(null);
           onSuccess();
@@ -354,30 +347,6 @@ export default function CustomerImportModal({
         setSyncProgress(0);
         setSyncStats(null);
       }, 2500);
-    }
-  };
-
-  // ── Dọn dẹp Duplicates trên Supabase ─────────────────────────
-  const handleCleanupDuplicates = async () => {
-    if (!confirm("Hành động này sẽ xóa các bản ghi khách hàng trùng lặp (giữ lại 1 bản ghi duy nhất cho mỗi mã/tên). Bạn có chắc chắn muốn thực hiện?")) {
-      return;
-    }
-    setCleaningDuplicates(true);
-    setCleanupResult(null);
-    try {
-      const res = await fetch("/api/system/cleanup-duplicates", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setCleanupResult(`❌ Lỗi: ${data.error || "Không thể dọn dẹp"}`);
-      } else {
-        setCleanupResult(`✅ ${data.message || `Đã dọn dẹp ${data.deleted} bản ghi trùng. Còn lại: ${data.kept}`}`);
-        onSuccess();
-        handlePreview();
-      }
-    } catch (e: any) {
-      setCleanupResult(`❌ Lỗi: ${e.message}`);
-    } finally {
-      setCleaningDuplicates(false);
     }
   };
 
@@ -419,41 +388,20 @@ export default function CustomerImportModal({
     }
 
     setImporting(false);
+    const syncTime = new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
+    localStorage.setItem("jpt_customer_last_sync_time", syncTime);
+    localStorage.setItem("jpt_customer_sync_status", "Đã đồng bộ");
+
     setSyncResult({
       success: errorCount === 0,
       total: rows.length,
       created: createdCount,
       updated: updatedCount,
       errors: errorCount,
+      lastSyncedAt: syncTime,
     });
     setStep("result");
     onSuccess();
-  };
-
-  const appsScriptCode = `// ===== GOOGLE APPS SCRIPT AUTO-SYNC TO JPT HELPDESK =====
-function autoSyncToHelpdesk() {
-  var WEBHOOK_URL = "${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/customers/sync-sheets";
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
-  if (data.length < 2) return;
-  var headers = data[0].map(function(h) { return String(h).trim(); });
-  var rows = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = {};
-    for (var j = 0; j < headers.length; j++) row[headers[j]] = data[i][j];
-    rows.push(row);
-  }
-  UrlFetchApp.fetch(WEBHOOK_URL, {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify({ data: rows })
-  });
-}`;
-
-  const copyAppsScript = () => {
-    navigator.clipboard.writeText(appsScriptCode);
-    setCopiedScript(true);
-    setTimeout(() => setCopiedScript(false), 2000);
   };
 
   if (!isOpen) return null;
@@ -469,8 +417,8 @@ function autoSyncToHelpdesk() {
               <FileSpreadsheet size={22} />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Đồng bộ dữ liệu Khách hàng</h3>
-              <p className="text-xs text-slate-500">So sánh và cập nhật dữ liệu từ Google Sheets hoặc file CSV vào Supabase</p>
+              <h3 className="text-lg font-bold text-slate-800">Đồng bộ Google Sheets (1 chiều)</h3>
+              <p className="text-xs text-slate-500">Cập nhật và thêm mới khách hàng từ Google Sheets vào Supabase</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition">
@@ -481,7 +429,7 @@ function autoSyncToHelpdesk() {
         {/* Tab switcher */}
         <div className="flex border-b border-slate-100 bg-slate-50/50 px-6 gap-2 pt-2">
           {[
-            { id: "sheets", label: "Google Sheets (Khuyến nghị)", icon: FileSpreadsheet },
+            { id: "sheets", label: "Google Sheets", icon: FileSpreadsheet },
             { id: "csv", label: "File CSV / Excel", icon: Upload },
           ].map(tab => (
             <button
@@ -565,7 +513,7 @@ function autoSyncToHelpdesk() {
                     <User size={18} className="text-blue-600" />
                     <div>
                       <h4 className="text-sm font-bold text-slate-800">Cấu hình Tài khoản Google User</h4>
-                      <p className="text-xs text-slate-500">Truy cập file Google Sheet an toàn bằng OAuth 2.0 Token (File sheet riêng tư)</p>
+                      <p className="text-xs text-slate-500">Xác thực truy cập an toàn bằng OAuth 2.0 Token (File sheet riêng tư)</p>
                     </div>
                   </div>
                   <button
@@ -594,7 +542,7 @@ function autoSyncToHelpdesk() {
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <p className="text-[11px] text-slate-500 mt-1">
-                          • Nhập OAuth 2.0 Access Token hoặc Refresh Token của tài khoản Google của bạn. Tự động lưu trên trình duyệt.
+                          • Tự động lưu trên trình duyệt của bạn sau khi nhập.
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
@@ -630,50 +578,30 @@ function autoSyncToHelpdesk() {
                 )}
               </div>
 
-              {/* Dọn dẹp Duplicates button */}
-              <div className="flex items-center justify-between p-3 bg-amber-50/70 border border-amber-200 rounded-2xl text-xs">
-                <div className="flex items-center gap-2 text-amber-900">
-                  <Sparkles size={16} className="text-amber-600 shrink-0" />
-                  <span>Dọn dẹp các bản ghi khách hàng bị trùng lặp trên Supabase</span>
-                </div>
-                <button
-                  onClick={handleCleanupDuplicates}
-                  disabled={cleaningDuplicates || syncing}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition flex items-center gap-1 shadow-sm disabled:opacity-50"
-                >
-                  {cleaningDuplicates ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  {cleaningDuplicates ? "Đang dọn dẹp..." : "Dọn dẹp Duplicates"}
-                </button>
-              </div>
-              {cleanupResult && (
-                <div className="p-3 bg-slate-900 text-slate-100 rounded-xl text-xs font-mono">
-                  {cleanupResult}
-                </div>
-              )}
-
               {/* ====== PREVIEW: Đang kiểm tra ====== */}
               {previewing && (
                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-center gap-3 text-blue-700 animate-pulse">
                   <Loader2 size={20} className="animate-spin shrink-0" />
                   <div>
                     <p className="font-bold text-sm">Đang so sánh Google Sheets với Supabase...</p>
-                    <p className="text-xs text-blue-500 mt-0.5">Đang quét sheet tab &apos;{sheetName}&apos; và đối chiếu với database</p>
+                    <p className="text-xs text-blue-500 mt-0.5">Đang quét sheet tab &apos;{sheetName}&apos; và đối chiếu dữ liệu</p>
                   </div>
                 </div>
               )}
 
-              {/* ====== PREVIEW RESULT: DIFF PANEL ====== */}
+              {/* ====== PREVIEW RESULT: DIFF PANEL (1-WAY) ====== */}
               {previewData && !syncing && (
                 <div className="bg-white border-2 border-blue-200 rounded-2xl overflow-hidden shadow-lg">
                   {/* Header */}
                   <div className="px-5 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 flex items-center justify-between">
                     <div>
                       <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        📊 Kết quả so sánh dữ liệu
+                        📊 Kết quả so sánh (Google Sheets ➔ Supabase)
                       </h4>
                       <p className="text-xs text-slate-600 mt-0.5">
                         Google Sheet: <strong className="text-blue-700 font-mono text-sm">{previewData.sheetTotal}</strong> bản ghi &nbsp;·&nbsp;
                         Supabase hiện tại: <strong className="text-purple-700 font-mono text-sm">{previewData.dbTotal}</strong> bản ghi
+                        {previewData.autoCleaned ? <span className="text-green-600 font-semibold ml-2">(Đã tự động dọn {previewData.autoCleaned} bản ghi trùng)</span> : null}
                       </p>
                     </div>
                     <button onClick={() => setPreviewData(null)} className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1 bg-white rounded-lg border">✕ Đóng</button>
@@ -690,7 +618,7 @@ function autoSyncToHelpdesk() {
                   ) : (
                     <>
                       {/* Diff Summary Cards */}
-                      <div className="grid grid-cols-3 divide-x divide-slate-100 bg-slate-50/50">
+                      <div className="grid grid-cols-2 divide-x divide-slate-100 bg-slate-50/50">
                         <div className="px-4 py-4 text-center">
                           <div className="text-3xl font-black text-green-600">{previewData.diff.add.count}</div>
                           <div className="text-xs font-bold text-slate-700 mt-1">🟢 Mới trên Sheet</div>
@@ -699,12 +627,7 @@ function autoSyncToHelpdesk() {
                         <div className="px-4 py-4 text-center">
                           <div className="text-3xl font-black text-blue-600">{previewData.diff.update.count}</div>
                           <div className="text-xs font-bold text-slate-700 mt-1">🔵 Cập nhật thay đổi</div>
-                          <div className="text-[11px] text-slate-500">Thay đổi tên / mã / địa chỉ</div>
-                        </div>
-                        <div className="px-4 py-4 text-center">
-                          <div className="text-3xl font-black text-red-500">{previewData.diff.remove.count}</div>
-                          <div className="text-xs font-bold text-slate-700 mt-1">🔴 Dư thừa trên Supabase</div>
-                          <div className="text-[11px] text-slate-500">Không có trong Sheet</div>
+                          <div className="text-[11px] text-slate-500">Cập nhật tên / mã / địa chỉ</div>
                         </div>
                       </div>
 
@@ -743,43 +666,7 @@ function autoSyncToHelpdesk() {
                             </div>
                           </div>
                         )}
-
-                        {previewData.diff.remove.count > 0 && (
-                          <div>
-                            <p className="text-xs font-bold text-red-600 mb-1.5">
-                              🔴 Bản ghi dư thừa trên Supabase ({previewData.diff.remove.count}):
-                            </p>
-                            <div className="space-y-1 bg-red-50/40 p-2 rounded-xl border border-red-100">
-                              {previewData.diff.remove.rows.slice(0, 10).map((r: any, i: number) => (
-                                <div key={i} className="text-xs text-slate-600 flex gap-2 py-0.5">
-                                  <span className="font-mono text-slate-400 shrink-0">{r.code}</span>
-                                  <span className="truncate line-through">{r.name}</span>
-                                </div>
-                              ))}
-                              {previewData.diff.remove.count > 10 && <p className="text-[11px] text-slate-400">...và {previewData.diff.remove.count - 10} bản ghi khác</p>}
-                            </div>
-                          </div>
-                        )}
                       </div>
-
-                      {/* Hard Delete Checkbox */}
-                      {previewData.diff.remove.count > 0 && (
-                        <div className="px-5 py-2.5 bg-amber-50/80 border-t border-amber-200 flex items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            id="hardDeleteCheckbox"
-                            checked={hardDeleteOrphans}
-                            onChange={e => {
-                              setHardDeleteOrphans(e.target.checked);
-                              localStorage.setItem("jpt_customer_hard_delete", String(e.target.checked));
-                            }}
-                            className="rounded text-green-600 focus:ring-green-500"
-                          />
-                          <label htmlFor="hardDeleteCheckbox" className="font-semibold text-slate-800 cursor-pointer">
-                            Xóa các bản ghi dư thừa khỏi Supabase để dữ liệu khớp chính xác 100% với Google Sheet ({previewData.sheetTotal} dòng)
-                          </label>
-                        </div>
-                      )}
 
                       {/* Sync Button */}
                       <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center gap-3">
@@ -789,7 +676,7 @@ function autoSyncToHelpdesk() {
                           className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
                         >
                           <RefreshCw size={17} />
-                          Tiến hành đồng bộ ngay ({previewData.diff.add.count + previewData.diff.update.count + (hardDeleteOrphans ? previewData.diff.remove.count : 0)} thay đổi)
+                          Tiến hành đồng bộ ({previewData.diff.add.count + previewData.diff.update.count} thay đổi)
                         </button>
                         <button onClick={() => setPreviewData(null)} className="px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition font-semibold">
                           Bỏ qua
@@ -810,7 +697,7 @@ function autoSyncToHelpdesk() {
                         {syncProgress < 100
                           ? syncStats?.total
                             ? `Đang đồng bộ... ${syncStats.processed} / ${syncStats.total}`
-                            : "Đang kết nối Google Sheets..."
+                            : "Đang tự động dọn dẹp duplicate & kết nối Google Sheets..."
                           : "Hoàn tất đồng bộ! ✓"}
                       </span>
                     </div>
@@ -840,7 +727,6 @@ function autoSyncToHelpdesk() {
                       <div className="flex gap-3 shrink-0">
                         <span className="text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded-lg border border-green-200">+{syncStats.created} tạo mới</span>
                         <span className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200">↺{syncStats.updated} cập nhật</span>
-                        {(syncStats.removed ?? 0) > 0 && <span className="text-red-700 font-bold bg-red-50 px-2 py-0.5 rounded-lg border border-red-200">✗{syncStats.removed} đã xóa</span>}
                         {syncStats.errors > 0 && <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">!{syncStats.errors} lỗi</span>}
                       </div>
                     </div>
@@ -862,11 +748,10 @@ function autoSyncToHelpdesk() {
                     <span>{syncResult.success ? "Đồng bộ thành công hoàn toàn!" : "Kết quả đồng bộ (Có mục cần xử lý):"}</span>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2 mt-3 bg-white p-3.5 rounded-xl text-xs border border-slate-200 shadow-sm">
+                  <div className="grid grid-cols-3 gap-2 mt-3 bg-white p-3.5 rounded-xl text-xs border border-slate-200 shadow-sm">
                     <div className="text-center">Tổng Sheet: <strong className="block text-sm text-slate-800">{syncResult.total}</strong></div>
                     <div className="text-center">Tạo mới: <strong className="block text-sm text-green-600">+{syncResult.created}</strong></div>
                     <div className="text-center">Cập nhật: <strong className="block text-sm text-blue-600">{syncResult.updated}</strong></div>
-                    <div className="text-center">Lỗi / Chưa khớp: <strong className={`block text-sm ${syncResult.errors ? "text-red-600 font-bold" : "text-slate-400"}`}>{syncResult.errors ?? 0}</strong></div>
                   </div>
                   {syncResult.lastSyncedAt && (
                     <p className="text-xs text-slate-500 mt-2 text-right">Hoàn tất lúc: {syncResult.lastSyncedAt}</p>
@@ -897,8 +782,7 @@ function autoSyncToHelpdesk() {
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-slate-800 flex items-center gap-1.5">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase ${
-                                err.type === "insert" ? "bg-green-100 text-green-700" :
-                                err.type === "update" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
+                                err.type === "insert" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
                               }`}>
                                 {err.type}
                               </span>
@@ -961,26 +845,6 @@ function autoSyncToHelpdesk() {
                     </select>
                   </div>
                 )}
-              </div>
-
-              {/* Apps Script Webhook */}
-              <div className="bg-slate-900 rounded-2xl p-4 text-slate-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Code2 size={16} className="text-green-400" />
-                    <span className="text-xs font-bold text-slate-200">Google Apps Script Webhook (Thời gian thực)</span>
-                  </div>
-                  <button
-                    onClick={copyAppsScript}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-green-400 rounded-lg text-xs font-semibold transition"
-                  >
-                    {copiedScript ? <Check size={13} /> : null}
-                    {copiedScript ? "Đã copy!" : "Copy script"}
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Tự động đẩy dữ liệu sang JPT Helpdesk ngay khi chỉnh sửa file Google Sheet (Extensions &gt; Apps Script).
-                </p>
               </div>
 
             </div>

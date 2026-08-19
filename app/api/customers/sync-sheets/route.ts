@@ -11,7 +11,7 @@ export interface SheetRow {
 }
 
 export interface DiffRow extends SheetRow {
-  dbId: string; // Direct ID of the record in Supabase to update
+  dbId: string;
   old_name?: string;
   old_ten_tieng_anh?: string;
   old_address?: string;
@@ -19,7 +19,7 @@ export interface DiffRow extends SheetRow {
 }
 
 export interface SyncErrorItem {
-  type: "insert" | "update" | "remove";
+  type: "insert" | "update";
   name: string;
   code?: string;
   message: string;
@@ -50,9 +50,7 @@ function sanitizeCustomerCode(rawCode: string, fallbackCode: string): string {
   let c = (rawCode || "").trim().toUpperCase();
   if (!c || c.startsWith("AUTO-")) return fallbackCode;
 
-  // If code is overly long or looks like full company name placed in code column
   if (c.length > 40 || c.split(/\s+/).length > 3) {
-    // Extract short identifier if present at the end (e.g. "... PVGAZPROM" -> "PVGAZPROM")
     const parts = c.split(/[\s\-_\/()]+/);
     const lastWord = parts[parts.length - 1];
     if (lastWord && lastWord.length >= 2 && lastWord.length <= 25 && /^[A-Z0-9.]+$/i.test(lastWord)) {
@@ -75,7 +73,7 @@ function deduplicateSheetRows(rows: SheetRow[]): SheetRow[] {
     const nc = norm(sanitizedCode);
     const nn = norm(row.name);
 
-    // 1. If exact name match -> merge into existing row (same customer with different code alias)
+    // If exact name match -> merge into existing row
     const existingByName = byName.get(nn);
     if (existingByName) {
       if (!existingByName.address && row.address) existingByName.address = row.address;
@@ -84,11 +82,10 @@ function deduplicateSheetRows(rows: SheetRow[]): SheetRow[] {
       continue;
     }
 
-    // 2. If same code match
+    // If same code match
     if (!isAuto && nc) {
       const existingByCode = byCode.get(nc);
       if (existingByCode) {
-        // If names are similar or one is abbreviation of the other (e.g. HiPT vs TẬP ĐOÀN HIPT)
         const n1 = norm(existingByCode.name);
         const n2 = nn;
         if (n1.includes(n2) || n2.includes(n1)) {
@@ -97,8 +94,6 @@ function deduplicateSheetRows(rows: SheetRow[]): SheetRow[] {
           if (!existingByCode.ten_tieng_anh && row.ten_tieng_anh) existingByCode.ten_tieng_anh = row.ten_tieng_anh;
           continue;
         } else {
-          // If completely different customer sharing same code (e.g. BVTD for Từ Dũ & Thủ Đức)
-          // Assign disambiguated code for second customer
           row.code = `${sanitizedCode}-2`;
         }
       }
@@ -136,7 +131,6 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
   let addressIdx  = idx(["địa chỉ", "dia chi", "address"]);
   let engIdx      = idx(["tên tiếng anh", "ten tieng anh", "english name", "name_en"]);
 
-  // Positional fallbacks for Account sheet: A=Code, B=TênKH, C=TênHiểnThị, D=MST, E=Địa chỉ
   if (codeIdx < 0)     codeIdx = 0;
   if (fullNameIdx < 0) fullNameIdx = 1;
   if (displayIdx < 0)  displayIdx = 2;
@@ -160,7 +154,6 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
     rawList.push({ code, name, ten_tieng_anh, tax_code, address });
   }
 
-  // Deduplicate before processing
   return deduplicateSheetRows(rawList);
 }
 
@@ -170,7 +163,6 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
           userAccessToken, userRefreshToken, userClientId, userClientSecret,
           data: rawRows } = body;
 
-  // Case 1: Direct JSON
   if (Array.isArray(rawRows) && rawRows.length > 0) {
     const rawList = rawRows.map((r: any, i: number) => ({
       code: String(r["Mã Khách Hàng"] || r["Mã khách hàng"] || r.code || `AUTO-${i + 1}`).trim(),
@@ -187,7 +179,6 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
 
   const range = sheetName ? `${sheetName}!A1:Z3000` : "A1:Z3000";
 
-  // Case 2: Google User OAuth
   if (userAccessToken || userRefreshToken) {
     const oauth2Client = new google.auth.OAuth2(userClientId || undefined, userClientSecret || undefined);
     let rToken = (userRefreshToken || "").trim();
@@ -202,7 +193,6 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
     return extractRowsFromValues(res.data.values || []);
   }
 
-  // Case 3: Service Account
   if (clientEmail && privateKey) {
     const auth = new google.auth.JWT({
       email: clientEmail,
@@ -215,6 +205,45 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
   }
 
   throw new Error("Chưa cấu hình thông tin xác thực Google (Token hoặc Service Account).");
+}
+
+// ─── Auto Clean Database Duplicates (Step 1 of Sync) ───────────
+async function autoCleanDbDuplicates(admin: SupabaseClient): Promise<number> {
+  try {
+    const { data: allRows, error } = await admin
+      .from("customers")
+      .select("id, code, name, created_at")
+      .order("created_at", { ascending: true });
+
+    if (error || !allRows || allRows.length === 0) return 0;
+
+    const grouped = new Map<string, typeof allRows>();
+    for (const row of allRows) {
+      const key = (row.code || row.name || "").trim().toLowerCase();
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(row);
+    }
+
+    const toDelete: string[] = [];
+    for (const [, rows] of grouped) {
+      if (rows.length > 1) {
+        rows.slice(1).forEach(r => toDelete.push(r.id));
+      }
+    }
+
+    if (toDelete.length === 0) return 0;
+
+    let deleted = 0;
+    for (let i = 0; i < toDelete.length; i += 100) {
+      const batch = toDelete.slice(i, i + 100);
+      const { error: delErr } = await admin.from("customers").delete().in("id", batch);
+      if (!delErr) deleted += batch.length;
+    }
+    return deleted;
+  } catch (e) {
+    console.error("autoCleanDbDuplicates error:", e);
+    return 0;
+  }
 }
 
 // ─── Fetch ALL DB customers ────────────────────────────────────
@@ -244,14 +273,13 @@ async function fetchAllDbCustomers(admin: SupabaseClient) {
   return all;
 }
 
-// ─── Compute diff with SANITIZED CODE and DIRECT dbId mapping ─
-function computeDiff(
+// ─── 1-Way Diff: Google Sheets -> Supabase ────────────────────
+function compute1WayDiff(
   sheetRows: SheetRow[],
   dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>
 ) {
   const dbByCode = new Map<string, typeof dbRows[0]>();
   const dbByName = new Map<string, typeof dbRows[0]>();
-  const matchedIds = new Set<string>();
 
   for (const r of dbRows) {
     const nc = norm(r.code);
@@ -275,7 +303,6 @@ function computeDiff(
     if (!dbRow) {
       toAdd.push(row);
     } else {
-      matchedIds.add(dbRow.id);
       const nameChanged = norm(dbRow.name) !== nn;
       const engChanged = norm(dbRow.ten_tieng_anh || "") !== norm(row.ten_tieng_anh || "");
       const addrChanged = norm(dbRow.address || "") !== norm(row.address || "");
@@ -284,7 +311,7 @@ function computeDiff(
       if (nameChanged || engChanged || addrChanged || codeChanged) {
         toUpdate.push({
           ...row,
-          dbId: dbRow.id, // Direct DB ID preserved!
+          dbId: dbRow.id,
           old_name: dbRow.name,
           old_ten_tieng_anh: dbRow.ten_tieng_anh,
           old_address: dbRow.address,
@@ -294,25 +321,20 @@ function computeDiff(
     }
   }
 
-  // Dữ liệu dư thừa trên DB không có trong Sheet
-  const toRemove = dbRows.filter(r => !matchedIds.has(r.id)).map(r => ({ id: r.id, code: r.code, name: r.name }));
-  return { toAdd, toUpdate, toRemove };
+  return { toAdd, toUpdate };
 }
 
-// ─── Robust Batch Sync Execution with Error Analysis ──────────
-async function executeSync(
+// ─── Execute 1-Way Sync (Insert & Update only) ─────────────────
+async function execute1WaySync(
   admin: SupabaseClient,
   toAdd: SheetRow[],
   toUpdate: DiffRow[],
-  toRemove: Array<{ id: string; code: string; name: string }>,
-  hardDeleteOrphans: boolean,
   onProgress: (processed: number, total: number, name: string, created: number, updated: number, errors: number, errorItem?: SyncErrorItem) => void
-): Promise<{ created: number; updated: number; removed: number; errors: number; errorLog: SyncErrorItem[] }> {
-  const total = toAdd.length + toUpdate.length + toRemove.length;
-  let processed = 0, created = 0, updated = 0, removed = 0, errors = 0;
+): Promise<{ created: number; updated: number; errors: number; errorLog: SyncErrorItem[] }> {
+  const total = toAdd.length + toUpdate.length;
+  let processed = 0, created = 0, updated = 0, errors = 0;
   const errorLog: SyncErrorItem[] = [];
 
-  // Helper for generating next system code
   let sysCodeCounter: number | null = null;
   const getNextSysCodeFast = async () => {
     if (sysCodeCounter === null) {
@@ -332,10 +354,8 @@ async function executeSync(
       const system_code = await getNextSysCodeFast();
       let code = sanitizeCustomerCode(row.code, system_code);
 
-      // Check if code already exists in DB to prevent Unique Constraint failure
       const { data: existingWithCode } = await admin.from("customers").select("id").eq("code", code).maybeSingle();
       if (existingWithCode) {
-        // If code already exists, update that record
         const { error: updErr } = await admin.from("customers").update({
           name: row.name.trim(),
           ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
@@ -360,7 +380,6 @@ async function executeSync(
           updated++;
         }
       } else {
-        // Normal INSERT
         const insertPayload: any = {
           system_code: system_code.slice(0, 48),
           code: code.slice(0, 48),
@@ -422,7 +441,7 @@ async function executeSync(
     processed++;
   }
 
-  // ── 2. UPDATE changed rows (USING DIRECT dbId) ─────────────────
+  // ── 2. UPDATE changed rows ─────────────────────────────────────
   for (const row of toUpdate) {
     onProgress(processed, total, row.name, created, updated, errors);
     try {
@@ -441,11 +460,9 @@ async function executeSync(
         payload.code = sanitizeCustomerCode(row.code, `AUTO-${targetId.slice(0, 8)}`);
       }
 
-      // Check if desired code is already held by ANOTHER customer
       if (payload.code) {
         const { data: codeHolder } = await admin.from("customers").select("id").eq("code", payload.code).maybeSingle();
         if (codeHolder && codeHolder.id !== targetId) {
-          // Temporarily free the code from the other holder to avoid unique collision
           await admin.from("customers").update({ code: `TMP-${codeHolder.id.slice(0, 8)}` }).eq("id", codeHolder.id);
         }
       }
@@ -453,7 +470,6 @@ async function executeSync(
       const { error: updErr } = await admin.from("customers").update(payload).eq("id", targetId);
 
       if (updErr) {
-        // Fallback retry without changing code if any conflict remains
         if (updErr.message.includes("unique") || updErr.message.includes("duplicate") || updErr.message.includes("too long")) {
           delete payload.code;
           const { error: retryErr } = await admin.from("customers").update(payload).eq("id", targetId);
@@ -501,60 +517,20 @@ async function executeSync(
     processed++;
   }
 
-  // ── 3. REMOVE or INACTIVATE orphan rows ────────────────────────
-  if (toRemove.length > 0) {
-    const chunks = [];
-    for (let i = 0; i < toRemove.length; i += 50) chunks.push(toRemove.slice(i, i + 50));
-
-    for (const chunk of chunks) {
-      onProgress(processed, total, `[Xử lý thừa] ${chunk[0]?.name || ""}`, created, updated, errors);
-      const ids = chunk.map(r => r.id);
-
-      if (hardDeleteOrphans) {
-        const { error: delErr } = await admin.from("customers").delete().in("id", ids);
-        if (delErr) {
-          const errItem: SyncErrorItem = {
-            type: "remove",
-            name: `${chunk.length} bản ghi dư thừa`,
-            message: `Lỗi xóa bản ghi dư thừa khỏi database`,
-            detail: delErr.message,
-          };
-          errorLog.push(errItem);
-          errors += chunk.length;
-          onProgress(processed, total, "[Lỗi xóa]", created, updated, errors, errItem);
-        } else {
-          removed += chunk.length;
-        }
-      } else {
-        const { error: inactErr } = await admin.from("customers").update({ tinh_trang: "Inactive" }).in("id", ids);
-        if (inactErr) {
-          const errItem: SyncErrorItem = {
-            type: "remove",
-            name: `${chunk.length} bản ghi dư thừa`,
-            message: `Lỗi đặt trạng thái Inactive cho bản ghi dư thừa`,
-            detail: inactErr.message,
-          };
-          errorLog.push(errItem);
-          errors += chunk.length;
-          onProgress(processed, total, "[Lỗi Inactive]", created, updated, errors, errItem);
-        } else {
-          removed += chunk.length;
-        }
-      }
-      processed += chunk.length;
-    }
-  }
-
-  return { created, updated, removed, errors, errorLog };
+  return { created, updated, errors, errorLog };
 }
 
 // ─── POST Handler ─────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { mode = "sync", hardDeleteOrphans = true } = body;
+    const { mode = "sync" } = body;
+    const admin = getAdmin();
 
-    // ── PREVIEW: compare Sheet vs DB ────────────────────────────
+    // ── BƯỚC 1 TỰ ĐỘNG: Dọn dẹp duplicates trước ─────────────────
+    const autoCleaned = await autoCleanDbDuplicates(admin);
+
+    // ── PREVIEW MODE ─────────────────────────────────────────────
     if (mode === "preview") {
       let sheetRows: SheetRow[];
       try {
@@ -567,7 +543,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu hợp lệ trong Google Sheet." }, { status: 400 });
       }
 
-      const admin = getAdmin();
       let dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>;
       try {
         dbRows = await fetchAllDbCustomers(admin);
@@ -575,23 +550,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: err.message }, { status: 400 });
       }
 
-      const { toAdd, toUpdate, toRemove } = computeDiff(sheetRows, dbRows);
+      const { toAdd, toUpdate } = compute1WayDiff(sheetRows, dbRows);
 
       return NextResponse.json({
         success: true,
         preview: true,
+        autoCleaned,
         sheetTotal: sheetRows.length,
         dbTotal: dbRows.length,
         diff: {
           add:    { count: toAdd.length,    rows: toAdd.slice(0, 30) },
           update: { count: toUpdate.length, rows: toUpdate.slice(0, 30) },
-          remove: { count: toRemove.length, rows: toRemove.slice(0, 30) },
         },
-        noChanges: !toAdd.length && !toUpdate.length && !toRemove.length,
+        noChanges: !toAdd.length && !toUpdate.length,
       });
     }
 
-    // ── SYNC DIFF / FULL SYNC with SSE ───────────────────────────
+    // ── 1-WAY SYNC WITH SSE STREAMING ────────────────────────────
     let sheetRows: SheetRow[];
     try {
       sheetRows = await fetchSheetRows(body);
@@ -603,7 +578,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Không tìm thấy dữ liệu hợp lệ từ Google Sheet." }, { status: 400 });
     }
 
-    const admin = getAdmin();
     let dbRows: Awaited<ReturnType<typeof fetchAllDbCustomers>>;
     try {
       dbRows = await fetchAllDbCustomers(admin);
@@ -611,16 +585,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: err.message }, { status: 400 });
     }
 
-    const { toAdd, toUpdate, toRemove } = computeDiff(sheetRows, dbRows);
-    const total = toAdd.length + toUpdate.length + toRemove.length;
+    const { toAdd, toUpdate } = compute1WayDiff(sheetRows, dbRows);
+    const total = toAdd.length + toUpdate.length;
+
+    const lastSyncedAt = new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
 
     if (total === 0) {
       return NextResponse.json({
         success: true,
-        total: 0,
+        total: sheetRows.length,
         created: 0,
         updated: 0,
-        removed: 0,
+        autoCleaned,
+        lastSyncedAt,
         message: "Dữ liệu trên Supabase đã hoàn toàn trùng khớp với Google Sheet.",
       });
     }
@@ -634,16 +611,14 @@ export async function POST(req: NextRequest) {
           total,
           toAdd: toAdd.length,
           toUpdate: toUpdate.length,
-          toRemove: toRemove.length,
           sheetTotal: sheetRows.length,
+          autoCleaned,
         });
 
-        const result = await executeSync(
+        const result = await execute1WaySync(
           admin,
           toAdd,
           toUpdate,
-          toRemove,
-          Boolean(hardDeleteOrphans),
           (processed, totalCount, name, created, updated, errors, errorItem) => {
             send({
               type: "progress",
@@ -660,8 +635,10 @@ export async function POST(req: NextRequest) {
 
         send({
           type: "done",
-          total,
+          total: sheetRows.length,
           sheetTotal: sheetRows.length,
+          lastSyncedAt,
+          autoCleaned,
           ...result,
         });
         controller.close();
