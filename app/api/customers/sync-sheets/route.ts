@@ -63,6 +63,55 @@ function sanitizeCustomerCode(rawCode: string, fallbackCode: string): string {
   return c.slice(0, 48);
 }
 
+// ─── Deduplicate Sheet Rows ───────────────────────────────────
+function deduplicateSheetRows(rows: SheetRow[]): SheetRow[] {
+  const byCode = new Map<string, SheetRow>();
+  const byName = new Map<string, SheetRow>();
+  const result: SheetRow[] = [];
+
+  for (const row of rows) {
+    const isAuto = !row.code || row.code.toUpperCase().startsWith("AUTO-");
+    const sanitizedCode = sanitizeCustomerCode(row.code, isAuto ? "" : row.code);
+    const nc = norm(sanitizedCode);
+    const nn = norm(row.name);
+
+    // 1. If exact name match -> merge into existing row (same customer with different code alias)
+    const existingByName = byName.get(nn);
+    if (existingByName) {
+      if (!existingByName.address && row.address) existingByName.address = row.address;
+      if (!existingByName.tax_code && row.tax_code) existingByName.tax_code = row.tax_code;
+      if (!existingByName.ten_tieng_anh && row.ten_tieng_anh) existingByName.ten_tieng_anh = row.ten_tieng_anh;
+      continue;
+    }
+
+    // 2. If same code match
+    if (!isAuto && nc) {
+      const existingByCode = byCode.get(nc);
+      if (existingByCode) {
+        // If names are similar or one is abbreviation of the other (e.g. HiPT vs TẬP ĐOÀN HIPT)
+        const n1 = norm(existingByCode.name);
+        const n2 = nn;
+        if (n1.includes(n2) || n2.includes(n1)) {
+          if (!existingByCode.address && row.address) existingByCode.address = row.address;
+          if (!existingByCode.tax_code && row.tax_code) existingByCode.tax_code = row.tax_code;
+          if (!existingByCode.ten_tieng_anh && row.ten_tieng_anh) existingByCode.ten_tieng_anh = row.ten_tieng_anh;
+          continue;
+        } else {
+          // If completely different customer sharing same code (e.g. BVTD for Từ Dũ & Thủ Đức)
+          // Assign disambiguated code for second customer
+          row.code = `${sanitizedCode}-2`;
+        }
+      }
+      byCode.set(norm(row.code), row);
+    }
+
+    byName.set(nn, row);
+    result.push(row);
+  }
+
+  return result;
+}
+
 // ─── Smart header + column mapping ───────────────────────────
 function extractRowsFromValues(rows: any[][]): SheetRow[] {
   if (!rows || rows.length < 1) return [];
@@ -94,7 +143,7 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
   if (taxIdx < 0 && headerRow.length > 3) taxIdx = 3;
   if (addressIdx < 0 && headerRow.length > 4) addressIdx = 4;
 
-  const result: SheetRow[] = [];
+  const rawList: SheetRow[] = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const row = rows[i] || [];
     const fullName  = String(row[fullNameIdx] ?? "").trim();
@@ -108,9 +157,11 @@ function extractRowsFromValues(rows: any[][]): SheetRow[] {
     const address = addressIdx >= 0 ? String(row[addressIdx] ?? "").trim() : "";
     const ten_tieng_anh = engIdx >= 0 ? String(row[engIdx] ?? "").trim() : "";
 
-    result.push({ code, name, ten_tieng_anh, tax_code, address });
+    rawList.push({ code, name, ten_tieng_anh, tax_code, address });
   }
-  return result;
+
+  // Deduplicate before processing
+  return deduplicateSheetRows(rawList);
 }
 
 // ─── Fetch sheet rows ─────────────────────────────────────────
@@ -121,13 +172,14 @@ async function fetchSheetRows(body: any): Promise<SheetRow[]> {
 
   // Case 1: Direct JSON
   if (Array.isArray(rawRows) && rawRows.length > 0) {
-    return rawRows.map((r: any, i: number) => ({
+    const rawList = rawRows.map((r: any, i: number) => ({
       code: String(r["Mã Khách Hàng"] || r["Mã khách hàng"] || r.code || `AUTO-${i + 1}`).trim(),
       name: String(r["Tên Khách Hàng"] || r["Tên khách hàng"] || r["Tên Hiển Thị"] || r.name || "").trim(),
       ten_tieng_anh: String(r["Tên Tiếng Anh"] || r.ten_tieng_anh || "").trim(),
       tax_code: String(r["Mã Số Thuế"] || r["Mã số thuế"] || r.tax_code || "").trim(),
       address: String(r["Địa Chỉ"] || r["Địa chỉ"] || r.address || "").trim(),
     })).filter((r: SheetRow) => r.name);
+    return deduplicateSheetRows(rawList);
   }
 
   const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
