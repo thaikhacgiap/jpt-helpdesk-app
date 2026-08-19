@@ -35,7 +35,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     supabase.from('tickets').select('*').order('created_at', { ascending: false }),
     supabase.from('customers').select('*', { count: 'exact', head: true }),
     supabase.from('contracts').select('*', { count: 'exact', head: true }),
-    supabase.from('staff').select('*', { count: 'exact', head: true }),
+    supabase.from('nhan_su').select('*', { count: 'exact', head: true }),
   ])
 
   const tickets = ticketsRes.data || []
