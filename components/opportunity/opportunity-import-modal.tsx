@@ -493,47 +493,6 @@ export default function OpportunityImportModal({
                 </div>
               </div>
 
-              {/* Google OAuth Credentials */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <User size={18} className="text-blue-600" />
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800">Cấu hình Tài khoản Google User</h4>
-                      <p className="text-xs text-slate-500">Dùng chung cấu hình xác thực OAuth với trang Khách hàng</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowAuthConfig(!showAuthConfig)}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
-                  >
-                    {showAuthConfig ? "Ẩn cấu hình" : "Xem/Sửa cấu hình"}
-                  </button>
-                </div>
-
-                {showAuthConfig && (
-                  <div className="pt-3 border-t border-slate-100 space-y-3">
-                    <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
-                          Google User Access Token / Refresh Token <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={userAccessToken || userRefreshToken}
-                          onChange={e => {
-                            setUserAccessToken(e.target.value);
-                            localStorage.setItem("jpt_google_user_access_token", e.target.value);
-                          }}
-                          placeholder="ya29.a0A... hoặc 1//04P... (Refresh Token)"
-                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Preview Diff */}
               {previewData && !syncing && (
                 <div className="bg-white border-2 border-purple-200 rounded-2xl overflow-hidden shadow-lg">
