@@ -548,18 +548,75 @@ export default function ContractImportModal({
 
               {/* Result */}
               {syncResult && (
-                <div className={`p-5 rounded-2xl border text-sm shadow-sm ${
+                <div className={`p-5 rounded-2xl border text-sm shadow-sm space-y-3 ${
                   syncResult.success ? "bg-green-50/90 border-green-300 text-green-900" : "bg-amber-50 border-amber-300 text-amber-900"
                 }`}>
                   <div className="flex items-center gap-2 font-bold text-base">
                     {syncResult.success ? <CheckCircle2 size={20} className="text-green-600" /> : <AlertTriangle size={20} className="text-amber-600" />}
                     <span>{syncResult.success ? "Đồng bộ Hợp đồng thành công hoàn toàn!" : "Kết quả đồng bộ:"}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 mt-3 bg-white p-3.5 rounded-xl text-xs border border-slate-200 shadow-sm">
-                    <div className="text-center">Tổng: <strong className="block text-sm text-slate-800">{syncResult.total}</strong></div>
+                  <div className="grid grid-cols-3 gap-2 bg-white p-3.5 rounded-xl text-xs border border-slate-200 shadow-sm">
+                    <div className="text-center">Tổng trên Sheet: <strong className="block text-sm text-slate-800">{syncResult.total}</strong></div>
                     <div className="text-center">Tạo mới: <strong className="block text-sm text-green-600">+{syncResult.created}</strong></div>
                     <div className="text-center">Cập nhật: <strong className="block text-sm text-blue-600">{syncResult.updated}</strong></div>
                   </div>
+
+                  {syncResult.message && (
+                    <p className="text-xs font-semibold text-amber-800 bg-amber-100/70 p-2.5 rounded-xl border border-amber-200">
+                      ⚠️ {syncResult.message}
+                    </p>
+                  )}
+
+                  {syncResult.errors && syncResult.errors > 0 && syncResult.created === 0 && (
+                    <div className="bg-white p-4 rounded-xl border border-amber-300 space-y-2.5 text-xs text-slate-800 shadow-sm">
+                      <p className="font-bold text-amber-900 flex items-center gap-1.5">
+                        🛠️ Nguyên nhân: Bảng <code>contracts</code> trên Supabase cần được cập nhật 14 cột mới.
+                      </p>
+                      <p className="text-slate-600">
+                        Vui lòng mở <a href="https://supabase.com/dashboard/project/bxxzmfchmbhwoaazvjxb/sql" target="_blank" rel="noopener noreferrer" className="text-purple-600 font-bold underline">Supabase SQL Editor</a> và chạy đoạn lệnh sau:
+                      </p>
+                      <div className="relative">
+                        <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg text-[11px] font-mono overflow-x-auto max-h-36">
+{`DROP TABLE IF EXISTS contracts CASCADE;
+
+CREATE TABLE contracts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  contract_no TEXT NOT NULL UNIQUE,
+  project_id TEXT,
+  status TEXT DEFAULT 'Active',
+  signed_date TEXT,
+  expiry_date TEXT,
+  service TEXT,
+  contract_type TEXT DEFAULT 'Hợp đồng dịch vụ',
+  description TEXT,
+  supplier TEXT,
+  end_user TEXT,
+  customer TEXT,
+  am TEXT,
+  team TEXT,
+  fy TEXT,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access to contracts" ON contracts FOR ALL USING (true) WITH CHECK (true);`}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const sql = `DROP TABLE IF EXISTS contracts CASCADE;\n\nCREATE TABLE contracts (\n  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n  contract_no TEXT NOT NULL UNIQUE,\n  project_id TEXT,\n  status TEXT DEFAULT 'Active',\n  signed_date TEXT,\n  expiry_date TEXT,\n  service TEXT,\n  contract_type TEXT DEFAULT 'Hợp đồng dịch vụ',\n  description TEXT,\n  supplier TEXT,\n  end_user TEXT,\n  customer TEXT,\n  am TEXT,\n  team TEXT,\n  fy TEXT,\n  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),\n  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())\n);\n\nALTER TABLE contracts ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow all access to contracts" ON contracts FOR ALL USING (true) WITH CHECK (true);`;
+                            navigator.clipboard.writeText(sql);
+                            alert("Đã copy mã SQL vào Clipboard!");
+                          }}
+                          className="absolute right-2 top-2 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[10px] font-bold shadow transition"
+                        >
+                          Copy SQL
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {syncResult.lastSyncedAt && (
                     <p className="text-xs text-slate-500 mt-2 text-right">Hoàn tất lúc: {syncResult.lastSyncedAt}</p>
                   )}
