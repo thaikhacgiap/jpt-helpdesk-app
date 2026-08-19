@@ -40,6 +40,24 @@ function extractSpreadsheetId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// ─── Sanitize and safely format customer code ─────────────────
+function sanitizeCustomerCode(rawCode: string, fallbackCode: string): string {
+  let c = (rawCode || "").trim().toUpperCase();
+  if (!c || c.startsWith("AUTO-")) return fallbackCode;
+
+  // If code is overly long or looks like full company name placed in code column
+  if (c.length > 40 || c.split(/\s+/).length > 3) {
+    // Extract short identifier if present at the end (e.g. "... PVGAZPROM" -> "PVGAZPROM")
+    const parts = c.split(/[\s\-_\/()]+/);
+    const lastWord = parts[parts.length - 1];
+    if (lastWord && lastWord.length >= 2 && lastWord.length <= 25 && /^[A-Z0-9.]+$/i.test(lastWord)) {
+      return lastWord;
+    }
+    return c.slice(0, 45);
+  }
+  return c.slice(0, 48);
+}
+
 // ─── Smart header + column mapping ───────────────────────────
 function extractRowsFromValues(rows: any[][]): SheetRow[] {
   if (!rows || rows.length < 1) return [];
@@ -259,7 +277,7 @@ async function executeSync(
     onProgress(processed, total, row.name, created, updated, errors);
     try {
       const system_code = await getNextSysCodeFast();
-      let code = (row.code && !row.code.toUpperCase().startsWith("AUTO-")) ? row.code.trim().toUpperCase() : system_code;
+      let code = sanitizeCustomerCode(row.code, system_code);
 
       // Check if code already exists in DB to prevent Unique Constraint failure
       const { data: existingWithCode } = await admin.from("customers").select("id").eq("code", code).maybeSingle();
@@ -290,27 +308,49 @@ async function executeSync(
         }
       } else {
         // Normal INSERT
-        const { error: insErr } = await admin.from("customers").insert([{
-          system_code,
-          code,
+        const insertPayload: any = {
+          system_code: system_code.slice(0, 48),
+          code: code.slice(0, 48),
           name: row.name.trim(),
           ten_tieng_anh: row.ten_tieng_anh?.trim() || null,
           address: row.address?.trim() || null,
           ghi_chu: row.tax_code ? `MST: ${row.tax_code}` : null,
           tinh_trang: "Active",
-        }]);
+        };
+
+        const { error: insErr } = await admin.from("customers").insert([insertPayload]);
 
         if (insErr) {
-          const errItem: SyncErrorItem = {
-            type: "insert",
-            name: row.name,
-            code,
-            message: `Lỗi thêm mới bản ghi vào database`,
-            detail: insErr.message,
-          };
-          errorLog.push(errItem);
-          errors++;
-          onProgress(processed, total, row.name, created, updated, errors, errItem);
+          // If error is value too long, retry with system_code as code
+          if (insErr.message.includes("too long")) {
+            insertPayload.code = system_code.slice(0, 48);
+            const { error: retryErr } = await admin.from("customers").insert([insertPayload]);
+            if (retryErr) {
+              const errItem: SyncErrorItem = {
+                type: "insert",
+                name: row.name,
+                code,
+                message: `Lỗi độ dài ký tự khi thêm mới`,
+                detail: retryErr.message,
+              };
+              errorLog.push(errItem);
+              errors++;
+              onProgress(processed, total, row.name, created, updated, errors, errItem);
+            } else {
+              created++;
+            }
+          } else {
+            const errItem: SyncErrorItem = {
+              type: "insert",
+              name: row.name,
+              code,
+              message: `Lỗi thêm mới bản ghi vào database`,
+              detail: insErr.message,
+            };
+            errorLog.push(errItem);
+            errors++;
+            onProgress(processed, total, row.name, created, updated, errors, errItem);
+          }
         } else {
           created++;
         }
@@ -334,8 +374,8 @@ async function executeSync(
   for (const row of toUpdate) {
     onProgress(processed, total, row.name, created, updated, errors);
     try {
-      const isAuto = row.code.toUpperCase().startsWith("AUTO-") || !row.code;
       const targetId = row.dbId;
+      const isAuto = row.code.toUpperCase().startsWith("AUTO-") || !row.code;
 
       const payload: any = {
         name: row.name.trim(),
@@ -345,13 +385,15 @@ async function executeSync(
         updated_at: new Date().toISOString(),
       };
       if (row.tax_code) payload.ghi_chu = `MST: ${row.tax_code}`;
-      if (!isAuto) payload.code = row.code.trim().toUpperCase();
+      if (!isAuto) {
+        payload.code = sanitizeCustomerCode(row.code, `AUTO-${targetId.slice(0, 8)}`);
+      }
 
       const { error: updErr } = await admin.from("customers").update(payload).eq("id", targetId);
 
       if (updErr) {
-        // If failed due to duplicate code constraint, retry updating without changing code
-        if (updErr.message.includes("unique") || updErr.message.includes("duplicate")) {
+        // If failed due to duplicate code constraint or value too long, retry updating without changing code
+        if (updErr.message.includes("unique") || updErr.message.includes("duplicate") || updErr.message.includes("too long")) {
           delete payload.code;
           const { error: retryErr } = await admin.from("customers").update(payload).eq("id", targetId);
           if (retryErr) {
