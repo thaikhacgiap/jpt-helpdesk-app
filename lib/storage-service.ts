@@ -13,6 +13,10 @@ export interface StorageConfig {
   drive_access_token?: string;
   drive_client_email?: string;
   drive_private_key?: string;
+  sheet_master_url?: string;
+  sheet_customer_tab?: string;
+  sheet_opportunity_tab?: string;
+  sheet_contract_tab?: string;
   auto_subfolders: boolean;
   max_file_size_mb: number;
 }
@@ -44,6 +48,10 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   drive_access_token: "",
   drive_client_email: "",
   drive_private_key: "",
+  sheet_master_url: "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit",
+  sheet_customer_tab: "Customer",
+  sheet_opportunity_tab: "Opportunity",
+  sheet_contract_tab: "Contract",
   auto_subfolders: true,
   max_file_size_mb: 50,
 };
@@ -92,6 +100,34 @@ export async function saveStorageConfig(config: StorageConfig): Promise<{ succes
     // Save to localStorage immediately
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_LOCAL_KEY, JSON.stringify(config));
+
+      // Sync master credentials to global shared keys across modules
+      if (config.sheet_master_url) {
+        localStorage.setItem("jpt_customer_sheet_url", config.sheet_master_url);
+        localStorage.setItem("jpt_opp_sheet_url", config.sheet_master_url);
+        localStorage.setItem("jpt_contract_sheet_url", config.sheet_master_url);
+      }
+      if (config.drive_client_id) {
+        localStorage.setItem("jpt_google_user_client_id", config.drive_client_id);
+      }
+      if (config.drive_client_secret) {
+        localStorage.setItem("jpt_google_user_client_secret", config.drive_client_secret);
+      }
+      if (config.drive_refresh_token) {
+        localStorage.setItem("jpt_google_user_refresh_token", config.drive_refresh_token);
+      }
+      if (config.drive_access_token) {
+        localStorage.setItem("jpt_google_user_access_token", config.drive_access_token);
+      }
+      if (config.sheet_customer_tab) {
+        localStorage.setItem("jpt_customer_sheet_name", config.sheet_customer_tab);
+      }
+      if (config.sheet_opportunity_tab) {
+        localStorage.setItem("jpt_opp_sheet_name", config.sheet_opportunity_tab);
+      }
+      if (config.sheet_contract_tab) {
+        localStorage.setItem("jpt_contract_sheet_name", config.sheet_contract_tab);
+      }
     }
 
     // Upsert into Supabase system_settings

@@ -29,7 +29,8 @@ import {
   Save,
   Key,
   ExternalLink,
-  Lock
+  Lock,
+  FileSpreadsheet
 } from "lucide-react";
 import { 
   StorageConfig, 
@@ -644,11 +645,75 @@ export default function SystemPage() {
                       />
                     </div>
 
+                    {/* Google Sheets Master Settings Card */}
+                    <div className="pt-4 border-t border-slate-100 space-y-4">
+                      <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200/80 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-purple-900 flex items-center gap-1.5 uppercase tracking-wider">
+                            <FileSpreadsheet size={15} className="text-purple-600" />
+                            <span>Google Sheets Master (Dùng Chung Cho Khách Hàng, Cơ Hội, Hợp Đồng)</span>
+                          </h4>
+                          <span className="text-[10px] bg-purple-200/60 text-purple-800 font-bold px-2 py-0.5 rounded-md">
+                            Dùng chung toàn hệ thống
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700">Link Google Sheet Tổng (Master Spreadsheet URL)</label>
+                          <input
+                            type="url"
+                            value={storageConfig.sheet_master_url || ""}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, sheet_master_url: e.target.value })}
+                            placeholder="https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit"
+                            className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-hidden font-mono bg-white"
+                          />
+                          <p className="text-[10px] text-slate-500">
+                            Các module Khách hàng, Cơ hội, Hợp đồng sẽ tự động đọc từ đường link này nếu không có cấu hình riêng.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 pt-1">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-slate-700">Tab Khách Hàng</label>
+                            <input
+                              type="text"
+                              value={storageConfig.sheet_customer_tab || "Customer"}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, sheet_customer_tab: e.target.value })}
+                              placeholder="Customer"
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-slate-700">Tab Cơ Hội</label>
+                            <input
+                              type="text"
+                              value={storageConfig.sheet_opportunity_tab || "Opportunity"}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, sheet_opportunity_tab: e.target.value })}
+                              placeholder="Opportunity"
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-slate-700">Tab Hợp Đồng</label>
+                            <input
+                              type="text"
+                              value={storageConfig.sheet_contract_tab || "Contract"}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, sheet_contract_tab: e.target.value })}
+                              placeholder="Contract"
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-hidden font-mono bg-white font-bold"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Google OAuth Client ID */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Key size={13} className="text-emerald-600" />
-                        <span>Google Client ID</span>
+                        <span>Google Client ID (Dùng chung cho Drive & Sheets Sync)</span>
                       </label>
                       <input
                         type="text"
@@ -663,7 +728,7 @@ export default function SystemPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Lock size={13} className="text-slate-500" />
-                        <span>Google Client Secret</span>
+                        <span>Google Client Secret (Dùng chung)</span>
                       </label>
                       <input
                         type="password"
@@ -678,7 +743,7 @@ export default function SystemPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <ShieldCheck size={13} className="text-emerald-600" />
-                        <span>Google OAuth Refresh Token (Của Email riêng)</span>
+                        <span>Google OAuth Refresh Token (Dùng chung 24/7 cho Drive & Sheets)</span>
                       </label>
                       <textarea
                         rows={2}
