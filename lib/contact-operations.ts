@@ -38,14 +38,31 @@ export async function generateNextContactCode(): Promise<string> {
   return `CTC-${String(max + 1).padStart(3, '0')}`
 }
 
-// ─── Fetch all ───────────────────────────────────────────────
+// ─── Fetch all (Uncapped with Chunked Pagination) ───────────
 export async function fetchContacts(): Promise<Contact[]> {
-  const { data, error } = await supabase
-    .from('contacts')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) { console.error('fetchContacts:', JSON.stringify(error)); return [] }
-  return data || []
+  const PAGE_SIZE = 1000;
+  let allData: Contact[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('fetchContacts error:', JSON.stringify(error));
+      break;
+    }
+
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allData;
 }
 
 // ─── Fetch by customer code ──────────────────────────────────

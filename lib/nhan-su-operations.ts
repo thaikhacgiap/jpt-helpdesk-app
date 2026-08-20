@@ -38,23 +38,35 @@ export async function generateNextMaNhanSu(): Promise<string> {
   return `NS-${String(max + 1).padStart(3, '0')}`
 }
 
-// Fetch all nhan su
+// Fetch all nhan su (Uncapped with Chunked Pagination)
 export async function fetchNhanSu(): Promise<NhanSu[]> {
   try {
-    const { data, error } = await supabase
-      .from('nhan_su')
-      .select('*')
-      .order('created_at', { ascending: true })
+    const PAGE_SIZE = 1000;
+    let allData: NhanSu[] = [];
+    let from = 0;
 
-    if (error) {
-      console.error('Error fetching nhan_su:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('nhan_su')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('Error fetching nhan_su:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    return data || []
+    return allData;
   } catch (error) {
-    console.error('Error fetching nhan_su:', error)
-    return []
+    console.error('Error fetching nhan_su:', error);
+    return [];
   }
 }
 

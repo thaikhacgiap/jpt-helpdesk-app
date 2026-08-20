@@ -82,20 +82,23 @@ const ContractTable = forwardRef<any, ContractTableProps>(({
   });
 
   const getStatusBadge = (status?: string) => {
-    const s = status?.toLowerCase() || "active";
-    if (s.includes("active") || s.includes("hiệu lực") || s.includes("đang")) {
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Active</span>;
+    const s = (status || "").trim().toLowerCase();
+    if (s === "đang triển khai" || s === "active" || s.includes("hiệu lực") || s.includes("đang")) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Đang triển khai</span>;
     }
-    if (s.includes("expire") || s.includes("hết hạn")) {
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Hết hạn</span>;
+    if (s === "hoàn thành" || s.includes("hoàn thành") || s.includes("closed")) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-300">Hoàn thành</span>;
     }
-    if (s.includes("pending") || s.includes("chờ")) {
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Pending</span>;
+    if (s === "hỗ trợ kỹ thuật" || s.includes("hỗ trợ")) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-300">Hỗ trợ kỹ thuật</span>;
     }
-    if (s.includes("thanh lý") || s.includes("closed")) {
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">Thanh lý</span>;
+    if (s === "nháp" || s.includes("nháp") || s.includes("pending") || s.includes("chờ")) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Nháp</span>;
     }
-    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-300">{status || "Active"}</span>;
+    if (s === "hủy" || s.includes("hủy") || s.includes("expire") || s.includes("hết hạn")) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Hủy</span>;
+    }
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">{status || "—"}</span>;
   };
 
   return (

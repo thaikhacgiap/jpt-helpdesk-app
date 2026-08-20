@@ -72,28 +72,41 @@ function normalizeContract(c: any): Contract {
   };
 }
 
-// ─── Fetch All Contracts ──────────────────────────────────────
+// ─── Fetch All Contracts (Uncapped with Chunked Pagination) ──
 export async function fetchContracts(): Promise<Contract[]> {
   try {
-    const { data, error } = await supabase
-      .from("contracts")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let from = 0;
 
-    if (error) {
-      console.warn("Supabase fetch contracts warning:", error.message);
-      if (typeof window !== "undefined") {
-        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (cached) {
-          return JSON.parse(cached).map(normalizeContract);
-        }
+    while (true) {
+      const { data, error } = await supabase
+        .from("contracts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.warn("Supabase fetch contracts warning:", error.message);
+        break;
       }
-      return [];
+
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    const normalized = (data || []).map(normalizeContract);
+    if (allData.length === 0 && typeof window !== "undefined") {
+      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (cached) {
+        return JSON.parse(cached).map(normalizeContract);
+      }
+    }
 
-    if (typeof window !== "undefined" && data) {
+    const normalized = allData.map(normalizeContract);
+
+    if (typeof window !== "undefined" && normalized.length > 0) {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(normalized));
     }
     return normalized;

@@ -21,28 +21,40 @@ export interface Opportunity {
 
 const LOCAL_STORAGE_KEY = "jpt_helpdesk_opportunities_cache";
 
-// ─── Fetch All Opportunities ──────────────────────────────────
+// ─── Fetch All Opportunities (Uncapped with Chunked Pagination) ──
 export async function fetchOpportunities(): Promise<Opportunity[]> {
   try {
-    const { data, error } = await supabase
-      .from("opportunities")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const PAGE_SIZE = 1000;
+    let allData: Opportunity[] = [];
+    let from = 0;
 
-    if (error) {
-      console.warn("Supabase fetch opportunities warning:", error.message);
-      // Fallback to localStorage if table is not yet provisioned in Supabase
-      if (typeof window !== "undefined") {
-        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (cached) return JSON.parse(cached);
+    while (true) {
+      const { data, error } = await supabase
+        .from("opportunities")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.warn("Supabase fetch opportunities warning:", error.message);
+        break;
       }
-      return [];
+
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    if (typeof window !== "undefined" && data) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+    if (allData.length === 0 && typeof window !== "undefined") {
+      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (cached) return JSON.parse(cached);
     }
-    return data || [];
+
+    if (typeof window !== "undefined" && allData.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(allData));
+    }
+    return allData;
   } catch (err) {
     console.error("fetchOpportunities error:", err);
     if (typeof window !== "undefined") {

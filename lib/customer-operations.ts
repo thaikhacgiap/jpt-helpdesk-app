@@ -190,23 +190,35 @@ export async function createCustomer(formData: any): Promise<{ success: boolean;
   }
 }
 
-// Fetch all customers
+// Fetch all customers (Uncapped with Chunked Pagination)
 export async function fetchCustomers(): Promise<Customer[]> {
   try {
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const PAGE_SIZE = 1000;
+    let allData: Customer[] = [];
+    let from = 0;
 
-    if (error) {
-      console.error('Error fetching customers:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('Error fetching customers:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    return data || []
+    return allData;
   } catch (error) {
-    console.error('Error fetching customers:', error)
-    return []
+    console.error('Error fetching customers:', error);
+    return [];
   }
 }
 

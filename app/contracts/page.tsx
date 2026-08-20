@@ -32,7 +32,16 @@ export default function ContractsPage() {
 
   const loadStats = async () => {
     const data = await fetchContracts();
-    const active = data.filter(c => (c.status || "active").toLowerCase().includes("active") || (c.status || "").toLowerCase().includes("hiệu lực")).length;
+    const active = data.filter(c => {
+      const s = (c.status || "").trim().toLowerCase();
+      return (
+        s === "đang triển khai" ||
+        s === "hỗ trợ kỹ thuật" ||
+        s === "active" ||
+        s.includes("hiệu lực") ||
+        s.includes("đang")
+      );
+    }).length;
     const uniqueCustomers = new Set(data.map(c => c.customer).filter(Boolean)).size;
     const lastSyncTime = localStorage.getItem("jpt_contract_last_sync_time") || "Chưa đồng bộ";
     setStats({ total: data.length, active, customers: uniqueCustomers, lastSync: lastSyncTime });
@@ -208,7 +217,7 @@ export default function ContractsPage() {
               <div>
                 <p className="text-[11px] text-slate-500 font-medium">Đang Hiệu Lực</p>
                 <p className="text-xl font-bold text-emerald-600 mt-0.5">{stats.active}</p>
-                <p className="text-[11px] text-emerald-500">Trạng thái Active</p>
+                <p className="text-[11px] text-emerald-500">Đang triển khai / Active</p>
               </div>
               <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                 <ShieldCheck size={16} className="text-emerald-600" />
@@ -259,7 +268,7 @@ export default function ContractsPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between mb-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 shrink-0">
           {/* Left */}
           <div className="flex items-center gap-2">
             <button
@@ -289,10 +298,11 @@ export default function ContractsPage() {
               className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
             >
               <option value="ALL">Tất cả trạng thái</option>
-              <option value="Active">Active (Hiệu lực)</option>
-              <option value="Pending">Pending (Chờ duyệt)</option>
-              <option value="Hết hạn">Hết hạn</option>
-              <option value="Thanh lý">Thanh lý</option>
+              <option value="Đang triển khai">Đang triển khai</option>
+              <option value="Hoàn thành">Hoàn thành</option>
+              <option value="Hỗ trợ kỹ thuật">Hỗ trợ kỹ thuật</option>
+              <option value="Nháp">Nháp</option>
+              <option value="Hủy">Hủy</option>
             </select>
           </div>
 
