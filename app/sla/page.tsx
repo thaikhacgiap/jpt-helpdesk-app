@@ -6,6 +6,13 @@ import Header from "@/components/layout/header";
 import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchSLASettings,
+  saveSLASetting,
+  deleteSLASetting,
+  generateSlaId,
+  type SLASetting,
+} from "@/lib/sla-operations";
 import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
 import {
@@ -14,21 +21,8 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────── */
-/* Types                                                       */
+/* Constants                                                   */
 /* ─────────────────────────────────────────────────────────── */
-interface SLASetting {
-  id: string;
-  sla_id: string;
-  customer_id: string | null;
-  customer_name: string | null;
-  contract_id: string | null;
-  contract_no: string | null;
-  priority: string;
-  response_time: number;
-  resolve_time: number;
-  created_at: string;
-}
-
 const PRIORITIES = ["L1", "L2", "L3", "L4"];
 
 const PRIORITY_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -37,29 +31,6 @@ const PRIORITY_META: Record<string, { label: string; color: string; bg: string; 
   L3: { label: "L3 (Minor)",    color: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-200" },
   L4: { label: "L4 (Warning)",  color: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200" },
 };
-
-/* ─────────────────────────────────────────────────────────── */
-/* DB helpers                                                  */
-/* ─────────────────────────────────────────────────────────── */
-async function fetchSLASettings(): Promise<SLASetting[]> {
-  const { data, error } = await supabase
-    .from("sla_settings")
-    .select("*")
-    .order("sla_id", { ascending: true });
-  if (error) { console.error(error); return []; }
-  return data as SLASetting[];
-}
-
-async function generateSlaId(): Promise<string> {
-  const { data } = await supabase
-    .from("sla_settings")
-    .select("sla_id")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  if (!data || data.length === 0) return "SLA-001";
-  const num = parseInt(data[0].sla_id.split("-")[1] || "0") + 1;
-  return `SLA-${String(num).padStart(3, "0")}`;
-}
 
 /* ─────────────────────────────────────────────────────────── */
 /* Customer picker sub-component                               */
@@ -286,22 +257,21 @@ function SlaModal({ mode, initial, customers, onClose, onSave }: ModalProps) {
     try {
       if (mode === "edit" && initial) {
         // Edit: update only the matching priority row
-        const { error } = await supabase.from("sla_settings").update({
+        await saveSLASetting({
+          id:             initial.id,
           customer_id:    selectedCustomer.id,
           customer_name:  selectedCustomer.name,
           contract_id:    selectedContract?.id || null,
           contract_no:    selectedContract?.contract_no || selectedContract?.code || null,
+          priority:       initial.priority,
           response_time:  parseInt(rows[initial.priority].response) || 0,
           resolve_time:   parseInt(rows[initial.priority].resolve) || 0,
-          updated_at:     new Date().toISOString(),
-        }).eq("id", initial.id);
-        if (error) { alert("Lỗi: " + error.message); setSaving(false); return; }
+        });
       } else {
         // Add: insert one row per priority that has values
-        const inserts = [];
         for (const p of PRIORITIES) {
           const slaId = await generateSlaId();
-          inserts.push({
+          await saveSLASetting({
             sla_id:         slaId,
             customer_id:    selectedCustomer.id,
             customer_name:  selectedCustomer.name,
@@ -312,13 +282,10 @@ function SlaModal({ mode, initial, customers, onClose, onSave }: ModalProps) {
             resolve_time:   parseInt(rows[p].resolve) || 0,
           });
         }
-        // Insert one by one to get sequential SLA IDs
-        for (const ins of inserts) {
-          const { error } = await supabase.from("sla_settings").insert([ins]);
-          if (error) { alert("Lỗi: " + error.message); setSaving(false); return; }
-        }
       }
       onSave();
+    } catch (err: any) {
+      alert("Lỗi khi lưu SLA: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -460,8 +427,8 @@ export default function SlaPage() {
 
   const handleDelete = async (id: string, slaId: string) => {
     if (!confirm(`Xóa cấu hình ${slaId}?`)) return;
-    const { error } = await supabase.from("sla_settings").delete().eq("id", id);
-    if (error) { alert("Lỗi xóa: " + error.message); return; }
+    const res = await deleteSLASetting(id);
+    if (!res.success) { alert("Lỗi xóa: " + res.error); return; }
     setSettings((s) => s.filter((x) => x.id !== id));
   };
 

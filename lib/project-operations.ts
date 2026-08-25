@@ -614,6 +614,427 @@ const DEFAULT_PROJECTS: Project[] = [
     timeline: [],
     documents: [],
     diary: []
+  },
+  {
+    id: "proj-5",
+    code: "PROJ-2026-005",
+    name: "Triển khai Tích hợp Hệ thống F5 BIG-IP & Bảo mật WAF Multi-Site",
+    customer: "Ngân hàng TMCP Sài Gòn Thương Tín (Sacombank)",
+    manager: "Phạm Văn Hùng",
+    startDate: "2026-08-01",
+    endDate: "2026-10-31",
+    budget: 850000000,
+    status: "Active",
+    description: "Dự án triển khai tích hợp cụm cân bằng tải F5 BIG-IP iSeries kết hợp tường lửa ứng dụng web F5 Advanced WAF (ASM) và DNS Load Balancing (GTM) đa trung tâm dữ liệu (DC & DR) cho toàn bộ hệ thống Ngân hàng điện tử Sacombank.",
+    progress: 54,
+    sow: [
+      { item: "Khảo sát & Thiết kế", deliverable: "Tài liệu HLD, LLD & MOP đã được phê duyệt", status: "Đã hoàn thành" },
+      { item: "Lắp đặt & HA Cluster", deliverable: "Cụm thiết bị F5 BIG-IP tại DC và DR hoạt động HA", status: "Đã hoàn thành" },
+      { item: "Cấu hình LTM & WAF", deliverable: "Chính sách LTM, SSL Offloading, iRules & WAF Policy OWASP", status: "Đang thực hiện" },
+      { item: "Kiểm thử & Nghiệm thu", deliverable: "Biên bản Stress Test, Di chuyển lưu lượng & PAC", status: "Chưa bắt đầu" }
+    ],
+    plan: [
+      {
+        id: "task-5-1",
+        title: "Phase 1: Khảo sát & Thiết kế Kiến trúc",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Phạm Văn Hùng, Lê Văn C",
+        startDate: "2026-08-01",
+        endDate: "2026-08-12",
+        actualStartDate: "2026-08-01",
+        actualEndDate: "2026-08-12",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1",
+        isHeader: true
+      },
+      {
+        id: "task-5-1-1",
+        title: "Khảo sát hiện trạng hạ tầng mạng & hệ thống máy chủ DC / DR",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-01",
+        endDate: "2026-08-03",
+        actualStartDate: "2026-08-01",
+        actualEndDate: "2026-08-03",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.1",
+        isHeader: false
+      },
+      {
+        id: "task-5-1-2",
+        title: "Xây dựng tài liệu thiết kế kiến trúc tổng thể High-Level Design (HLD)",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Phạm Văn Hùng",
+        startDate: "2026-08-04",
+        endDate: "2026-08-06",
+        actualStartDate: "2026-08-04",
+        actualEndDate: "2026-08-06",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.2",
+        isHeader: false
+      },
+      {
+        id: "task-5-1-3",
+        title: "Thiết kế chi tiết cấu hình mạng, VLAN, IP và Dynamic Routing BGP/OSPF",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-06",
+        endDate: "2026-08-08",
+        actualStartDate: "2026-08-06",
+        actualEndDate: "2026-08-08",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.3",
+        isHeader: false
+      },
+      {
+        id: "task-5-1-4",
+        title: "Họp rà soát giải pháp an ninh mạng & tuân thủ bảo mật với Khối CNTT",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Phạm Văn Hùng, Nguyễn Văn A",
+        startDate: "2026-08-09",
+        endDate: "2026-08-10",
+        actualStartDate: "2026-08-09",
+        actualEndDate: "2026-08-10",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.4",
+        isHeader: false
+      },
+      {
+        id: "task-5-1-5",
+        title: "Phê duyệt phương án kỹ thuật chi tiết (LLD) và kế hoạch chuyển đổi (MOP)",
+        phase: "Phase 1: Khảo sát & Thiết kế",
+        assignee: "Phạm Văn Hùng",
+        startDate: "2026-08-11",
+        endDate: "2026-08-12",
+        actualStartDate: "2026-08-11",
+        actualEndDate: "2026-08-12",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "1.5",
+        isHeader: false
+      },
+      {
+        id: "task-5-2",
+        title: "Phase 2: Lắp đặt Phần cứng & Cấu hình Cơ bản",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Lê Văn C, Phạm Minh D",
+        startDate: "2026-08-13",
+        endDate: "2026-08-22",
+        actualStartDate: "2026-08-13",
+        status: "In Progress",
+        progress: 96,
+        taskIndex: "2",
+        isHeader: true
+      },
+      {
+        id: "task-5-2-1",
+        title: "Kiểm tra nghiệm thu thiết bị vật lý F5 BIG-IP tại DC chính và DC dự phòng",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Phạm Minh D",
+        startDate: "2026-08-13",
+        endDate: "2026-08-14",
+        actualStartDate: "2026-08-13",
+        actualEndDate: "2026-08-14",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.1",
+        isHeader: false
+      },
+      {
+        id: "task-5-2-2",
+        title: "Lắp đặt thiết bị vào rack tủ mạng, kết nối nguồn điện kép và đấu nối cáp quang",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Phạm Minh D",
+        startDate: "2026-08-15",
+        endDate: "2026-08-16",
+        actualStartDate: "2026-08-15",
+        actualEndDate: "2026-08-16",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.2",
+        isHeader: false
+      },
+      {
+        id: "task-5-2-3",
+        title: "Cấu hình Management IP, kích hoạt License Enterprise và cập nhật TMOS firmware",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-17",
+        endDate: "2026-08-18",
+        actualStartDate: "2026-08-17",
+        actualEndDate: "2026-08-18",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.3",
+        isHeader: false
+      },
+      {
+        id: "task-5-2-4",
+        title: "Thiết lập cụm dự phòng độ sẵn sàng cao High Availability (HA Sync-Failover)",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-19",
+        endDate: "2026-08-20",
+        actualStartDate: "2026-08-19",
+        actualEndDate: "2026-08-20",
+        status: "Completed",
+        progress: 100,
+        taskIndex: "2.4",
+        isHeader: false
+      },
+      {
+        id: "task-5-2-5",
+        title: "Kiểm tra đồng bộ trạng thái ConfigSync và kiểm thử chuyển mạch Failover",
+        phase: "Phase 2: Lắp đặt & Cấu hình HA",
+        assignee: "Lê Văn C, Phạm Minh D",
+        startDate: "2026-08-21",
+        endDate: "2026-08-22",
+        actualStartDate: "2026-08-21",
+        status: "In Progress",
+        progress: 80,
+        taskIndex: "2.5",
+        isHeader: false
+      },
+      {
+        id: "task-5-3",
+        title: "Phase 3: Triển khai Cấu hình Dịch vụ & WAF",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Lê Văn C, Phạm Văn Hùng",
+        startDate: "2026-08-23",
+        endDate: "2026-09-18",
+        actualStartDate: "2026-08-23",
+        status: "In Progress",
+        progress: 38,
+        taskIndex: "3",
+        isHeader: true
+      },
+      {
+        id: "task-5-3-1",
+        title: "Cấu hình LTM: Khởi tạo Virtual Servers, Backend Pools, Nodes & Health Monitors",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-23",
+        endDate: "2026-08-27",
+        actualStartDate: "2026-08-23",
+        status: "In Progress",
+        progress: 75,
+        taskIndex: "3.1",
+        isHeader: false
+      },
+      {
+        id: "task-5-3-2",
+        title: "Cấu hình SSL/TLS Offloading, Cipher Suites bảo mật cao & import SSL Certificate",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Lê Văn C",
+        startDate: "2026-08-28",
+        endDate: "2026-08-31",
+        actualStartDate: "2026-08-28",
+        status: "In Progress",
+        progress: 60,
+        taskIndex: "3.2",
+        isHeader: false
+      },
+      {
+        id: "task-5-3-3",
+        title: "Viết và tối ưu kịch bản iRules tùy biến điều phối luồng HTTP Header / URI",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Phạm Văn Hùng",
+        startDate: "2026-09-01",
+        endDate: "2026-09-05",
+        status: "In Progress",
+        progress: 50,
+        taskIndex: "3.3",
+        isHeader: false
+      },
+      {
+        id: "task-5-3-4",
+        title: "Kích hoạt Module Advanced WAF (ASM) và triển khai bộ Policy phòng chống OWASP Top 10",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Lê Văn C, Phạm Văn Hùng",
+        startDate: "2026-09-06",
+        endDate: "2026-09-10",
+        status: "In Progress",
+        progress: 40,
+        taskIndex: "3.4",
+        isHeader: false
+      },
+      {
+        id: "task-5-3-5",
+        title: "Cấu hình Layer 7 DoS / DDoS Mitigation, Rate Limiting và Bot Defense",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Phạm Văn Hùng",
+        startDate: "2026-09-11",
+        endDate: "2026-09-14",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "3.5",
+        isHeader: false
+      },
+      {
+        id: "task-5-3-6",
+        title: "Cấu hình DNS Global Server Load Balancing (GTM) điều phối tải đa điểm DC-DR",
+        phase: "Phase 3: Dịch vụ & WAF Policy",
+        assignee: "Lê Văn C",
+        startDate: "2026-09-15",
+        endDate: "2026-09-18",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "3.6",
+        isHeader: false
+      },
+      {
+        id: "task-5-4",
+        title: "Phase 4: Kiểm thử, Nghiệm thu & Chuyển giao",
+        phase: "Phase 4: Kiểm thử & Nghiệm thu",
+        assignee: "Phạm Văn Hùng, Lê Văn C, Phạm Minh D",
+        startDate: "2026-09-19",
+        endDate: "2026-10-31",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "4",
+        isHeader: true
+      },
+      {
+        id: "task-5-4-1",
+        title: "Thực hiện kiểm thử tải Stress Test & Penetration Test kịch bản 50,000 CCU",
+        phase: "Phase 4: Kiểm thử & Nghiệm thu",
+        assignee: "Phạm Minh D, Lê Văn C",
+        startDate: "2026-09-19",
+        endDate: "2026-09-25",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "4.1",
+        isHeader: false
+      },
+      {
+        id: "task-5-4-2",
+        title: "Thực hiện di chuyển luồng dịch vụ thực tế ngoài giờ cao điểm (Traffic Cutover)",
+        phase: "Phase 4: Kiểm thử & Nghiệm thu",
+        assignee: "Lê Văn C, Phạm Văn Hùng",
+        startDate: "2026-09-26",
+        endDate: "2026-10-05",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "4.2",
+        isHeader: false
+      },
+      {
+        id: "task-5-4-3",
+        title: "Tổ chức đào tạo chuyển giao công nghệ và hướng dẫn vận hành cho kỹ sư IT Ops",
+        phase: "Phase 4: Kiểm thử & Nghiệm thu",
+        assignee: "Phạm Văn Hùng",
+        startDate: "2026-10-06",
+        endDate: "2026-10-15",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "4.3",
+        isHeader: false
+      },
+      {
+        id: "task-5-4-4",
+        title: "Bàn giao bộ tài liệu hoàn công As-Built và ký biên bản nghiệm thu kỹ thuật (PAC)",
+        phase: "Phase 4: Kiểm thử & Nghiệm thu",
+        assignee: "Phạm Văn Hùng, Nguyễn Văn A",
+        startDate: "2026-10-16",
+        endDate: "2026-10-31",
+        status: "Todo",
+        progress: 0,
+        taskIndex: "4.4",
+        isHeader: false
+      }
+    ],
+    timeline: [
+      {
+        id: "ms-5-1",
+        title: "Phê duyệt LLD & Kế hoạch MOP",
+        description: "Hoàn tất giai đoạn khảo sát, ký duyệt tài liệu thiết kế kỹ thuật thi công.",
+        plannedDate: "2026-08-12",
+        actualDate: "2026-08-12",
+        status: "Reached",
+        type: "Milestone"
+      },
+      {
+        id: "ms-5-2",
+        title: "Hoàn tất Lắp đặt & Cấu hình HA Cluster",
+        description: "Thiết bị F5 BIG-IP tại DC và DR sẵn sàng ở trạng thái High Availability.",
+        plannedDate: "2026-08-22",
+        status: "Pending",
+        type: "Milestone"
+      },
+      {
+        id: "ms-5-3",
+        title: "Hoàn thành Cấu hình WAF & GTM Policy",
+        description: "Cấu hình Virtual Servers, SSL Offload, WAF OWASP Top 10 và GTM Sync.",
+        plannedDate: "2026-09-18",
+        status: "Pending",
+        type: "Review"
+      },
+      {
+        id: "ms-5-4",
+        title: "Nghiệm thu Dự án (PAC Signing)",
+        description: "Hoàn tất cutover, đào tạo vận hành và ký biên bản nghiệm thu đưa vào sản xuất.",
+        plannedDate: "2026-10-31",
+        status: "Pending",
+        type: "Release"
+      }
+    ],
+    documents: [
+      {
+        id: "doc-5-1",
+        name: "Tai_Lieu_Thiet_Ke_LLD_F5_BIGIP_Sacombank.pdf",
+        type: "pdf",
+        size: "5.4 MB",
+        uploadedDate: "2026-08-12",
+        uploader: "Phạm Văn Hùng",
+        category: "Design"
+      },
+      {
+        id: "doc-5-2",
+        name: "Ke_Hoach_Chuyen_Doi_MOP_Cutover_F5.docx",
+        type: "docx",
+        size: "2.1 MB",
+        uploadedDate: "2026-08-12",
+        uploader: "Lê Văn C",
+        category: "Survey"
+      },
+      {
+        id: "doc-5-3",
+        name: "Hop_Dong_Trien_Khai_F5_WAF_Sacombank.pdf",
+        type: "pdf",
+        size: "4.2 MB",
+        uploadedDate: "2026-08-01",
+        uploader: "Nguyễn Văn Quang",
+        category: "Contract"
+      }
+    ],
+    diary: [
+      {
+        id: "diary-5-1",
+        author: "Phạm Văn Hùng",
+        timestamp: "2026-08-12T16:30:00Z",
+        content: "Đã hoàn thành buổi bảo vệ tài liệu LLD với Ban Giám đốc Khối CNTT Sacombank. Phương án kiến trúc HA và WAF Policy được duyệt 100%.",
+        category: "Milestone"
+      },
+      {
+        id: "diary-5-2",
+        author: "Lê Văn C",
+        timestamp: "2026-08-20T14:15:00Z",
+        content: "Đã hoàn tất lắp đặt phần cứng tại cả 2 site DC Tân Bình và DR Bình Dương. Cụm HA đã sync cấu hình TMOS thành công.",
+        category: "Update"
+      },
+      {
+        id: "diary-5-3",
+        author: "Phạm Minh D",
+        timestamp: "2026-08-24T10:00:00Z",
+        content: "Bắt đầu cấu hình Virtual Servers cho phân hệ Internet Banking và Mobile Banking API gateway.",
+        category: "Update"
+      }
+    ]
   }
 ];
 
@@ -641,6 +1062,10 @@ function getStoredProjects(): Project[] {
     if (!list.some(p => p.id === "proj-4")) {
       const proj4 = DEFAULT_PROJECTS.find(p => p.id === "proj-4");
       if (proj4) { list.push(proj4); updated = true; }
+    }
+    if (!list.some(p => p.id === "proj-5")) {
+      const proj5 = DEFAULT_PROJECTS.find(p => p.id === "proj-5");
+      if (proj5) { list.push(proj5); updated = true; }
     }
     if (updated) {
       localStorage.setItem('jpt_projects', JSON.stringify(list));
