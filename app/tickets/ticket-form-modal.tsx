@@ -18,6 +18,7 @@ import { Contact, fetchContactsByCustomerCode } from "@/lib/contact-operations";
 import { supabase } from "@/lib/supabase";
 import AttachmentUploader from "@/components/common/attachment-uploader";
 import { AttachedFile } from "@/lib/storage-service";
+import { getCurrentUser } from "@/lib/auth-operations";
 
 /* ═══════════════════════════════════════════════════════════ */
 /* Types                                                       */
@@ -4374,6 +4375,7 @@ export default function TicketFormModal({
       if (currentStep === "create") {
         if (mode === "create" && !savedTicketId) {
           /* Create new ticket */
+          const currentUser = getCurrentUser();
           const res = await createTicket({
             title:        createData.title,
             description:  createData.description,
@@ -4385,6 +4387,7 @@ export default function TicketFormModal({
             progress:     progressStr,
             customerId:   checkData.customerId   || null,
             customerName: checkData.customerName || null,
+            creatorName:  currentUser?.name      || checkData.saleName || undefined,
           });
           if (!res.success) { alert("Lỗi tạo ticket: " + res.error); return; }
           setSavedTicketId(res.dbId || "");

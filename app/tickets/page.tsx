@@ -142,16 +142,49 @@ function FilterDropdown({
 }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
-const timeAgo = (dateStr?: string) => {
-  if (!dateStr) return "—";
+const parseServerDate = (dateStr?: string): Date | null => {
+  if (!dateStr) return null;
   try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
+    let s = String(dateStr).trim();
+    if (!s || s === "—" || s === "null" || s === "undefined") return null;
+
+    // Handle format DD-MM-YYYY or DD/MM/YYYY
+    if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(s)) {
+      const parts = s.split(/[-/ :]/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const min = parts[4] ? parseInt(parts[4], 10) : 0;
+        const sec = parts[5] ? parseInt(parts[5], 10) : 0;
+        return new Date(year, month, day, hour, min, sec);
+      }
+    }
+
+    // Handle format YYYY-MM-DD HH:mm:ss without timezone: Supabase timestamp is UTC, so treat as UTC
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/.test(s)) {
+      if (!s.endsWith("Z") && !/[+-]\d{2}(:?\d{2})?$/.test(s)) {
+        s = s.replace(" ", "T") + "Z";
+      }
+    }
+
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+};
+
+const timeAgo = (dateStr?: string) => {
+  const date = parseServerDate(dateStr);
+  if (!date) return dateStr || "—";
+  try {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
     if (seconds < 0) {
-      return dateStr;
+      return "vừa xong";
     }
 
     const intervals = [
@@ -170,45 +203,102 @@ const timeAgo = (dateStr?: string) => {
     }
     return "vừa xong";
   } catch {
-    return dateStr;
+    return dateStr || "—";
   }
 };
 
 const formatDateTime = (dateStr?: string) => {
-  if (!dateStr) return "—";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const pad = (num: number) => String(num).padStart(2, "0");
-    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-  } catch {
-    return dateStr;
-  }
+  const d = parseServerDate(dateStr);
+  if (!d) return dateStr || "—";
+  const pad = (num: number) => String(num).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
 const formatDuration = (ticket: Ticket) => {
-  if (ticket.duration) return ticket.duration;
-  const start = ticket.start_time || ticket.startTime;
-  const end = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
+  if (ticket.duration && ticket.duration !== "—") return ticket.duration;
+  const start = parseServerDate(ticket.start_time || ticket.startTime || ticket.created_at || ticket.created_time);
   if (!start) return "—";
-  try {
-    const startDate = new Date(start);
-    if (isNaN(startDate.getTime())) return "—";
-    const endDate = end ? new Date(end) : null;
-    if (endDate && !isNaN(endDate.getTime())) {
-      const diffMs = endDate.getTime() - startDate.getTime();
-      if (diffMs < 0) return "—";
-      const totalMinutes = Math.floor(diffMs / (1000 * 60));
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
-      if (hours > 0) return `${hours}h`;
-      return `${minutes}m`;
-    }
-    return "—";
-  } catch {
-    return "—";
+
+  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel";
+  const endStr = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
+  const end = (isCompleted && endStr) ? (parseServerDate(endStr) || new Date()) : new Date();
+
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs < 0) return "0 phút";
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return `${days} ngày ${hours}h`;
   }
+  if (hours > 0) {
+    return `${hours} giờ ${minutes}p`;
+  }
+  return `${minutes} phút`;
+};
+
+const getTicketSlaInfo = (ticket: Ticket) => {
+  let slaHours = 24;
+  const p = (ticket.priority || "").toLowerCase();
+  if (p.includes("l1") || p.includes("critical")) slaHours = 2;
+  else if (p.includes("l2") || p.includes("major") || p.includes("high")) slaHours = 4;
+  else if (p.includes("l3") || p.includes("minor") || p.includes("medium")) slaHours = 24;
+  else if (p.includes("l4") || p.includes("warning") || p.includes("low")) slaHours = 48;
+
+  if (ticket.sla_time) {
+    const customMatch = String(ticket.sla_time).match(/^(\d+)/);
+    if (customMatch) {
+      const parsedVal = parseInt(customMatch[1], 10);
+      if (parsedVal > 0) {
+        slaHours = parsedVal;
+      }
+    }
+  }
+
+  const start = parseServerDate(ticket.start_time || ticket.startTime || ticket.created_at || ticket.created_time);
+  if (!start) {
+    return {
+      durationLabel: `${slaHours}h`,
+      deadlineLabel: "—",
+      status: ticket.sla_status || "Under SLA",
+    };
+  }
+
+  const deadline = new Date(start.getTime() + slaHours * 3600000);
+  const pad = (num: number) => String(num).padStart(2, "0");
+  const deadlineLabel = `${pad(deadline.getHours())}:${pad(deadline.getMinutes())} ${pad(deadline.getDate())}/${pad(deadline.getMonth() + 1)}`;
+
+  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed";
+  const endStr = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
+  const finishDate = (isCompleted && endStr) ? parseServerDate(endStr) : null;
+
+  let status: "Under SLA" | "Going to breach SLA" | "Failure SLA" = "Under SLA";
+  if (finishDate) {
+    if (finishDate.getTime() <= deadline.getTime()) {
+      status = "Under SLA";
+    } else {
+      status = "Failure SLA";
+    }
+  } else {
+    const now = new Date();
+    const remainingMs = deadline.getTime() - now.getTime();
+    if (remainingMs < 0) {
+      status = "Failure SLA";
+    } else if (remainingMs < slaHours * 3600000 * 0.25) {
+      status = "Going to breach SLA";
+    } else {
+      status = "Under SLA";
+    }
+  }
+
+  return {
+    durationLabel: `${slaHours}h`,
+    deadlineLabel,
+    status: ticket.sla_status || status,
+  };
 };
 
 const renderPriorityBadge = (priority?: string) => {
@@ -975,7 +1065,9 @@ export default function TicketsPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedTickets.map((ticket, index) => (
+                paginatedTickets.map((ticket, index) => {
+                  const slaInfo = getTicketSlaInfo(ticket);
+                  return (
                   <tr key={ticket.id || index} className="hover:bg-slate-50/70 transition text-sm font-normal divide-x divide-slate-200">
                     {/* Checkbox */}
                     <td className="px-3 py-2 text-center whitespace-nowrap border-b border-slate-200">
@@ -1038,11 +1130,16 @@ export default function TicketsPage() {
                     {/* SLA Time */}
                     {visibleColumns.sla_time && (
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
-                        {ticket.sla_time ? (
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs border border-slate-200">
-                            {ticket.sla_time}
+                        <div className="flex flex-col min-w-0" title={slaInfo.deadlineLabel !== "—" ? `Hạn xử lý SLA: ${slaInfo.deadlineLabel}` : undefined}>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 inline-block w-fit">
+                            {slaInfo.durationLabel}
                           </span>
-                        ) : "—"}
+                          {slaInfo.deadlineLabel !== "—" && (
+                            <span className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5 truncate">
+                              Hạn: {slaInfo.deadlineLabel}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     )}
 
@@ -1091,7 +1188,7 @@ export default function TicketsPage() {
                     {/* SLA Status */}
                     {visibleColumns.sla_status && (
                       <td className="px-3 py-2 whitespace-nowrap border-b border-slate-200">
-                        {renderSlaStatusBadge(ticket.sla_status)}
+                        {renderSlaStatusBadge(ticket.sla_status || slaInfo.status)}
                       </td>
                     )}
 
@@ -1128,7 +1225,8 @@ export default function TicketsPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

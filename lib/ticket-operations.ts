@@ -63,10 +63,38 @@ export async function generateNextPortalTicketId(): Promise<string> {
 }
 
 
+// Helper to get SLA duration based on priority level
+export function getDefaultSlaDuration(priority?: string): string {
+  const p = (priority || '').toLowerCase();
+  if (p.includes('l1') || p.includes('critical')) return '2h';
+  if (p.includes('l2') || p.includes('major') || p.includes('high')) return '4h';
+  if (p.includes('l3') || p.includes('minor') || p.includes('medium')) return '24h';
+  if (p.includes('l4') || p.includes('warning') || p.includes('low')) return '48h';
+  return '24h';
+}
+
 // Create new ticket
 export async function createTicket(formData: any): Promise<{ success: boolean; ticketId?: string; dbId?: string; error?: string }> {
   try {
     const ticketId = await generateNextTicketId()
+
+    // Determine creator name from formData or active user session
+    let creatorName = formData.creatorName || formData.creator_name || null;
+    if (!creatorName && typeof window !== 'undefined') {
+      try {
+        const authSession = localStorage.getItem('jpt_auth_session');
+        if (authSession) {
+          const parsed = JSON.parse(authSession);
+          if (parsed?.name) {
+            creatorName = parsed.name;
+          }
+        }
+      } catch {}
+    }
+
+    const nowIso = new Date().toISOString();
+    const startTime = formData.startTime || formData.start_time || nowIso;
+    const slaTime = formData.slaTime || formData.sla_time || getDefaultSlaDuration(formData.priority);
 
     const { data, error } = await supabase
       .from('tickets')
@@ -82,13 +110,13 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
         contract_scope: formData.contractScope || null,
         category:       formData.category      || null,
         priority:       formData.priority      || null,
-        creator_name:   formData.creatorName   || null,
+        creator_name:   creatorName,
         assigned:       Array.isArray(formData.assigned) ? formData.assigned.join(', ') : (formData.assigned || null),
         following:      Array.isArray(formData.following) ? formData.following.join(', ') : (formData.following || null),
         tt_status:      formData.ttStatus      || 'In progress',
-        sla_status:     formData.slaStatus     || null,
-        sla_time:       formData.slaTime       || null,
-        start_time:     formData.startTime     || null,
+        sla_status:     formData.slaStatus     || 'Under SLA',
+        sla_time:       slaTime,
+        start_time:     startTime,
         end_time:       formData.endTime       || null,
         tt_close_time:  formData.closeTime     || null,
         hold_time:      formData.holdTime      || null,
@@ -99,6 +127,8 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
         unhold_time:    formData.unholdTime    || null,
         onsite:         formData.onsite        || null,
         runbook:        formData.runbook       || null,
+        created_at:     nowIso,
+        updated_at:     nowIso,
       }])
       .select()
 
