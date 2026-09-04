@@ -12,6 +12,7 @@ import {
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
 import { 
   Search, 
   Plus, 
@@ -40,6 +41,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [staffList, setStaffList] = useState<NhanSu[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerContracts, setCustomerContracts] = useState<Contract[]>([]);
   
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +55,10 @@ export default function ProjectsPage() {
   const [formData, setFormData] = useState({
     code: "",
     name: "",
+    customerId: "",
     customer: "",
+    contractId: "",
+    contractNo: "",
     manager: "",
     startDate: "",
     endDate: "",
@@ -71,6 +76,38 @@ export default function ProjectsPage() {
 
   const refreshProjects = () => {
     setProjects(fetchProjects());
+  };
+
+  const handleCustomerChange = async (customerId: string) => {
+    const selectedCust = customers.find(c => c.id === customerId);
+    setFormData(prev => ({
+      ...prev,
+      customerId,
+      customer: selectedCust?.name || "",
+      contractId: "",
+      contractNo: ""
+    }));
+
+    if (customerId) {
+      try {
+        const contracts = await fetchContractsByCustomer(customerId);
+        setCustomerContracts(contracts);
+      } catch (err) {
+        console.error("Error fetching contracts for customer:", err);
+        setCustomerContracts([]);
+      }
+    } else {
+      setCustomerContracts([]);
+    }
+  };
+
+  const handleContractChange = (contractId: string) => {
+    const selectedContr = customerContracts.find(c => c.id === contractId);
+    setFormData(prev => ({
+      ...prev,
+      contractId,
+      contractNo: selectedContr?.contract_no || selectedContr?.code || ""
+    }));
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -109,7 +146,10 @@ export default function ProjectsPage() {
       setFormData({
         code: "",
         name: "",
+        customerId: "",
         customer: "",
+        contractId: "",
+        contractNo: "",
         manager: "",
         startDate: "",
         endDate: "",
@@ -117,6 +157,7 @@ export default function ProjectsPage() {
         status: "Planning",
         description: ""
       });
+      setCustomerContracts([]);
       refreshProjects();
     } catch (err) {
       setError("Không thể tạo dự án: " + String(err));
@@ -367,6 +408,13 @@ export default function ProjectsPage() {
                     <Building2 size={14} className="text-slate-400 shrink-0" />
                     <span className="font-semibold text-slate-700 truncate">{project.customer || "Chưa chọn khách hàng"}</span>
                   </div>
+                  {/* Contract */}
+                  {project.contractNo && (
+                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                      <FileText size={14} className="text-indigo-500 shrink-0" />
+                      <span className="text-slate-600">Hợp đồng: <span className="font-medium text-indigo-700">{project.contractNo}</span></span>
+                    </div>
+                  )}
                   {/* Manager */}
                   <div className="flex items-center gap-2 text-xs text-slate-600">
                     <User size={14} className="text-slate-400 shrink-0" />
@@ -437,7 +485,7 @@ export default function ProjectsPage() {
                 <tr className="text-xs text-slate-500 font-semibold bg-slate-50 border-b border-slate-200">
                   <th className="px-6 py-4">Mã</th>
                   <th className="px-6 py-4">Tên dự án</th>
-                  <th className="px-6 py-4">Khách hàng</th>
+                  <th className="px-6 py-4">Khách hàng & HĐ</th>
                   <th className="px-6 py-4">Chủ nhiệm (PM)</th>
                   <th className="px-6 py-4">Thời gian</th>
                   <th className="px-6 py-4 w-40">Tiến độ</th>
@@ -462,8 +510,14 @@ export default function ProjectsPage() {
                         {project.name}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 font-medium text-slate-600">
-                      {project.customer || "—"}
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-700">{project.customer || "—"}</div>
+                      {project.contractNo && (
+                        <div className="text-xs text-indigo-600 font-normal mt-0.5 flex items-center gap-1">
+                          <FileText size={11} />
+                          <span>HĐ: {project.contractNo}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-slate-650 mt-0.5">
                       {project.manager || "—"}
@@ -479,28 +533,30 @@ export default function ProjectsPage() {
                             style={{ width: `${project.progress}%` }}
                           />
                         </div>
-                        <span className="text-xs font-semibold text-slate-600 w-8 text-right shrink-0">{project.progress}%</span>
+                        <span className="text-xs font-semibold text-slate-600">{project.progress}%</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap">
-                      <span className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(project.status)}`}>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadgeClass(project.status)}`}>
                         {getStatusLabel(project.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="Chi tiết"
+                        >
+                          <ArrowRight size={16} />
+                        </Link>
                         <button
                           onClick={(e) => handleDelete(project.id, e)}
-                          className="p-1.5 hover:text-red-500 hover:bg-red-50 rounded-lg transition duration-150 cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                           title="Xóa dự án"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={16} />
                         </button>
-                        <Link href={`/projects/${project.id}`}>
-                          <div className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 group-hover:text-blue-500 hover:text-blue-600 transition cursor-pointer">
-                            <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
-                          </div>
-                        </Link>
                       </div>
                     </td>
                   </tr>
@@ -511,43 +567,43 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Add Project Modal Popup */}
+      {/* Modal: Create Project */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-scale-in">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 sticky top-0 bg-white z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-                  <Plus size={18} />
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  <Plus size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Thêm Dự Án Mới</h2>
-                  <p className="text-xs text-slate-500">Khởi tạo kế hoạch và cấu trúc dự án triển khai.</p>
+                  <h3 className="font-bold text-slate-800 text-lg">Khởi Tạo Dự Án Mới</h3>
+                  <p className="text-xs text-slate-500">Tạo dự án triển khai và phân công chủ nhiệm</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center gap-2">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-center gap-2">
                   <AlertTriangle size={16} className="shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Row 1: Code & Name */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Mã dự án <span className="text-slate-400 font-normal">(tự sinh nếu để trống)</span>
+                    Mã dự án <span className="text-slate-400 font-normal">(tự sinh)</span>
                   </label>
                   <input
                     type="text"
@@ -559,7 +615,7 @@ export default function ProjectsPage() {
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Tên dự án <span className="text-red-500">*</span>
                   </label>
@@ -575,30 +631,54 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 2: Customer & Manager */}
+              {/* Row 2: Customer & Contract (Matching) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Khách hàng / Đối tác
                   </label>
                   <select
-                    name="customer"
-                    value={formData.customer}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    value={formData.customerId}
+                    onChange={(e) => handleCustomerChange(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                   >
                     <option value="">-- Chọn khách hàng --</option>
                     {customers.map((c) => (
-                      <option key={c.id} value={c.name}>
+                      <option key={c.id} value={c.id}>
                         [{c.code}] {c.name}
                       </option>
                     ))}
-                    <option value="ACME Corp Việt Nam">ACME Corp Việt Nam (Mẫu)</option>
-                    <option value="Công ty Cổ phần Thép Việt">Công ty Cổ phần Thép Việt (Mẫu)</option>
-                    <option value="Ngân hàng Thương mại JPT">Ngân hàng Thương mại JPT (Mẫu)</option>
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                    Hợp đồng dịch vụ
+                  </label>
+                  <select
+                    value={formData.contractId}
+                    onChange={(e) => handleContractChange(e.target.value)}
+                    disabled={!formData.customerId || customerContracts.length === 0}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">
+                      {!formData.customerId 
+                        ? "-- Vui lòng chọn khách hàng trước --" 
+                        : customerContracts.length === 0 
+                        ? "-- Không có hợp đồng tương ứng --" 
+                        : "-- Chọn hợp đồng liên quan --"}
+                    </option>
+                    {customerContracts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.contract_no || c.code} - {c.service || c.name || "Hợp đồng"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: PM & Budget */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Chủ nhiệm dự án (PM)
@@ -607,22 +687,36 @@ export default function ProjectsPage() {
                     name="manager"
                     value={formData.manager}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                   >
                     <option value="">-- Chọn quản trị viên --</option>
                     {staffList.map((s) => (
                       <option key={s.id} value={s.ten_nhan_su}>
-                        {s.ten_nhan_su} ({s.bo_phan || "Nhân viên"})
+                        {s.ten_nhan_su} ({s.bo_phan || "Nhân sự"})
                       </option>
                     ))}
-                    <option value="John D.">John D. (Support)</option>
-                    <option value="Mike R.">Mike R. (Technical)</option>
-                    <option value="Tom H.">Tom H. (IT)</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                    Ngân sách dự toán (VNĐ)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="budget"
+                      value={formData.budget || ""}
+                      onChange={handleInputChange}
+                      placeholder="0"
+                      className="w-full px-3 py-2.5 pl-8 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition font-mono"
+                    />
+                    <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
                 </div>
               </div>
 
-              {/* Row 3: Dates */}
+              {/* Row 4: Dates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
@@ -637,10 +731,9 @@ export default function ProjectsPage() {
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Ngày kết thúc dự kiến <span className="text-red-500">*</span>
+                    Ngày kết thúc <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -653,7 +746,7 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 4: Status */}
+              {/* Row 5: Status */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Trạng thái khởi tạo
@@ -662,7 +755,7 @@ export default function ProjectsPage() {
                   name="status"
                   value={formData.status}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                 >
                   <option value="Planning">Lập kế hoạch (Planning)</option>
                   <option value="Active">Đang triển khai (Active)</option>

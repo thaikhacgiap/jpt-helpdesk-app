@@ -54,6 +54,9 @@ export interface Project {
   code: string;
   name: string;
   customer: string;
+  customerId?: string;
+  contractId?: string;
+  contractNo?: string;
   manager: string;
   startDate: string;
   endDate: string;

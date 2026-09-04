@@ -1209,19 +1209,26 @@ export default function ProjectDetailPage() {
                   )}
                   
                   {/* Additional Meta Details */}
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs">
                     <div className="space-y-1">
                       <span className="text-slate-400 font-medium block">Khách hàng</span>
                       <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <Building2 size={14} className="text-blue-500" />
-                        {project.customer}
+                        <Building2 size={14} className="text-blue-500 shrink-0" />
+                        <span className="truncate">{project.customer || "Chưa chọn khách hàng"}</span>
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-slate-400 font-medium block">Hợp đồng liên quan</span>
+                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                        <FileText size={14} className="text-indigo-500 shrink-0" />
+                        <span className="truncate">{project.contractNo || "Chưa gắn hợp đồng"}</span>
                       </span>
                     </div>
                     <div className="space-y-1">
                       <span className="text-slate-400 font-medium block">Chủ nhiệm (PM)</span>
                       <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <User size={14} className="text-purple-500" />
-                        {project.manager || "Chưa phân công"}
+                        <User size={14} className="text-purple-500 shrink-0" />
+                        <span className="truncate">{project.manager || "Chưa phân công"}</span>
                       </span>
                     </div>
                   </div>

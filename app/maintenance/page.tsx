@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter } from "lucide-react";
 
+import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+
 interface Task {
   id: string;
   parentId: string | null;
@@ -89,8 +91,8 @@ const calculateCycleProgress = (tasks: Task[]) => {
 export default function MaintenancePage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [allContracts, setAllContracts] = useState<any[]>([]);
-  const [filteredContracts, setFilteredContracts] = useState<any[]>([]);
+  const [allContracts, setAllContracts] = useState<Contract[]>([]);
+  const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
@@ -116,7 +118,7 @@ export default function MaintenancePage() {
     try {
       const { data } = await supabase
         .from("tickets")
-        .select("*, customer:customers(id, name), contract:contracts(id, name)")
+        .select("*, customer:customers(id, name, code), contract:contracts(id, contract_no, service, code, name)")
         .eq("tt_type", "Maintenance")
         .order("created_at", { ascending: false });
       setTickets(data || []);
@@ -135,10 +137,7 @@ export default function MaintenancePage() {
         .order("name", { ascending: true });
       setCustomers(custData || []);
 
-      const { data: contrData } = await supabase
-        .from("contracts")
-        .select("id, code, name, customer_id")
-        .order("name", { ascending: true });
+      const contrData = await fetchContracts();
       setAllContracts(contrData || []);
     } catch (err) {
       console.error("Error loading reference data:", err);
@@ -150,11 +149,16 @@ export default function MaintenancePage() {
     loadReferenceData();
   }, []);
 
-  const handleCustomerChange = (customerId: string) => {
+  const handleCustomerChange = async (customerId: string) => {
     setForm(f => ({ ...f, customerId, contractId: "" }));
     if (customerId) {
-      const matched = allContracts.filter(c => c.customer_id === customerId);
-      setFilteredContracts(matched);
+      try {
+        const matched = await fetchContractsByCustomer(customerId);
+        setFilteredContracts(matched);
+      } catch (err) {
+        console.error("Error loading contracts for customer:", err);
+        setFilteredContracts([]);
+      }
     } else {
       setFilteredContracts([]);
     }
@@ -204,7 +208,7 @@ export default function MaintenancePage() {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (plan: any) => {
+  const handleEdit = async (plan: any) => {
     setEditingPlan(plan);
     setForm({
       customerId: plan.customer_id || "",
@@ -215,8 +219,13 @@ export default function MaintenancePage() {
       description: plan.description || "",
     });
     if (plan.customer_id) {
-      const matched = allContracts.filter(c => c.customer_id === plan.customer_id);
-      setFilteredContracts(matched);
+      try {
+        const matched = await fetchContractsByCustomer(plan.customer_id);
+        setFilteredContracts(matched);
+      } catch (err) {
+        console.error("Error loading contracts for plan edit:", err);
+        setFilteredContracts([]);
+      }
     } else {
       setFilteredContracts([]);
     }
@@ -244,7 +253,7 @@ export default function MaintenancePage() {
       const progressStr = `${progressPercent}%`;
 
       const custObj = customers.find(c => c.id === form.customerId);
-      const contrObj = allContracts.find(c => c.id === form.contractId);
+      const contrObj = filteredContracts.find(c => c.id === form.contractId) || allContracts.find(c => c.id === form.contractId);
 
       const payload = {
         title: `Kế hoạch bảo trì - ${custObj?.name || "Khách hàng"}`,
@@ -252,7 +261,7 @@ export default function MaintenancePage() {
         customer_id: form.customerId,
         customer_name: custObj?.name || null,
         contract_id: form.contractId || null,
-        contract_no: contrObj?.name || null,
+        contract_no: contrObj?.contract_no || contrObj?.code || contrObj?.name || null,
         sla_time: String(form.currentPeriod),
         hold_time: String(form.totalPeriods),
         progress: progressStr,
@@ -300,7 +309,7 @@ export default function MaintenancePage() {
     const displayId = (t.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-').toLowerCase();
     const idMatch = displayId.includes(term);
     const custMatch = (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
-    const contrMatch = (t.contract?.name || t.contract_no || "")?.toLowerCase().includes(term);
+    const contrMatch = (t.contract?.contract_no || t.contract?.service || t.contract?.name || t.contract_no || "")?.toLowerCase().includes(term);
     
     const matchesSearch = idMatch || custMatch || contrMatch;
     const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
@@ -507,10 +516,10 @@ export default function MaintenancePage() {
           <td 
             className="sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 text-slate-700 text-sm font-normal max-w-[180px] truncate" 
             style={{ left: "198px", minWidth: "180px", width: "180px" }} 
-            title={t.contract?.name || t.contract_no}
+            title={t.contract_no || t.contract?.contract_no || t.contract?.name}
           >
             <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline">
-              {t.contract?.name || t.contract_no || "—"}
+              {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
             </Link>
           </td>
           
@@ -672,8 +681,8 @@ export default function MaintenancePage() {
                     <td className="px-4 py-3.5 text-slate-700 max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
                       {t.customer?.name || t.customer_name || "—"}
                     </td>
-                    <td className="px-4 py-3.5 text-slate-500 max-w-[200px] truncate" title={t.contract?.name || t.contract_no}>
-                      {t.contract?.name || t.contract_no || "—"}
+                    <td className="px-4 py-3.5 text-slate-500 max-w-[200px] truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
+                      {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
                     </td>
                     <td className="px-4 py-3.5 text-center font-medium text-slate-700">{t.sla_time || 0}</td>
                     <td className="px-4 py-3.5 text-center font-medium text-slate-500">{t.hold_time || 0}</td>
@@ -918,18 +927,24 @@ export default function MaintenancePage() {
               {/* Contract Select */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  Hợp đồng
+                  Hợp đồng dịch vụ
                 </label>
                 <select
                   value={form.contractId}
                   onChange={e => setForm(f => ({ ...f, contractId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-                  disabled={!form.customerId}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
+                  disabled={!form.customerId || filteredContracts.length === 0}
                 >
-                  <option value="">-- Chọn hợp đồng --</option>
+                  <option value="">
+                    {!form.customerId 
+                      ? "-- Vui lòng chọn khách hàng trước --" 
+                      : filteredContracts.length === 0 
+                      ? "-- Không có hợp đồng tương ứng --" 
+                      : "-- Chọn hợp đồng --"}
+                  </option>
                   {filteredContracts.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
+                      {c.contract_no || c.code} - {c.service || c.name || "Hợp đồng dịch vụ"}
                     </option>
                   ))}
                 </select>
