@@ -115,7 +115,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
   }
 }
 
-// Fetch all tickets
+// Fetch all tickets (excluding Requests and Maintenance plans)
 export async function fetchTickets(): Promise<Ticket[]> {
   try {
     const { data, error } = await supabase
@@ -128,7 +128,17 @@ export async function fetchTickets(): Promise<Ticket[]> {
       return []
     }
 
-    return data || []
+    // Filter out customer requests (CR-, TH-), internal requests (SR-, TR-), and maintenance plans (BTR-, Maintenance)
+    const ticketsOnly = (data || []).filter(t => {
+      const tid = (t.ticket_id || '').toUpperCase();
+      // Exclude Customer Requests / Requests
+      if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) return false;
+      // Exclude Maintenance plans
+      if (tid.startsWith('BTR-') || t.tt_type === 'Maintenance') return false;
+      return true;
+    });
+
+    return ticketsOnly;
   } catch (error) {
     console.error('Error fetching tickets:', error)
     return []

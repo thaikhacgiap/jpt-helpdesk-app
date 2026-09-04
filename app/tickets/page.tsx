@@ -426,6 +426,10 @@ export default function TicketsPage() {
     setFilters((f) => ({ ...f, [key]: val }));
 
   const filtered = tickets.filter((t) => {
+    const tid = (t.ticket_id || '').toUpperCase();
+    if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-') || t.tt_type === 'Maintenance') {
+      return false;
+    }
     if (search && !Object.values(t).some((v) => String(v ?? "").toLowerCase().includes(search.toLowerCase()))) return false;
     if (filters.tt_type && t.tt_type !== filters.tt_type) return false;
     if (filters.contract_scope && t.contract_scope !== filters.contract_scope) return false;

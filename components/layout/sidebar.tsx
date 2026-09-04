@@ -42,11 +42,15 @@ export default function Sidebar() {
       try {
         const { data, error } = await supabase
           .from("tickets")
-          .select("tt_status");
+          .select("ticket_id, tt_type, tt_status");
         if (!error && data) {
-          const ongoing = data.filter((t) =>
-            ["In progress", "On Hold", "Reporting"].includes(t.tt_status || "")
-          ).length;
+          const ongoing = data.filter((t) => {
+            const tid = (t.ticket_id || '').toUpperCase();
+            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-') || t.tt_type === 'Maintenance') {
+              return false;
+            }
+            return ["In progress", "On Hold", "Reporting"].includes(t.tt_status || "");
+          }).length;
           setOngoingCount(ongoing);
         }
       } catch (err) {
