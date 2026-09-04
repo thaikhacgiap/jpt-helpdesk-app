@@ -32,7 +32,7 @@ async function checkConnection() {
   console.log(`  ✓  Kết nối thành công (${ms}ms)`)
 
   // Kiểm tra tất cả các bảng cần thiết
-  const tables = ['tickets', 'customers', 'contracts', 'staff', 'nhan_su', 'contacts']
+  const tables = ['tickets', 'customers', 'contracts', 'nhan_su', 'contacts']
   for (const t of tables) {
     const { count, error: e } = await supabase.from(t).select('*', { count: 'exact', head: true })
     if (e) {
@@ -90,22 +90,18 @@ async function fetchReferences() {
   if (coe) console.warn(`  ⚠  Contracts  : ${coe.message}`)
   else console.log(`  ✓  Contracts  : ${contracts?.length ?? 0} bản ghi`)
 
-  // Staff (nhan_su hoặc staff)
+  // Nhân sự
   const { data: staff, error: se } = await supabase.from('nhan_su').select('id, ma_nhan_su, ten_nhan_su').limit(20)
   if (se) console.warn(`  ⚠  Nhan_su    : ${se.message}`)
   else console.log(`  ✓  Nhan_su    : ${staff?.length ?? 0} bản ghi`)
 
-  const { data: staffTable, error: ste } = await supabase.from('staff').select('id, name').limit(20)
-  if (ste) console.warn(`  ⚠  Staff      : ${ste.message}`)
-  else console.log(`  ✓  Staff      : ${staffTable?.length ?? 0} bản ghi`)
-
-  return { customers, contracts: contracts || [], staff: staff || [], staffTable: staffTable || [] }
+  return { customers, contracts: contracts || [], staff: staff || [] }
 }
 
 // ═══════════════════════════════════════════════════════
 // STEP 3: TẠO 20 TICKET MỚI
 // ═══════════════════════════════════════════════════════
-async function seedTickets({ customers, contracts, staff, staffTable }) {
+async function seedTickets({ customers, contracts, staff }) {
   console.log(`\n${line}`)
   console.log('  🎫 TẠO 20 TICKET MỚI')
   console.log(line)

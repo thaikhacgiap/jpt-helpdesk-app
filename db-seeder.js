@@ -288,9 +288,6 @@ async function seed() {
     console.log("Cleaning nhan_su...");
     await supabase.from("nhan_su").delete().neq("ma_nhan_su", "KEEP_NONE");
     
-    console.log("Cleaning staff...");
-    await supabase.from("staff").delete().neq("email", "KEEP_NONE");
-    
     console.log("Cleaning system_users...");
     await supabase.from("system_users").delete().neq("email", "KEEP_NONE");
     
@@ -316,10 +313,6 @@ async function seed() {
     console.log("Seeding nhan_su...");
     const { error: nsErr } = await supabase.from("nhan_su").insert(SEED_NHAN_SU);
     if (nsErr) throw nsErr;
-
-    console.log("Seeding staff...");
-    const { error: stErr } = await supabase.from("staff").upsert(SEED_STAFF, { onConflict: 'email' });
-    if (stErr) throw stErr;
 
     console.log("Seeding contacts...");
     const { error: cntErr } = await supabase.from("contacts").insert(SEED_CONTACTS);

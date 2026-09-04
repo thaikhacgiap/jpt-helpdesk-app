@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Báo cáo Hiện trạng & Cấu trúc Database - JPT Helpdesk</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-6 md:p-10">
+  <div class="max-w-7xl mx-auto space-y-8">
+    <!-- Header -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full uppercase tracking-wider">JPT Helpdesk v4.0</span>
+          <span class="text-xs text-slate-500">Cập nhật: 04/09/2026</span>
+        </div>
+        <h1 class="text-2xl md:text-3xl font-bold text-slate-900 mt-2">Báo Cáo Hiện Trạng & Cấu Trúc Cơ Sở Dữ Liệu</h1>
+        <p class="text-sm text-slate-600 mt-1">Kiến trúc: Supabase PostgreSQL (Cloud) + Client LocalStorage (Hybrid)</p>
+      </div>
+      <a href="/Bao_Cao_Hien_Trang_Database_JPT.xlsx" download class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow transition duration-150">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Tải File Excel (.xlsx)
+      </a>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng thực thể quản lý</p>
+        <p class="text-2xl font-bold text-slate-900 mt-1">18 Bảng / Module</p>
+        <p class="text-xs text-slate-500 mt-1">11 Live DB, 4 Pending, 3 Local</p>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Đang hoạt động trên Supabase</p>
+        <p class="text-2xl font-bold text-emerald-600 mt-1">11 Bảng</p>
+        <p class="text-xs text-slate-500 mt-1">Hợp đồng, Khách hàng, Ticket...</p>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Chưa chạy Migration</p>
+        <p class="text-2xl font-bold text-amber-600 mt-1">4 Bảng</p>
+        <p class="text-xs text-slate-500 mt-1">opportunities, logs, settings...</p>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-xs font-semibold text-rose-600 uppercase tracking-wider">Còn ở LocalStorage</p>
+        <p class="text-2xl font-bold text-rose-600 mt-1">3 Module</p>
+        <p class="text-xs text-slate-500 mt-1">Dự án, Yêu cầu, Thông báo</p>
+      </div>
+    </div>
+
+    <!-- Table List -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-200 bg-slate-50/50">
+        <h2 class="text-lg font-bold text-slate-900">Danh Mục & Trạng Thái Các Bảng Dữ Liệu</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-100 text-slate-700 font-semibold text-xs uppercase tracking-wider border-b border-slate-200">
+            <tr>
+              <th class="p-3.5 text-center">STT</th>
+              <th class="p-3.5">Tên Bảng / Đối tượng</th>
+              <th class="p-3.5">Phân hệ</th>
+              <th class="p-3.5 text-center">Lưu trữ</th>
+              <th class="p-3.5 text-center">Trạng thái</th>
+              <th class="p-3.5 text-right">Số bản ghi (Live)</th>
+              <th class="p-3.5">Mô tả nghiệp vụ</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 text-slate-600">
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">1</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">customers</td>
+              <td class="p-3.5">Khách hàng & Đối tác</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">492</td>
+              <td class="p-3.5">Danh bạ khách hàng, mã TTKD, người phụ trách, phân loại đối tác</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">2</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">contracts</td>
+              <td class="p-3.5">Hợp đồng & Dịch vụ</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">1,162</td>
+              <td class="p-3.5">Quản lý hợp đồng bảo trì, dịch vụ, số hiệu HĐ, thời hạn hiệu lực, AM</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">3</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">tickets</td>
+              <td class="p-3.5">Helpdesk & Ticket</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">29</td>
+              <td class="p-3.5">Phiếu yêu cầu hỗ trợ kỹ thuật, xử lý sự cố, theo dõi SLA và tiến độ</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">4</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">nhan_su</td>
+              <td class="p-3.5">Nhân sự</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">10</td>
+              <td class="p-3.5">Danh sách nhân viên, phòng ban, chức vụ, kỹ thuật viên phụ trách</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">5</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">system_users</td>
+              <td class="p-3.5">Tài khoản hệ thống</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">5</td>
+              <td class="p-3.5">Tài khoản đăng nhập nội bộ và tài khoản Portal khách hàng</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">6</td>
+              <td class="p-3.5 font-mono font-semibold text-blue-600">user_groups</td>
+              <td class="p-3.5">Phân quyền (RBAC)</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">Hoạt động</span></td>
+              <td class="p-3.5 text-right font-bold text-slate-900">4</td>
+              <td class="p-3.5">Nhóm người dùng: Ban Giám Đốc, PM, Technical, Customer và quyền route</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">7</td>
+              <td class="p-3.5 font-mono font-semibold text-amber-600">opportunities</td>
+              <td class="p-3.5">Cơ hội kinh doanh</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">Supabase DB</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-semibold">Chưa migrate</span></td>
+              <td class="p-3.5 text-right text-slate-400">0</td>
+              <td class="p-3.5">Cơ hội kinh doanh, dự kiến doanh thu, xác suất thành công</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">8</td>
+              <td class="p-3.5 font-mono font-semibold text-rose-600">projects & tasks</td>
+              <td class="p-3.5">Quản lý Dự án v4.0</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-50 text-rose-700 rounded text-xs font-semibold">LocalStorage</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full text-xs font-semibold">Cần chuyển DB</span></td>
+              <td class="p-3.5 text-right text-slate-900 font-bold">5</td>
+              <td class="p-3.5">Kế hoạch dự án, giai đoạn Phase, công việc con, Gantt Chart, Milestone</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">9</td>
+              <td class="p-3.5 font-mono font-semibold text-rose-600">service_requests</td>
+              <td class="p-3.5">Yêu cầu nội bộ</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-50 text-rose-700 rounded text-xs font-semibold">LocalStorage</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full text-xs font-semibold">Cần chuyển DB</span></td>
+              <td class="p-3.5 text-right text-slate-900 font-bold">4</td>
+              <td class="p-3.5">Yêu cầu triển khai, hỗ trợ kỹ thuật, cấp phát tài khoản nội bộ</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="p-3.5 text-center font-medium">10</td>
+              <td class="p-3.5 font-mono font-semibold text-rose-600">notifications</td>
+              <td class="p-3.5">Trung tâm thông báo</td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-50 text-rose-700 rounded text-xs font-semibold">LocalStorage</span></td>
+              <td class="p-3.5 text-center"><span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full text-xs font-semibold">Cần chuyển DB</span></td>
+              <td class="p-3.5 text-right text-slate-900 font-bold">5</td>
+              <td class="p-3.5">Thông báo bảo trì hệ thống và thông báo điều hành công việc</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+      <h2 class="text-lg font-bold text-slate-900">4 Đề Xuất Tối Ưu Hóa Cốt Lõi</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl border border-rose-200 bg-rose-50/40">
+          <span class="text-xs font-bold text-rose-600 uppercase">Ưu tiên 1 - Cao</span>
+          <h3 class="font-bold text-slate-900 mt-1">Chuyển Dự án & Yêu cầu lên Supabase</h3>
+          <p class="text-sm text-slate-600 mt-1">Tạo bảng <code>projects</code>, <code>project_tasks</code>, <code>service_requests</code> trên Supabase để tránh mất dữ liệu khi xóa cache.</p>
+        </div>
+        <div class="p-4 rounded-xl border border-amber-200 bg-amber-50/40">
+          <span class="text-xs font-bold text-amber-600 uppercase">Ưu tiên 2 - Cao</span>
+          <h3 class="font-bold text-slate-900 mt-1">Chạy Migration còn thiếu</h3>
+          <p class="text-sm text-slate-600 mt-1">Thực thi các file <code>opportunities_migration.sql</code> và <code>storage_settings_migration.sql</code> trên Supabase.</p>
+        </div>
+        <div class="p-4 rounded-xl border border-blue-200 bg-blue-50/40">
+          <span class="text-xs font-bold text-blue-600 uppercase">Ưu tiên 3 - Trung bình</span>
+          <h3 class="font-bold text-slate-900 mt-1">Bảo mật tài khoản & RLS</h3>
+          <p class="text-sm text-slate-600 mt-1">Mã hóa mật khẩu <code>system_users</code> bằng bcrypt và phân quyền RLS theo Role thay vì mở <code>true</code>.</p>
+        </div>
+        <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+          <span class="text-xs font-bold text-emerald-600 uppercase">Ưu tiên 4 - Trung bình</span>
+          <h3 class="font-bold text-slate-900 mt-1">Đánh Index tìm kiếm</h3>
+          <p class="text-sm text-slate-600 mt-1">Tạo Composite Index và Trigram Index cho bảng <code>contracts</code> (1.162 dòng) và <code>customers</code> (492 dòng).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

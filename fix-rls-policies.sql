@@ -4,23 +4,29 @@
 -- ============================================================
 
 -- ============================================================
--- STAFF Table Policies
+-- NHAN_SU Table Policies
 -- ============================================================
-DROP POLICY IF EXISTS "Enable read access for all users" ON staff;
-DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON staff;
+DROP POLICY IF EXISTS "Enable read access for all users" ON nhan_su;
+DROP POLICY IF EXISTS "Enable insert for all users" ON nhan_su;
+DROP POLICY IF EXISTS "Enable update for all users" ON nhan_su;
+DROP POLICY IF EXISTS "Enable delete for all users" ON nhan_su;
 
 CREATE POLICY "Enable read access for all users"
-ON staff FOR SELECT
+ON nhan_su FOR SELECT
 USING (true);
 
 CREATE POLICY "Enable insert for all users"
-ON staff FOR INSERT
+ON nhan_su FOR INSERT
 WITH CHECK (true);
 
 CREATE POLICY "Enable update for all users"
-ON staff FOR UPDATE
+ON nhan_su FOR UPDATE
 USING (true)
 WITH CHECK (true);
+
+CREATE POLICY "Enable delete for all users"
+ON nhan_su FOR DELETE
+USING (true);
 
 -- ============================================================
 -- CUSTOMERS Table Policies

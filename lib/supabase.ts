@@ -9,17 +9,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Type definitions for database tables
-export interface Staff {
+export interface NhanSu {
   id: string
-  name: string
-  email: string
-  phone?: string
-  position?: string
-  department?: string
-  active: boolean
-  created_at: string
-  updated_at: string
+  ma_nhan_su: string
+  ten_nhan_su: string
+  bo_phan?: string
+  chuc_vu?: string
+  phu_trach?: string
+  ngay_sinh?: string
+  so_cccd?: string
+  cap_ngay?: string
+  email?: string
+  so_dien_thoai?: string
+  dia_chi?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Customer {

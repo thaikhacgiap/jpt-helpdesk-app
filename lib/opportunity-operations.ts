@@ -5,6 +5,7 @@ export interface Opportunity {
   system_code?: string;
   code: string;
   name: string;
+  customer_id?: string;
   customer_code?: string;
   customer_name?: string;
   giai_doan?: string;

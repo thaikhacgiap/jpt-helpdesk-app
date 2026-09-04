@@ -22,6 +22,7 @@ export interface Contract {
   name?: string;
   customer_name?: string;
   customer_id?: string;
+  supplier_id?: string;
   start_date?: string;
   end_date?: string;
   owner_name?: string;
@@ -44,9 +45,14 @@ function normalizeContract(c: any): Contract {
   const expiry_date = c?.expiry_date || c?.end_date || "";
   const customer = c?.customer || c?.customer_name || "";
   const am = c?.am || c?.owner_name || c?.phu_trach || "";
+  const customer_id = c?.customer_id || undefined;
+  const supplier_id = c?.supplier_id || undefined;
 
   return {
     ...c,
+    id: c?.id || "",
+    customer_id,
+    supplier_id,
     contract_no,
     project_id: c?.project_id || "",
     status: c?.status || "Active",
@@ -142,6 +148,8 @@ export async function createContract(
 
     const payload = {
       contract_no,
+      customer_id: contract.customer_id || null,
+      supplier_id: contract.supplier_id || null,
       project_id: contract.project_id?.trim() || null,
       status: contract.status || "Active",
       signed_date: contract.signed_date || contract.start_date || null,
