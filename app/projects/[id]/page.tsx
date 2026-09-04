@@ -1209,7 +1209,7 @@ export default function ProjectDetailPage() {
                   )}
                   
                   {/* Additional Meta Details */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 text-xs">
                     <div className="space-y-1">
                       <span className="text-slate-400 font-medium block">Khách hàng</span>
                       <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
@@ -1222,6 +1222,13 @@ export default function ProjectDetailPage() {
                       <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
                         <FileText size={14} className="text-indigo-500 shrink-0" />
                         <span className="truncate">{project.contractNo || "Chưa gắn hợp đồng"}</span>
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-slate-400 font-medium block">Cơ hội liên kết</span>
+                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                        <Tag size={14} className="text-amber-500 shrink-0" />
+                        <span className="truncate">{project.opportunityCode ? `[${project.opportunityCode}] ${project.opportunityName || ""}` : "Chưa gắn cơ hội"}</span>
                       </span>
                     </div>
                     <div className="space-y-1">

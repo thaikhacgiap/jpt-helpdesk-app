@@ -66,6 +66,39 @@ export async function fetchOpportunities(): Promise<Opportunity[]> {
   }
 }
 
+// ─── Fetch Opportunities By Customer ─────────────────────────
+export async function fetchOpportunitiesByCustomer(customerIdentifier: string): Promise<Opportunity[]> {
+  if (!customerIdentifier || !customerIdentifier.trim()) return [];
+  const raw = customerIdentifier.trim();
+  const q = raw.toLowerCase();
+
+  // 1. Direct database query if UUID
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
+  if (isUUID) {
+    try {
+      const { data, error } = await supabase
+        .from("opportunities")
+        .select("*")
+        .eq("customer_id", raw)
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+    } catch (e) {
+      console.warn("Direct query opportunities by customer UUID warning:", e);
+    }
+  }
+
+  // 2. Memory / cache filtering
+  const all = await fetchOpportunities();
+  return all.filter(o =>
+    (o.customer_id && o.customer_id.toLowerCase() === q) ||
+    (o.customer_code && o.customer_code.toLowerCase() === q) ||
+    (o.customer_name && o.customer_name.toLowerCase().includes(q))
+  );
+}
+
 // ─── Create Opportunity ───────────────────────────────────────
 export async function createOpportunity(
   opp: Omit<Opportunity, "id" | "created_at" | "updated_at">

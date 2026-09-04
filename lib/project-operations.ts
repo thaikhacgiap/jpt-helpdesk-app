@@ -49,6 +49,8 @@ export interface ProjectSowItem {
   status: string;
 }
 
+export type ProjectType = 'professional' | 'poc' | 'commercial' | 'internal';
+
 export interface Project {
   id: string;
   code: string;
@@ -57,6 +59,10 @@ export interface Project {
   customerId?: string;
   contractId?: string;
   contractNo?: string;
+  opportunityId?: string;
+  opportunityCode?: string;
+  opportunityName?: string;
+  projectType?: ProjectType;
   manager: string;
   startDate: string;
   endDate: string;

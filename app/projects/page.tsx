@@ -8,11 +8,13 @@ import {
   fetchProjects, 
   createProject, 
   deleteProject, 
-  Project 
+  Project,
+  ProjectType
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
+import { fetchOpportunitiesByCustomer, Opportunity } from "@/lib/opportunity-operations";
 import { 
   Search, 
   Plus, 
@@ -34,7 +36,11 @@ import {
   TrendingUp,
   Clock,
   LayoutGrid,
-  List
+  List,
+  Sparkles,
+  ShoppingCart,
+  Home,
+  Target
 } from "lucide-react";
 
 export default function ProjectsPage() {
@@ -42,7 +48,11 @@ export default function ProjectsPage() {
   const [staffList, setStaffList] = useState<NhanSu[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerContracts, setCustomerContracts] = useState<Contract[]>([]);
+  const [customerOpportunities, setCustomerOpportunities] = useState<Opportunity[]>([]);
   
+  // Tab State: 4 tabs
+  const [activeTab, setActiveTab] = useState<ProjectType>("professional");
+
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -59,6 +69,10 @@ export default function ProjectsPage() {
     customer: "",
     contractId: "",
     contractNo: "",
+    opportunityId: "",
+    opportunityCode: "",
+    opportunityName: "",
+    projectType: "professional" as ProjectType,
     manager: "",
     startDate: "",
     endDate: "",
@@ -78,6 +92,31 @@ export default function ProjectsPage() {
     setProjects(fetchProjects());
   };
 
+  const handleOpenCreateModal = () => {
+    setFormData({
+      code: "",
+      name: "",
+      customerId: "",
+      customer: "",
+      contractId: "",
+      contractNo: "",
+      opportunityId: "",
+      opportunityCode: "",
+      opportunityName: "",
+      projectType: activeTab,
+      manager: "",
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: "",
+      budget: 0,
+      status: "Planning",
+      description: ""
+    });
+    setCustomerContracts([]);
+    setCustomerOpportunities([]);
+    setError("");
+    setIsModalOpen(true);
+  };
+
   const handleCustomerChange = async (customerId: string) => {
     const selectedCust = customers.find(c => c.id === customerId);
     setFormData(prev => ({
@@ -85,29 +124,58 @@ export default function ProjectsPage() {
       customerId,
       customer: selectedCust?.name || "",
       contractId: "",
-      contractNo: ""
+      contractNo: "",
+      opportunityId: "",
+      opportunityCode: "",
+      opportunityName: ""
     }));
 
     if (customerId) {
       try {
-        const contracts = await fetchContractsByCustomer(customerId);
+        const [contracts, opportunities] = await Promise.all([
+          fetchContractsByCustomer(customerId),
+          fetchOpportunitiesByCustomer(customerId)
+        ]);
         setCustomerContracts(contracts);
+        setCustomerOpportunities(opportunities);
       } catch (err) {
-        console.error("Error fetching contracts for customer:", err);
+        console.error("Error fetching customer related data:", err);
         setCustomerContracts([]);
+        setCustomerOpportunities([]);
       }
     } else {
       setCustomerContracts([]);
+      setCustomerOpportunities([]);
     }
+  };
+
+  const handleOpportunityChange = (oppId: string) => {
+    const selectedOpp = customerOpportunities.find(o => o.id === oppId);
+    setFormData(prev => {
+      const nextCode = selectedOpp?.code ? selectedOpp.code : prev.code;
+      return {
+        ...prev,
+        opportunityId: oppId,
+        opportunityCode: selectedOpp?.code || "",
+        opportunityName: selectedOpp?.name || "",
+        // Lấy từ "code" trong bảng opportunity nếu chọn "cơ hội"
+        code: nextCode || prev.code
+      };
+    });
   };
 
   const handleContractChange = (contractId: string) => {
     const selectedContr = customerContracts.find(c => c.id === contractId);
-    setFormData(prev => ({
-      ...prev,
-      contractId,
-      contractNo: selectedContr?.contract_no || selectedContr?.code || ""
-    }));
+    setFormData(prev => {
+      // Lấy từ "PROJECT ID" trong bảng contract nếu chọn hợp đồng
+      const nextCode = selectedContr?.project_id || selectedContr?.code || selectedContr?.contract_no;
+      return {
+        ...prev,
+        contractId,
+        contractNo: selectedContr?.contract_no || selectedContr?.code || "",
+        code: nextCode || prev.code
+      };
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -142,22 +210,6 @@ export default function ProjectsPage() {
     try {
       createProject(formData);
       setIsModalOpen(false);
-      // Reset form
-      setFormData({
-        code: "",
-        name: "",
-        customerId: "",
-        customer: "",
-        contractId: "",
-        contractNo: "",
-        manager: "",
-        startDate: "",
-        endDate: "",
-        budget: 0,
-        status: "Planning",
-        description: ""
-      });
-      setCustomerContracts([]);
       refreshProjects();
     } catch (err) {
       setError("Không thể tạo dự án: " + String(err));
@@ -174,26 +226,48 @@ export default function ProjectsPage() {
     }
   };
 
-  // Filter projects
+  // Filter projects by activeTab and search/status filters
   const filteredProjects = projects.filter(project => {
+    const projType = project.projectType || 'professional';
+    if (projType !== activeTab) return false;
+
+    const query = searchQuery.toLowerCase();
     const matchesSearch = 
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      project.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.customer.toLowerCase().includes(searchQuery.toLowerCase());
+      project.name.toLowerCase().includes(query) || 
+      project.code.toLowerCase().includes(query) ||
+      (project.customer || "").toLowerCase().includes(query) ||
+      (project.contractNo || "").toLowerCase().includes(query) ||
+      (project.opportunityCode || "").toLowerCase().includes(query);
       
     const matchesStatus = statusFilter === "All" || project.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate statistics
+  // Calculate counts for 4 tabs
+  const tabCounts = {
+    professional: projects.filter(p => !p.projectType || p.projectType === "professional").length,
+    poc: projects.filter(p => p.projectType === "poc").length,
+    commercial: projects.filter(p => p.projectType === "commercial").length,
+    internal: projects.filter(p => p.projectType === "internal").length,
+  };
+
+  // Define tabs header
+  const PROJECT_TABS = [
+    { id: "professional", label: `DA chuyên nghiệp (${tabCounts.professional})`, icon: Briefcase },
+    { id: "poc", label: `DA POC (${tabCounts.poc})`, icon: Sparkles },
+    { id: "commercial", label: `DA TM đơn thuần (${tabCounts.commercial})`, icon: ShoppingCart },
+    { id: "internal", label: `DA nội bộ (${tabCounts.internal})`, icon: Home },
+  ];
+
+  // Calculate statistics for currently active tab
   const stats = {
-    total: projects.length,
-    active: projects.filter(p => p.status === "Active").length,
-    planning: projects.filter(p => p.status === "Planning").length,
-    completed: projects.filter(p => p.status === "Completed").length,
-    delayed: projects.filter(p => p.status === "Delayed").length,
-    totalBudget: projects.reduce((sum, p) => sum + p.budget, 0)
+    total: filteredProjects.length,
+    active: filteredProjects.filter(p => p.status === "Active").length,
+    planning: filteredProjects.filter(p => p.status === "Planning").length,
+    completed: filteredProjects.filter(p => p.status === "Completed").length,
+    delayed: filteredProjects.filter(p => p.status === "Delayed").length,
+    totalBudget: filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)
   };
 
   const getStatusBadgeClass = (status: Project["status"]) => {
@@ -201,13 +275,13 @@ export default function ProjectsPage() {
       case "Planning":
         return "bg-slate-100 text-slate-700 border-slate-200";
       case "Active":
-        return "bg-teal-50 text-teal-700 border-teal-200/50";
+        return "bg-blue-50 text-blue-700 border-blue-200/60";
       case "On Hold":
-        return "bg-amber-50 text-amber-700 border-amber-200/50";
+        return "bg-amber-50 text-amber-700 border-amber-200/60";
       case "Completed":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
+        return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
       case "Delayed":
-        return "bg-rose-50 text-rose-700 border-rose-200/50";
+        return "bg-red-50 text-red-700 border-red-200/60";
       default:
         return "bg-slate-100 text-slate-700 border-slate-200";
     }
@@ -216,120 +290,137 @@ export default function ProjectsPage() {
   const getStatusLabel = (status: Project["status"]) => {
     switch (status) {
       case "Planning": return "Lập kế hoạch";
-      case "Active": return "Đang triển khai";
-      case "On Hold": return "Tạm hoãn";
+      case "Active": return "Đang chạy";
+      case "On Hold": return "Tạm dừng";
       case "Completed": return "Hoàn thành";
       case "Delayed": return "Trễ hạn";
       default: return status;
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+  const getProjectTypeLabel = (type?: ProjectType) => {
+    switch (type) {
+      case "poc": return "DA POC";
+      case "commercial": return "DA TM đơn thuần";
+      case "internal": return "DA nội bộ";
+      case "professional":
+      default:
+        return "DA chuyên nghiệp";
+    }
   };
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return "";
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return dateStr;
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   return (
     <MainLayout>
-      <Header 
-        title="Triển khai Dự án" 
-        description="Quản lý vòng đời dự án, lập kế hoạch, theo dõi tiến độ Gantt, tài liệu và nhật ký thực địa." 
+      {/* Header with 4 Tabs in the top-right corner */}
+      <Header
+        title="Quản Lý Dự Án Triển Khai"
+        description="Theo dõi tiến độ, phân bổ nhân sự, mốc công việc và hồ sơ dự án"
+        tabs={PROJECT_TABS}
+        activeTab={activeTab}
+        setActiveTab={(id: any) => setActiveTab(id as ProjectType)}
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        {/* Card 1: Total */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between hover:shadow-md transition duration-200">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng dự án</p>
-            <h3 className="text-2xl font-bold text-slate-800 mt-1">{stats.total}</h3>
-            <p className="text-xs text-slate-400 mt-1">Dự án trong danh sách</p>
+      {/* Stats Cards Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng dự án</span>
+            <FolderOpen size={16} className="text-blue-500" />
           </div>
-          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-            <Briefcase size={22} />
-          </div>
+          <div className="text-2xl font-bold text-slate-800 mt-2">{stats.total}</div>
         </div>
 
-        {/* Card 2: Active */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between hover:shadow-md transition duration-200">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đang triển khai</p>
-            <h3 className="text-2xl font-bold text-teal-600 mt-1">{stats.active}</h3>
-            <p className="text-xs text-slate-400 mt-1">Dự án đang chạy thực địa</p>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Đang chạy</span>
+            <TrendingUp size={16} className="text-blue-500" />
           </div>
-          <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600">
-            <TrendingUp size={22} />
-          </div>
+          <div className="text-2xl font-bold text-blue-600 mt-2">{stats.active}</div>
         </div>
 
-        {/* Card 3: Delayed */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between hover:shadow-md transition duration-200">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Trễ tiến độ</p>
-            <h3 className="text-2xl font-bold text-rose-600 mt-1">{stats.delayed}</h3>
-            <p className="text-xs text-slate-400 mt-1">Dự án bị quá hạn dự kiến</p>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Kế hoạch</span>
+            <Clock size={16} className="text-slate-400" />
           </div>
-          <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
-            <Clock size={22} />
-          </div>
+          <div className="text-2xl font-bold text-slate-700 mt-2">{stats.planning}</div>
         </div>
 
-        {/* Card 4: Completed Projects */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between hover:shadow-md transition duration-200">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dự án Hoàn thành</p>
-            <h3 className="text-xl font-bold text-slate-800 mt-1.5">{stats.completed}</h3>
-            <p className="text-xs text-slate-400 mt-1">Các dự án đã nghiệm thu</p>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Hoàn thành</span>
+            <CheckCircle2 size={16} className="text-emerald-500" />
           </div>
-          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
-            <CheckCircle2 size={22} />
+          <div className="text-2xl font-bold text-emerald-600 mt-2">{stats.completed}</div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider">Trễ hạn</span>
+            <AlertTriangle size={16} className="text-rose-500" />
+          </div>
+          <div className="text-2xl font-bold text-rose-600 mt-2">{stats.delayed}</div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">Tổng ngân sách</span>
+            <DollarSign size={16} className="text-indigo-500" />
+          </div>
+          <div className="text-sm font-bold text-indigo-600 mt-3 truncate font-mono" title={`${stats.totalBudget.toLocaleString('vi-VN')} đ`}>
+            {stats.totalBudget >= 1000000000 
+              ? `${(stats.totalBudget / 1000000000).toFixed(1)} tỷ đ`
+              : stats.totalBudget >= 1000000 
+              ? `${(stats.totalBudget / 1000000).toFixed(0)} tr đ`
+              : `${stats.totalBudget.toLocaleString('vi-VN')} đ`}
           </div>
         </div>
       </div>
 
-      {/* Toolbar / Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm mb-6">
-        {/* Left: Search & Filter */}
-        <div className="flex flex-1 flex-col md:flex-row items-center gap-3">
-          <div className="relative w-full md:max-w-xs">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Action Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Search & Filter */}
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="Tìm dự án, khách hàng..."
+              placeholder={`Tìm ${getProjectTypeLabel(activeTab)} theo tên, mã, khách hàng, HĐ, cơ hội...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-xs font-medium text-slate-500 whitespace-nowrap">Trạng thái:</span>
+          <div className="flex items-center gap-2">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white font-medium text-slate-700"
             >
-              <option value="All">Tất cả</option>
-              <option value="Planning">Lập kế hoạch</option>
-              <option value="Active">Đang triển khai</option>
-              <option value="On Hold">Tạm hoãn</option>
-              <option value="Completed">Hoàn thành</option>
-              <option value="Delayed">Trễ hạn</option>
+              <option value="All">Tất cả trạng thái</option>
+              <option value="Active">Đang chạy (Active)</option>
+              <option value="Planning">Lập kế hoạch (Planning)</option>
+              <option value="On Hold">Tạm hoãn (On Hold)</option>
+              <option value="Completed">Hoàn thành (Completed)</option>
+              <option value="Delayed">Trễ hạn (Delayed)</option>
             </select>
           </div>
         </div>
 
-        {/* Right: View Mode & Add Button */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-          <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 gap-0.5 shrink-0">
+        {/* View Switcher and Add Button */}
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60">
             <button
               onClick={() => setViewMode("grid")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
@@ -355,21 +446,28 @@ export default function ProjectsPage() {
           </div>
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenCreateModal}
             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition shadow-sm hover:shadow-md cursor-pointer shrink-0"
           >
             <Plus size={16} />
-            <span>Thêm Dự Án</span>
+            <span>Thêm Dự Án Mới</span>
           </button>
         </div>
       </div>
 
-      {/* Projects Grid */}
+      {/* Projects Grid / Table */}
       {filteredProjects.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/60 p-12 text-center shadow-sm">
           <FolderOpen size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="text-lg font-bold text-slate-800">Không tìm thấy dự án</h3>
-          <p className="text-sm text-slate-500 mt-1">Thử thay đổi từ khóa tìm kiếm hoặc lọc trạng thái khác.</p>
+          <h3 className="text-lg font-bold text-slate-800">Không tìm thấy dự án nào trong mục "{getProjectTypeLabel(activeTab)}"</h3>
+          <p className="text-sm text-slate-500 mt-1">Thử thay đổi từ khóa tìm kiếm hoặc nhấn nút "Thêm Dự Án Mới" để khởi tạo.</p>
+          <button
+            onClick={handleOpenCreateModal}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-sm font-semibold transition cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>Khởi tạo {getProjectTypeLabel(activeTab)} đầu tiên</span>
+          </button>
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -382,9 +480,14 @@ export default function ProjectsPage() {
               <div className="p-6">
                 {/* Badge and Code */}
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-mono font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">
-                    {project.code}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                      {project.code}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded">
+                      {getProjectTypeLabel(project.projectType)}
+                    </span>
+                  </div>
                   
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(project.status)}`}>
                     {getStatusLabel(project.status)}
@@ -398,7 +501,7 @@ export default function ProjectsPage() {
 
                 {/* Description */}
                 <p className="text-sm text-slate-500 line-clamp-2 mb-4 h-10">
-                  {project.description}
+                  {project.description || "Dự án triển khai dịch vụ hệ thống công nghệ thông tin."}
                 </p>
 
                 {/* Meta details */}
@@ -413,6 +516,13 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-2 text-xs text-slate-600">
                       <FileText size={14} className="text-indigo-500 shrink-0" />
                       <span className="text-slate-600">Hợp đồng: <span className="font-medium text-indigo-700">{project.contractNo}</span></span>
+                    </div>
+                  )}
+                  {/* Opportunity */}
+                  {project.opportunityCode && (
+                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                      <Target size={14} className="text-amber-500 shrink-0" />
+                      <span className="text-slate-600">Cơ hội: <span className="font-medium text-amber-700">{project.opportunityCode}</span></span>
                     </div>
                   )}
                   {/* Manager */}
@@ -431,12 +541,12 @@ export default function ProjectsPage() {
                 <div>
                   <div className="flex justify-between items-center text-xs font-semibold mb-1">
                     <span className="text-slate-500">Tiến độ</span>
-                    <span className="text-blue-600">{project.progress}%</span>
+                    <span className="text-blue-600">{project.progress || 0}%</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div 
                       className="bg-blue-600 h-full rounded-full transition-all duration-500" 
-                      style={{ width: `${project.progress}%` }}
+                      style={{ width: `${project.progress || 0}%` }}
                     />
                   </div>
                 </div>
@@ -483,9 +593,9 @@ export default function ProjectsPage() {
             <table className="w-full text-sm border-collapse text-left">
               <thead>
                 <tr className="text-xs text-slate-500 font-semibold bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4">Mã</th>
+                  <th className="px-6 py-4">Mã DA</th>
                   <th className="px-6 py-4">Tên dự án</th>
-                  <th className="px-6 py-4">Khách hàng & HĐ</th>
+                  <th className="px-6 py-4">Khách hàng, HĐ & Cơ hội</th>
                   <th className="px-6 py-4">Chủ nhiệm (PM)</th>
                   <th className="px-6 py-4">Thời gian</th>
                   <th className="px-6 py-4 w-40">Tiến độ</th>
@@ -499,7 +609,7 @@ export default function ProjectsPage() {
                     key={project.id} 
                     className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition duration-150 group"
                   >
-                    <td className="px-6 py-4 font-mono font-bold text-slate-500 text-xs">
+                    <td className="px-6 py-4 font-mono font-bold text-slate-600 text-xs">
                       {project.code}
                     </td>
                     <td className="px-6 py-4">
@@ -512,12 +622,20 @@ export default function ProjectsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-700">{project.customer || "—"}</div>
-                      {project.contractNo && (
-                        <div className="text-xs text-indigo-600 font-normal mt-0.5 flex items-center gap-1">
-                          <FileText size={11} />
-                          <span>HĐ: {project.contractNo}</span>
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {project.contractNo && (
+                          <span className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded font-normal flex items-center gap-1">
+                            <FileText size={10} />
+                            <span>HĐ: {project.contractNo}</span>
+                          </span>
+                        )}
+                        {project.opportunityCode && (
+                          <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded font-normal flex items-center gap-1">
+                            <Target size={10} />
+                            <span>Cơ hội: {project.opportunityCode}</span>
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-slate-650 mt-0.5">
                       {project.manager || "—"}
@@ -530,10 +648,10 @@ export default function ProjectsPage() {
                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                           <div 
                             className="bg-blue-600 h-full rounded-full transition-all duration-300" 
-                            style={{ width: `${project.progress}%` }}
+                            style={{ width: `${project.progress || 0}%` }}
                           />
                         </div>
-                        <span className="text-xs font-semibold text-slate-600">{project.progress}%</span>
+                        <span className="text-xs font-semibold text-slate-600">{project.progress || 0}%</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -570,16 +688,16 @@ export default function ProjectsPage() {
       {/* Modal: Create Project */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-scale-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto border border-slate-100 animate-scale-in">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
                   <Plus size={20} />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-lg">Khởi Tạo Dự Án Mới</h3>
-                  <p className="text-xs text-slate-500">Tạo dự án triển khai và phân công chủ nhiệm</p>
+                  <p className="text-xs text-slate-500">Tạo dự án triển khai và liên kết thông tin khách hàng</p>
                 </div>
               </div>
               <button
@@ -599,22 +717,8 @@ export default function ProjectsPage() {
                 </div>
               )}
 
-              {/* Row 1: Code & Name */}
+              {/* Row 1: Tên dự án (người tạo điền) & Loại dự án */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Mã dự án <span className="text-slate-400 font-normal">(tự sinh)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={formData.code}
-                    onChange={handleInputChange}
-                    placeholder="VD: PROJ-HELP-01"
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition font-mono uppercase"
-                  />
-                </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Tên dự án <span className="text-red-500">*</span>
@@ -629,13 +733,30 @@ export default function ProjectsPage() {
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                    Loại dự án <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="projectType"
+                    value={formData.projectType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer font-medium text-slate-700"
+                  >
+                    <option value="professional">DA chuyên nghiệp</option>
+                    <option value="poc">DA POC</option>
+                    <option value="commercial">DA TM đơn thuần</option>
+                    <option value="internal">DA nội bộ</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Row 2: Customer & Contract (Matching) */}
+              {/* Row 2: Khách hàng & Mã dự án */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Khách hàng / Đối tác
+                    Khách hàng
                   </label>
                   <select
                     value={formData.customerId}
@@ -653,7 +774,59 @@ export default function ProjectsPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Hợp đồng dịch vụ
+                    Mã dự án <span className="text-slate-400 font-normal">(Tự điền từ Cơ hội / Hợp đồng)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="code"
+                    value={formData.code}
+                    onChange={handleInputChange}
+                    placeholder="VD: PROJ-2026-001 hoặc mã từ Cơ hội/HĐ"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition font-mono uppercase bg-slate-50/50"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Cơ hội & Hợp đồng (Lọc theo khách hàng đã chọn) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                    <span>Cơ hội (Opportunity)</span>
+                    {customerOpportunities.length > 0 && (
+                      <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+                        {customerOpportunities.length} cơ hội
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={formData.opportunityId}
+                    onChange={(e) => handleOpportunityChange(e.target.value)}
+                    disabled={!formData.customerId || customerOpportunities.length === 0}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">
+                      {!formData.customerId 
+                        ? "-- Vui lòng chọn khách hàng trước --" 
+                        : customerOpportunities.length === 0 
+                        ? "-- Không có cơ hội liên quan --" 
+                        : "-- Chọn cơ hội --"}
+                    </option>
+                    {customerOpportunities.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        [{o.code}] {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                    <span>Hợp đồng (Contract)</span>
+                    {customerContracts.length > 0 && (
+                      <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                        {customerContracts.length} hợp đồng
+                      </span>
+                    )}
                   </label>
                   <select
                     value={formData.contractId}
@@ -665,19 +838,19 @@ export default function ProjectsPage() {
                       {!formData.customerId 
                         ? "-- Vui lòng chọn khách hàng trước --" 
                         : customerContracts.length === 0 
-                        ? "-- Không có hợp đồng tương ứng --" 
+                        ? "-- Không có hợp đồng liên quan --" 
                         : "-- Chọn hợp đồng liên quan --"}
                     </option>
                     {customerContracts.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.contract_no || c.code} - {c.service || c.name || "Hợp đồng"}
+                        {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.service || c.name || "Hợp đồng"}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Row 3: PM & Budget */}
+              {/* Row 4: PM & Budget */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
@@ -716,7 +889,7 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 4: Dates */}
+              {/* Row 5: Dates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
@@ -731,6 +904,7 @@ export default function ProjectsPage() {
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
                   />
                 </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Ngày kết thúc <span className="text-red-500">*</span>
@@ -746,7 +920,7 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 5: Status */}
+              {/* Row 6: Status */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Trạng thái khởi tạo
@@ -765,7 +939,7 @@ export default function ProjectsPage() {
                 </select>
               </div>
 
-              {/* Description */}
+              {/* Row 7: Description */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Mô tả dự án
