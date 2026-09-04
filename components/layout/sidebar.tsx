@@ -46,7 +46,7 @@ export default function Sidebar() {
         if (!error && data) {
           const ongoing = data.filter((t) => {
             const tid = (t.ticket_id || '').toUpperCase();
-            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-') || t.tt_type === 'Maintenance') {
+            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) {
               return false;
             }
             return ["In progress", "On Hold", "Reporting"].includes(t.tt_status || "");
