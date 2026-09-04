@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
-import { fetchTickets } from "@/lib/ticket-operations";
+import { fetchTickets, deleteTicket } from "@/lib/ticket-operations";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
@@ -579,6 +579,51 @@ export default function TicketsPage() {
     }
   };
 
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
+
+  const handleDeleteTicket = async (ticket: Ticket) => {
+    const confirmMsg = `Bạn có chắc chắn muốn xóa ticket "${ticket.ticket_id}${ticket.title ? ' - ' + ticket.title : ''}" không? Thao tác này không thể khôi phục.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const targetId = ticket.id || ticket.ticket_id;
+      setDeletingTicketId(targetId);
+      const res = await deleteTicket(targetId);
+      if (!res.success) {
+        alert("Lỗi khi xóa ticket: " + (res.error || "Không thể xóa."));
+        return;
+      }
+      setSelectedRowIds((prev) => prev.filter((id) => id !== targetId));
+      await loadTickets();
+    } catch (err: any) {
+      console.error("Error deleting ticket:", err);
+      alert("Đã xảy ra lỗi trong quá trình xóa ticket.");
+    } finally {
+      setDeletingTicketId(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRowIds.length === 0) return;
+    const confirmMsg = `Bạn có chắc chắn muốn xóa ${selectedRowIds.length} ticket đã chọn không? Thao tác này không thể khôi phục.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setLoading(true);
+      for (const id of selectedRowIds) {
+        await deleteTicket(id);
+      }
+      setSelectedRowIds([]);
+      await loadTickets();
+    } catch (err) {
+      console.error("Bulk delete error:", err);
+      alert("Đã xảy ra lỗi khi xóa các ticket đã chọn.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOnSuccess = async () => {
     await loadTickets();
 
@@ -740,6 +785,31 @@ export default function TicketsPage() {
         </div>
       </div>
 
+      {/* Selected Items Action Bar */}
+      {selectedRowIds.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 mb-3 bg-red-50 border border-red-200 rounded-xl animate-in fade-in slide-in-from-top-1 shadow-2xs">
+          <div className="flex items-center gap-2 text-sm text-red-800 font-medium">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span>Đang chọn <b>{selectedRowIds.length}</b> ticket</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedRowIds([])}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 transition cursor-pointer"
+            >
+              Hủy chọn
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+            >
+              <Trash2 size={12} />
+              <span>Xóa {selectedRowIds.length} ticket đã chọn</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Redesigned Table Card with Column Resizing & Vertical Grid Borders */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-220px)] min-h-[300px]">
@@ -751,7 +821,20 @@ export default function TicketsPage() {
                   style={{ width: `${colWidths.select}px`, minWidth: `${colWidths.select}px` }}
                   className="px-3 py-2.5 text-center sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200"
                 >
-                  <input type="checkbox" className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
+                  <input 
+                    type="checkbox" 
+                    checked={paginatedTickets.length > 0 && paginatedTickets.every(t => selectedRowIds.includes(t.id || t.ticket_id))}
+                    onChange={() => {
+                      const pageIds = paginatedTickets.map(t => t.id || t.ticket_id);
+                      const isAllPageSelected = pageIds.every(id => selectedRowIds.includes(id));
+                      if (isAllPageSelected) {
+                        setSelectedRowIds(prev => prev.filter(id => !pageIds.includes(id)));
+                      } else {
+                        setSelectedRowIds(prev => Array.from(new Set([...prev, ...pageIds])));
+                      }
+                    }}
+                    className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+                  />
                 </th>
 
                 {/* Ticket ID */}
@@ -1071,7 +1154,18 @@ export default function TicketsPage() {
                   <tr key={ticket.id || index} className="hover:bg-slate-50/70 transition text-sm font-normal divide-x divide-slate-200">
                     {/* Checkbox */}
                     <td className="px-3 py-2 text-center whitespace-nowrap border-b border-slate-200">
-                      <input type="checkbox" className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
+                      <input 
+                        type="checkbox" 
+                        checked={selectedRowIds.includes(ticket.id || ticket.ticket_id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const targetId = ticket.id || ticket.ticket_id;
+                          setSelectedRowIds((prev) =>
+                            prev.includes(targetId) ? prev.filter((id) => id !== targetId) : [...prev, targetId]
+                          );
+                        }}
+                        className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+                      />
                     </td>
 
                     {/* Ticket ID */}
@@ -1216,7 +1310,17 @@ export default function TicketsPage() {
                         >
                           <Pencil size={13} />
                         </button>
-                        <button className="hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-50" title="Xóa">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTicket(ticket);
+                          }}
+                          disabled={deletingTicketId === (ticket.id || ticket.ticket_id)}
+                          className={`hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-50 cursor-pointer ${
+                            deletingTicketId === (ticket.id || ticket.ticket_id) ? "opacity-40 pointer-events-none text-red-300" : ""
+                          }`}
+                          title="Xóa ticket"
+                        >
                           <Trash2 size={13} />
                         </button>
                         <button className="hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100" title="Thêm">

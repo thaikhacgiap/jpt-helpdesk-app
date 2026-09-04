@@ -264,12 +264,31 @@ export async function addTicketUpdate(ticketDbId: string, updateData: any): Prom
 }
 
 // Delete ticket
-export async function deleteTicket(ticketId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteTicket(idOrTicketId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    // Find the ticket first to get both id and ticket_id
+    const { data: ticketData } = await supabase
+      .from('tickets')
+      .select('id, ticket_id')
+      .or(`id.eq.${idOrTicketId},ticket_id.eq.${idOrTicketId}`)
+      .maybeSingle()
+
+    const targetId = ticketData?.id || idOrTicketId
+    const targetTicketId = ticketData?.ticket_id || idOrTicketId
+
+    // Remove any related ticket_updates
+    try {
+      await supabase
+        .from('ticket_updates')
+        .delete()
+        .or(`ticket_id.eq.${targetId},ticket_id.eq.${targetTicketId}`)
+    } catch {}
+
+    // Delete the ticket record
     const { error } = await supabase
       .from('tickets')
       .delete()
-      .eq('ticket_id', ticketId)
+      .or(`id.eq.${targetId},ticket_id.eq.${targetTicketId}`)
 
     if (error) {
       console.error('Error deleting ticket:', error)
