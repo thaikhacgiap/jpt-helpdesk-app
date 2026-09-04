@@ -127,12 +127,36 @@ export async function fetchContracts(): Promise<Contract[]> {
 }
 
 // ─── Fetch Contracts By Customer ──────────────────────────────
-export async function fetchContractsByCustomer(customerNameOrCode: string): Promise<Contract[]> {
+export async function fetchContractsByCustomer(customerIdentifier: string): Promise<Contract[]> {
+  if (!customerIdentifier || !customerIdentifier.trim()) return [];
+  const raw = customerIdentifier.trim();
+  const q = raw.toLowerCase();
+
+  // 1. Direct database query if UUID
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
+  if (isUUID) {
+    try {
+      const { data, error } = await supabase
+        .from("contracts")
+        .select("*")
+        .or(`customer_id.eq.${raw},supplier_id.eq.${raw}`)
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map(normalizeContract);
+      }
+    } catch (e) {
+      console.warn("Direct query by customer UUID warning:", e);
+    }
+  }
+
+  // 2. Memory / cache filtering
   const all = await fetchContracts();
-  if (!customerNameOrCode) return all;
-  const q = customerNameOrCode.trim().toLowerCase();
   return all.filter(c =>
+    (c.customer_id && c.customer_id.toLowerCase() === q) ||
+    (c.supplier_id && c.supplier_id.toLowerCase() === q) ||
     (c.customer && c.customer.toLowerCase().includes(q)) ||
+    (c.supplier && c.supplier.toLowerCase().includes(q)) ||
     (c.end_user && c.end_user.toLowerCase().includes(q)) ||
     (c.customer_name && c.customer_name.toLowerCase().includes(q))
   );
