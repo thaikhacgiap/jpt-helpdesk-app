@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, UserPlus, Loader2, Search, ChevronDown } from "lucide-react";
 import { createContact, updateContact, Contact } from "@/lib/contact-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 
 interface ContactModalProps {
   isOpen: boolean;
@@ -24,82 +25,6 @@ const emptyForm = {
   dia_chi: "",
   ghi_chu: "",
 };
-
-// Searchable customer dropdown
-function CustomerDropdown({
-  value, onChange, customers,
-}: { value: string; onChange: (code: string, name: string) => void; customers: Customer[] }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(""); }
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const filtered = customers.filter(c =>
-    !query || c.code.toLowerCase().includes(query.toLowerCase()) || c.name.toLowerCase().includes(query.toLowerCase())
-  );
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => { setOpen(!open); setQuery(""); }}
-        className="w-full flex items-center justify-between px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-      >
-        {value ? (
-          <span className="font-mono text-slate-800 text-sm font-semibold">{value}</span>
-        ) : (
-          <span className="text-slate-400">-- Chọn khách hàng --</span>
-        )}
-        <ChevronDown size={15} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                autoFocus
-                type="text"
-                placeholder="Tìm mã hoặc tên KH..."
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            <button type="button" onClick={() => { onChange("", ""); setOpen(false); }}
-              className="w-full px-3 py-2 text-left text-xs text-slate-400 hover:bg-slate-50">
-              -- Không chọn --
-            </button>
-            {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">Không tìm thấy</div>
-            ) : filtered.map(c => (
-              <button type="button" key={c.id}
-                onClick={() => { onChange(c.code, c.name); setOpen(false); setQuery(""); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-blue-50 transition ${value === c.code ? "bg-blue-50" : ""}`}
-              >
-                <div>
-                  <p className="text-xs font-mono font-semibold text-slate-700">{c.code}</p>
-                  <p className="text-xs text-slate-500">{c.name}</p>
-                </div>
-                {value === c.code && <span className="ml-auto text-blue-500 text-xs">✓</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ContactModal({ isOpen, onClose, onSuccess, editData }: ContactModalProps) {
   const isEditMode = !!editData;
@@ -194,10 +119,12 @@ export default function ContactModal({ isOpen, onClose, onSuccess, editData }: C
             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
               Khách hàng
             </label>
-            <CustomerDropdown
+            <CustomerSearchSelect
               value={formData.customer_code}
-              onChange={(code, name) => setFormData(prev => ({ ...prev, customer_code: code, customer_name: name }))}
+              valueKey="code"
+              onChange={(code, cust) => setFormData(prev => ({ ...prev, customer_code: code, customer_name: cust?.name || "" }))}
               customers={customers}
+              placeholder="-- Chọn khách hàng --"
             />
           </div>
 

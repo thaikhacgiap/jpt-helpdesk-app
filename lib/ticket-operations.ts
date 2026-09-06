@@ -158,10 +158,11 @@ export async function fetchTickets(): Promise<Ticket[]> {
       return []
     }
 
-    // Filter out only customer/service requests (CR-, TH-, SR-, TR-)
+    // Filter out customer/service requests (CR-, TH-, SR-, TR-) and maintenance plans (BTR-, or tt_type = 'Maintenance')
     const ticketsOnly = (data || []).filter(t => {
       const tid = (t.ticket_id || '').toUpperCase();
-      if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) return false;
+      if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-')) return false;
+      if (t.tt_type === 'Maintenance' || t.tt_type?.toLowerCase() === 'maintenance') return false;
       return true;
     });
 

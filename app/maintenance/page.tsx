@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter } from "lucide-react";
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 
 interface Task {
   id: string;
@@ -619,18 +620,17 @@ export default function MaintenancePage() {
           </select>
 
           {/* Customer Filter */}
-          <select
-            value={customerFilter}
-            onChange={e => setCustomerFilter(e.target.value)}
-            className="h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer max-w-[200px]"
-          >
-            <option value="All">Tất cả khách hàng</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-56 sm:w-64">
+            <CustomerSearchSelect
+              value={customerFilter}
+              onChange={(val) => setCustomerFilter(val || "All")}
+              customers={customers}
+              allowAll={true}
+              allValue="All"
+              allLabel="Tất cả khách hàng"
+              placeholder="Tất cả khách hàng"
+            />
+          </div>
         </div>
       </div>
 
@@ -909,19 +909,13 @@ export default function MaintenancePage() {
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                   Khách hàng <span className="text-red-500">*</span>
                 </label>
-                <select
+                <CustomerSearchSelect
                   value={form.customerId}
-                  onChange={e => handleCustomerChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                  onChange={(val) => handleCustomerChange(val)}
+                  customers={customers}
+                  placeholder="-- Chọn khách hàng --"
                   required
-                >
-                  <option value="">-- Chọn khách hàng --</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Contract Select */}

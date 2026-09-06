@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Target, Save, Loader2 } from "lucide-react";
 import { Opportunity, createOpportunity, updateOpportunity } from "@/lib/opportunity-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 
 interface OpportunityModalProps {
   isOpen: boolean;
@@ -188,12 +189,12 @@ export default function OpportunityModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Tên Khách hàng</label>
-              <input
-                type="text"
+              <CustomerSearchSelect
                 value={formData.customer_name}
-                onChange={e => setFormData({ ...formData, customer_name: e.target.value })}
-                placeholder="VD: Tập đoàn VNPT"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                valueKey="name"
+                onChange={(val) => setFormData({ ...formData, customer_name: val })}
+                placeholder="Tìm và chọn khách hàng..."
+                size="sm"
               />
             </div>
             <div>

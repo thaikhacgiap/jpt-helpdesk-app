@@ -13,6 +13,7 @@ import {
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
 import { fetchOpportunitiesByCustomer, Opportunity } from "@/lib/opportunity-operations";
 import { 
@@ -758,18 +759,12 @@ export default function ProjectsPage() {
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Khách hàng
                   </label>
-                  <select
+                  <CustomerSearchSelect
                     value={formData.customerId}
-                    onChange={(e) => handleCustomerChange(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn khách hàng --</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        [{c.code}] {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => handleCustomerChange(val)}
+                    customers={customers}
+                    placeholder="-- Chọn khách hàng --"
+                  />
                 </div>
 
                 <div>

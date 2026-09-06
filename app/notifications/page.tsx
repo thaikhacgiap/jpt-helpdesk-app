@@ -5,6 +5,7 @@ import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { getCurrentUser, UserSession, fetchUsers, SystemUser } from "@/lib/auth-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 import {
   CustomerNotification,
   InternalNotification,
@@ -629,18 +630,15 @@ export default function NotificationsPage() {
 
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Khách hàng áp dụng *</label>
-                  <select
+                  <CustomerSearchSelect
                     value={customerForm.target_customer_id}
-                    onChange={(e) => setCustomerForm({ ...customerForm, target_customer_id: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-semibold"
-                  >
-                    <option value="All">Tất cả khách hàng</option>
-                    {customersList.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setCustomerForm({ ...customerForm, target_customer_id: val || "All" })}
+                    customers={customersList}
+                    allowAll={true}
+                    allValue="All"
+                    allLabel="Tất cả khách hàng"
+                    placeholder="Chọn khách hàng áp dụng..."
+                  />
                 </div>
               </div>
 

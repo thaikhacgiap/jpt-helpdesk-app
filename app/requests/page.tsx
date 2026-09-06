@@ -12,6 +12,7 @@ import {
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchAllTickets, updateServiceTicket, createServiceRequest, ServiceTicket } from "@/lib/portal-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -1325,19 +1326,14 @@ export default function RequestsPage() {
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Khách hàng <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="customerId"
+                <CustomerSearchSelect
                   value={customerFormData.customerId}
-                  onChange={handleCustomerInputChange}
-                  required
+                  onChange={(val) => setCustomerFormData((prev) => ({ ...prev, customerId: val }))}
+                  customers={dbCustomers}
                   disabled={!!editingCustomerTicket}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                >
-                  <option value="">-- Chọn khách hàng nhận yêu cầu --</option>
-                  {dbCustomers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                  ))}
-                </select>
+                  required
+                  placeholder="-- Chọn khách hàng nhận yêu cầu --"
+                />
               </div>
 
               {/* Title */}

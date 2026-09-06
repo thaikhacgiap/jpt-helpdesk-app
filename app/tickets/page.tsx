@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 /* ─── Dropdown options ─────────────────────────────────────── */
-const TT_TYPE_OPTIONS = ["Technical support", "Implementation", "Health-Check", "Consultation", "Maintenance"];
+const TT_TYPE_OPTIONS = ["Technical support", "Implementation", "Health-Check", "Consultation"];
 const CONTRACT_SCOPE_OPTIONS = ["In scope", "Out scope", "Presale"];
 const CATEGORY_OPTIONS = ["Hardware", "Software", "Network", "Security", "Cloud", "Other"];
 const PRIORITY_OPTIONS = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
@@ -649,10 +649,13 @@ export default function TicketsPage() {
   const setFilter = (key: keyof Filters) => (val: string) =>
     setFilters((f) => ({ ...f, [key]: val }));
 
-  // Only filter out requests (CR-, TH-, SR-, TR-). Keep all other tickets (maintenance, etc.)
+  // Filter out requests (CR-, TH-, SR-, TR-) and maintenance plans (BTR-, Maintenance)
   const filtered = tickets.filter((t) => {
     const tid = (t.ticket_id || '').toUpperCase();
-    if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) {
+    if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-')) {
+      return false;
+    }
+    if (t.tt_type === 'Maintenance' || t.tt_type?.toLowerCase() === 'maintenance') {
       return false;
     }
     if (search && !Object.values(t).some((v) => String(v ?? "").toLowerCase().includes(search.toLowerCase()))) return false;

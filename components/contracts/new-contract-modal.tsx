@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, FileText, Save, Loader2 } from "lucide-react";
 import { Contract, createContract, updateContract } from "@/lib/contract-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 
 interface ContractModalProps {
   isOpen: boolean;
@@ -272,12 +273,12 @@ export default function ContractModal({
             {/* CUSTOMER */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700">CUSTOMER (Khách hàng)</label>
-              <input
-                type="text"
+              <CustomerSearchSelect
                 value={formData.customer}
-                onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
-                placeholder="Tên khách hàng / Doanh nghiệp"
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-hidden"
+                valueKey="name"
+                onChange={(val) => setFormData({ ...formData, customer: val })}
+                placeholder="Tìm và chọn khách hàng..."
+                size="sm"
               />
             </div>
 

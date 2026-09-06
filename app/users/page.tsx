@@ -14,6 +14,7 @@ import {
   SystemUser 
 } from "@/lib/auth-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { 
   Plus, 
   Search, 
@@ -584,25 +585,19 @@ export default function UsersPage() {
                       <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                         Chọn khách hàng liên kết <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        required
+                      <CustomerSearchSelect
                         value={createForm.customerId}
-                        onChange={e => {
-                          const cid = e.target.value;
-                          const cust = dbCustomers.find(c => c.id === cid);
+                        onChange={(cid, cust) => {
                           setCreateForm(f => ({
                             ...f,
                             customerId: cid,
                             department: cust ? cust.name : "Khách hàng doanh nghiệp"
                           }));
                         }}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chọn khách hàng --</option>
-                        {dbCustomers.map(c => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                        ))}
-                      </select>
+                        customers={dbCustomers}
+                        required
+                        placeholder="-- Chọn khách hàng liên kết --"
+                      />
                     </div>
                   );
                 }

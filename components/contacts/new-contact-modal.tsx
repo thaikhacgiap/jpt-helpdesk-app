@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { createContact } from "@/lib/contact-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
 
 interface NewContactModalProps {
   isOpen: boolean;
@@ -143,15 +144,13 @@ export default function NewContactModal({ isOpen, onClose, onSuccess }: NewConta
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Company
+                Company (Khách hàng)
               </label>
-              <input
-                type="text"
-                name="company"
+              <CustomerSearchSelect
                 value={formData.company}
-                onChange={handleChange}
-                placeholder="Company name"
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                valueKey="name"
+                onChange={(val) => setFormData(prev => ({ ...prev, company: val }))}
+                placeholder="Chọn công ty / khách hàng..."
               />
             </div>
 
