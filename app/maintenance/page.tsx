@@ -120,7 +120,7 @@ export default function MaintenancePage() {
       const { data } = await supabase
         .from("tickets")
         .select("*, customer:customers(id, name, code), contract:contracts(id, contract_no, service, code, name)")
-        .eq("tt_type", "Maintenance")
+        .or("tt_type.ilike.maintenance,ticket_id.ilike.BTR-%")
         .order("created_at", { ascending: false });
       setTickets(data || []);
     } catch (err) {
