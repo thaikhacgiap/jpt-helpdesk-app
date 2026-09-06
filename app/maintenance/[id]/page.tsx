@@ -96,7 +96,7 @@ export default function MaintenanceDetailPage() {
     try {
       const { data, error } = await supabase
         .from("tickets")
-        .select("*, customer:customers(id, name), contract:contracts(id, name)")
+        .select("*, customer:customers(id, name)")
         .eq("id", planId)
         .single();
 

@@ -117,11 +117,14 @@ export default function MaintenancePage() {
   const loadTickets = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
-        .select("*, customer:customers(id, name, code), contract:contracts(id, contract_no, service, code, name)")
+        .select("*, customer:customers(id, name, code)")
         .or("tt_type.ilike.maintenance,ticket_id.ilike.BTR-%")
         .order("created_at", { ascending: false });
+      if (error) {
+        console.error("Error loading maintenance tickets:", error);
+      }
       setTickets(data || []);
     } catch (err) {
       console.error("Error loading maintenance tickets:", err);
@@ -306,15 +309,15 @@ export default function MaintenancePage() {
   };
 
   const filtered = tickets.filter(t => {
-    const term = search.toLowerCase();
+    const term = (search || "").toLowerCase().trim();
     const displayId = (t.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-').toLowerCase();
-    const idMatch = displayId.includes(term);
-    const custMatch = (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
-    const contrMatch = (t.contract?.contract_no || t.contract?.service || t.contract?.name || t.contract_no || "")?.toLowerCase().includes(term);
+    const idMatch = !term || displayId.includes(term) || (t.ticket_id || "").toLowerCase().includes(term);
+    const custMatch = !term || (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
+    const contrMatch = !term || (t.contract_no || t.contract?.contract_no || t.contract?.service || t.contract?.name || "")?.toLowerCase().includes(term);
     
-    const matchesSearch = idMatch || custMatch || contrMatch;
-    const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
-    const matchesCustomer = customerFilter === "All" || t.customer_id === customerFilter;
+    const matchesSearch = !term || idMatch || custMatch || contrMatch;
+    const matchesStatus = !statusFilter || statusFilter === "All" || t.tt_status === statusFilter;
+    const matchesCustomer = !customerFilter || customerFilter === "All" || customerFilter === "" || t.customer_id === customerFilter || (t.customer?.name === customerFilter) || (t.customer_name === customerFilter);
 
     return matchesSearch && matchesStatus && matchesCustomer;
   });
