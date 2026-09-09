@@ -289,27 +289,40 @@ export default function ContractImportModal({
     }
   };
 
-  // CSV Import
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Import (.xlsx, .xls, .csv)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split("\n").filter(l => l.trim());
-      if (lines.length <= 1) return;
-      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ''));
-      const parsed = lines.slice(1).map(l => {
-        const cols = l.split(",").map(c => c.trim().replace(/^"|"$/g, ''));
-        const obj: any = {};
-        headers.forEach((h, i) => { obj[h] = cols[i] || ""; });
-        return obj;
+    setImporting(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/system/parse-file", {
+        method: "POST",
+        body: fd,
       });
-      setCsvRows(parsed);
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || "Không thể đọc file. Vui lòng kiểm tra lại định dạng.");
+        return;
+      }
+
+      if (!data.rows || data.rows.length === 0) {
+        alert("File không có dữ liệu hoặc không nhận diện được các cột.");
+        return;
+      }
+
+      setCsvRows(data.rows);
       setStep("preview");
-    };
-    reader.readAsText(file, "UTF-8");
+    } catch (err: any) {
+      alert("Lỗi khi tải file: " + (err.message || String(err)));
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleImportCSV = async () => {
@@ -319,33 +332,47 @@ export default function ContractImportModal({
     let updatedCount = 0;
     let errorCount = 0;
 
+    const getField = (row: any, ...keys: string[]): string => {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") {
+          return String(row[k]).trim();
+        }
+      }
+      const rowKeys = Object.keys(row);
+      for (const k of keys) {
+        const target = k.toLowerCase().replace(/[\s_\-]/g, "");
+        const found = rowKeys.find((rk) => rk.toLowerCase().replace(/[\s_\-]/g, "") === target);
+        if (found && row[found] !== undefined && row[found] !== null && String(row[found]).trim() !== "") {
+          return String(row[found]).trim();
+        }
+      }
+      return "";
+    };
+
     for (const r of csvRows) {
-      const contractNo =
-        r["CONTRACT NO"] ||
-        r["Contract No"] ||
-        r["contract_no"] ||
-        r["Mã Hợp Đồng"] ||
-        r["Mã hợp đồng"] ||
-        r["Số hợp đồng"] ||
-        "";
+      const contractNo = getField(
+        r,
+        "CONTRACT NO", "Contract No", "contract_no", "Mã Hợp Đồng", "Mã hợp đồng",
+        "Số hợp đồng", "Số HĐ", "Mã HĐ", "So hop dong", "Ma hop dong", "Contract"
+      );
 
       if (!contractNo.trim()) continue;
 
       const res = await upsertContractFromImport({
         contract_no: contractNo,
-        project_id: r["PROJECT ID"] || r["Project ID"] || r["project_id"] || r["Mã dự án"] || "",
-        status: r["STATUS"] || r["Status"] || r["Trạng thái"] || "Active",
-        signed_date: r["SIGNED DATE"] || r["Signed Date"] || r["signed_date"] || r["Ngày ký"] || "",
-        expiry_date: r["EXPIRY DATE"] || r["Expiry Date"] || r["expiry_date"] || r["Ngày hết hạn"] || "",
-        service: r["SERVICE"] || r["Service"] || r["service"] || r["Dịch vụ"] || "",
-        contract_type: r["CONTRACT TYPE"] || r["Contract Type"] || r["contract_type"] || r["Loại hợp đồng"] || "Hợp đồng dịch vụ",
-        description: r["DESCRIPTION"] || r["Description"] || r["description"] || r["Mô tả"] || "",
-        supplier: r["SUPPLIER"] || r["Supplier"] || r["supplier"] || r["Nhà cung cấp"] || "",
-        end_user: r["END USER"] || r["End User"] || r["end_user"] || r["Người dùng cuối"] || "",
-        customer: r["CUSTOMER"] || r["Customer"] || r["customer"] || r["Khách hàng"] || "",
-        am: r["AM"] || r["am"] || r["Phụ trách"] || "",
-        team: r["TEAM"] || r["Team"] || r["team"] || r["Nhóm"] || "",
-        fy: r["FY"] || r["fy"] || r["Năm tài chính"] || "",
+        project_id: getField(r, "PROJECT ID", "Project ID", "project_id", "Mã dự án", "Project", "Dự án"),
+        status: getField(r, "STATUS", "Status", "status", "Trạng thái", "Tinh trang") || "Active",
+        signed_date: getField(r, "SIGNED DATE", "Signed Date", "signed_date", "Ngày ký", "Ngay ky"),
+        expiry_date: getField(r, "EXPIRY DATE", "Expiry Date", "expiry_date", "Ngày hết hạn", "Ngay het han"),
+        service: getField(r, "SERVICE", "Service", "service", "Dịch vụ", "Dich vu"),
+        contract_type: getField(r, "CONTRACT TYPE", "Contract Type", "contract_type", "Loại hợp đồng", "Loai HD") || "Hợp đồng dịch vụ",
+        description: getField(r, "DESCRIPTION", "Description", "description", "Mô tả", "Mo ta", "Nội dung"),
+        supplier: getField(r, "SUPPLIER", "Supplier", "supplier", "Nhà cung cấp", "Nha cung cap"),
+        end_user: getField(r, "END USER", "End User", "end_user", "Người dùng cuối", "Enduser"),
+        customer: getField(r, "CUSTOMER", "Customer", "customer", "Khách hàng", "Khach hang"),
+        am: getField(r, "AM", "am", "Phụ trách", "Account Manager", "Nhan vien phu trach"),
+        team: getField(r, "TEAM", "Team", "team", "Nhóm", "Phong ban"),
+        fy: getField(r, "FY", "fy", "Năm tài chính", "Nam"),
       });
 
       if (res.success) {
@@ -633,9 +660,9 @@ CREATE POLICY "Allow all access to contracts" ON contracts FOR ALL USING (true) 
                   onClick={() => fileRef.current?.click()}
                   className="border-2 border-dashed border-slate-300 hover:border-purple-500 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 hover:bg-purple-50/20"
                 >
-                  <input ref={fileRef} type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleFileChange} className="hidden" />
                   <Upload size={36} className="mx-auto text-slate-400 mb-3" />
-                  <p className="text-sm font-bold text-slate-700">Nhấn để chọn file CSV Hợp đồng</p>
+                  <p className="text-sm font-bold text-slate-700">Nhấn để chọn file Excel (.xlsx, .xls) hoặc CSV Hợp đồng</p>
                   <p className="text-xs text-slate-500 mt-1">Hỗ trợ 14 cột: CONTRACT NO, PROJECT ID, STATUS, SIGNED DATE, EXPIRY DATE, SERVICE, CONTRACT TYPE, DESCRIPTION, SUPPLIER, END USER, CUSTOMER, AM, TEAM, FY</p>
                 </div>
               )}

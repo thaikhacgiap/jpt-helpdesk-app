@@ -169,7 +169,7 @@ export default function RequestsPage() {
 
     try {
       let finalDescription = customerFormData.description.trim();
-      if (customerFormData.tt_type === "Xử lý lỗi" && customerFormData.affected_service) {
+      if ((customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && customerFormData.affected_service) {
         finalDescription += `\n\n[Thông tin sự cố]\n- Thời gian bắt đầu sự cố: ${customerFormData.incident_start_time.replace("T", " ")}\n- Dịch vụ bị ảnh hưởng: ${customerFormData.affected_service}`;
       }
 
@@ -184,7 +184,7 @@ export default function RequestsPage() {
         priority: customerFormData.priority,
         remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
         hold_reason: customerFormData.affected_service || null,
-        start_time: customerFormData.tt_type === "Xử lý lỗi"
+        start_time: (customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi")
           ? new Date(customerFormData.incident_start_time).toISOString()
           : new Date().toISOString()
       };
@@ -636,8 +636,11 @@ export default function RequestsPage() {
                       {/* Loại yêu cầu */}
                       <td className="px-4 py-1">
                         <span className={`px-2 py-0.5 rounded-full text-sm font-normal border whitespace-nowrap ${
-                          t.tt_type === "Xử lý lỗi" ? "bg-red-50 text-red-700 border-red-200" :
-                          t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          t.tt_type === "Xử lý sự cố" || t.tt_type === "Xử lý lỗi" ? "bg-red-50 text-red-700 border-red-200" :
+                          t.tt_type === "HTKT thông thường" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                          t.tt_type === "HTKT nâng cao" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                          t.tt_type === "Thay đổi hệ thống" || t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          t.tt_type === "Tư vấn kỹ thuật" ? "bg-teal-50 text-teal-700 border-teal-200" :
                           t.tt_type === "Cài đặt - Nâng cấp" ? "bg-violet-50 text-violet-700 border-violet-200" :
                           "bg-slate-50 text-slate-600 border-slate-200"
                         }`}>{t.tt_type || "—"}</span>
@@ -650,7 +653,7 @@ export default function RequestsPage() {
 
                       {/* Thời gian sự cố */}
                       <td className="px-4 py-1 font-mono text-slate-500 text-sm font-normal whitespace-nowrap">
-                        {t.tt_type === "Xử lý lỗi" && t.start_time
+                        {(t.tt_type === "Xử lý sự cố" || t.tt_type === "Xử lý lỗi") && t.start_time
                           ? formatDate(t.start_time)
                           : <span className="text-slate-300">—</span>}
                       </td>
@@ -951,10 +954,11 @@ export default function RequestsPage() {
                     className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
                   >
                     <option value="All">Tất cả loại yêu cầu</option>
-                    <option value="Xử lý lỗi">Xử lý lỗi</option>
-                    <option value="Thay đổi cấu hình">Thay đổi cấu hình</option>
-                    <option value="Cài đặt - Nâng cấp">Cài đặt - Nâng cấp</option>
-                    <option value="Khác">Khác</option>
+                    <option value="Xử lý sự cố">Xử lý sự cố</option>
+                    <option value="HTKT thông thường">HTKT thông thường</option>
+                    <option value="HTKT nâng cao">HTKT nâng cao</option>
+                    <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
+                    <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
                   </select>
                 ) : (
                   <select
@@ -1366,10 +1370,11 @@ export default function RequestsPage() {
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                   >
                     <option value="">-- Chọn loại yêu cầu --</option>
-                    <option value="Xử lý lỗi">Xử lý lỗi</option>
-                    <option value="Thay đổi cấu hình">Thay đổi cấu hình</option>
-                    <option value="Cài đặt - Nâng cấp">Cài đặt - Nâng cấp</option>
-                    <option value="Khác">Khác</option>
+                    <option value="Xử lý sự cố">Xử lý sự cố</option>
+                    <option value="HTKT thông thường">HTKT thông thường</option>
+                    <option value="HTKT nâng cao">HTKT nâng cao</option>
+                    <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
+                    <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
                   </select>
                 </div>
 
@@ -1396,7 +1401,7 @@ export default function RequestsPage() {
               </div>
 
               {/* Conditional Incident Fields */}
-              {customerFormData.tt_type === "Xử lý lỗi" && (
+              {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left animate-fade-in">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">

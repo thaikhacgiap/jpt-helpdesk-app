@@ -199,7 +199,7 @@ export default function PortalPage() {
   const [tickets, setTickets] = useState<ServiceTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalDefaultType, setModalDefaultType] = useState("Xử lý lỗi");
+  const [modalDefaultType, setModalDefaultType] = useState("Xử lý sự cố");
   const [modalDefaultCategory, setModalDefaultCategory] = useState("Software");
   
   const [user, setUser] = useState<UserSession | null>(null);
@@ -449,10 +449,11 @@ export default function PortalPage() {
 
   // Chart 1: Request Type Breakdown (Biểu đồ Loại yêu cầu)
   const typeChartData = [
-    { name: "Xử lý lỗi", count: tickets.filter(t => t.tt_type === "Xử lý lỗi" || t.tt_type === "Technical support" || !t.tt_type).length || 1 },
-    { name: "Cấu hình", count: tickets.filter(t => t.tt_type === "Thay đổi cấu hình").length || 1 },
-    { name: "Cài đặt", count: tickets.filter(t => t.tt_type === "Cài đặt - Nâng cấp").length || 1 },
-    { name: "Tư vấn", count: tickets.filter(t => t.tt_type === "Yêu cầu tư vấn" || t.tt_type === "Consultant").length || 0 }
+    { name: "Sự cố", count: tickets.filter(t => t.tt_type === "Xử lý sự cố" || t.tt_type === "Xử lý lỗi" || t.tt_type === "Technical support" || !t.tt_type).length || 1 },
+    { name: "HTKT thường", count: tickets.filter(t => t.tt_type === "HTKT thông thường").length || 0 },
+    { name: "HTKT nâng cao", count: tickets.filter(t => t.tt_type === "HTKT nâng cao").length || 0 },
+    { name: "Thay đổi HT", count: tickets.filter(t => t.tt_type === "Thay đổi hệ thống" || t.tt_type === "Thay đổi cấu hình").length || 1 },
+    { name: "Tư vấn", count: tickets.filter(t => t.tt_type === "Tư vấn kỹ thuật" || t.tt_type === "Yêu cầu tư vấn" || t.tt_type === "Consultant" || t.tt_type === "Consultation").length || 0 }
   ];
 
   // Chart 2: Request Category Breakdown (Biểu đồ Danh mục yêu cầu)
@@ -638,7 +639,7 @@ export default function PortalPage() {
             {/* 1. NÚT TẠO REQUEST (CÙNG KÍCH CỠ & FONT CHỮ VỚI CÁC NÚT KHÁC) */}
             <div>
               <button 
-                onClick={() => openCreateModal("Xử lý lỗi", "Software")}
+                onClick={() => openCreateModal("Xử lý sự cố", "Software")}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition-all shadow-md shadow-blue-600/30 cursor-pointer text-left border border-blue-400/30 active:scale-[0.98]"
               >
                 <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">

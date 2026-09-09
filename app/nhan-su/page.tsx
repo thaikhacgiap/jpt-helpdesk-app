@@ -26,77 +26,18 @@ export default function NhanSuPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [editData, setEditData] = useState<NhanSu | null>(null);
   const [search, setSearch] = useState("");
-  const [stats, setStats] = useState({ total: 0, withPhone: 0, withEmail: 0, lastSync: "" });
+  const [stats, setStats] = useState({ total: 0, withPhone: 0, withEmail: 0, departments: 0 });
   const tableRef = useRef<any>(null);
 
   const loadStats = async () => {
     const data = await fetchNhanSu();
     const withPhone = data.filter(ns => !!ns.so_dien_thoai && ns.so_dien_thoai.trim() !== "").length;
     const withEmail = data.filter(ns => !!ns.email && ns.email.trim() !== "").length;
-    const lastSyncTime = localStorage.getItem("jpt_nhan_su_last_sync_time") || "Chưa đồng bộ";
-    setStats({ total: data.length, withPhone, withEmail, lastSync: lastSyncTime });
+    const uniqueDepts = new Set(data.map(ns => ns.bo_phan?.trim()).filter(Boolean));
+    setStats({ total: data.length, withPhone, withEmail, departments: uniqueDepts.size });
   };
 
   useEffect(() => { loadStats(); }, []);
-
-  // Background Auto-Sync Timer Effect
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-
-    const checkAndRunAutoSync = async (isInitial = false) => {
-      const isExplicitlyDisabled = localStorage.getItem("jpt_customer_auto_sync") === "false";
-      if (isExplicitlyDisabled) return;
-
-      const sheetUrl =
-        localStorage.getItem("jpt_nhan_su_sheet_url") ||
-        localStorage.getItem("jpt_customer_sheet_url") ||
-        localStorage.getItem("jpt_master_sheet_url") ||
-        "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit";
-
-      const userAccessToken = localStorage.getItem("jpt_google_user_access_token") || "";
-      const userRefreshToken = localStorage.getItem("jpt_google_user_refresh_token") || "";
-      const userClientId = localStorage.getItem("jpt_google_user_client_id") || "";
-      const userClientSecret = localStorage.getItem("jpt_google_user_client_secret") || "";
-
-      if (!userAccessToken && !userRefreshToken) return;
-
-      try {
-        const payload: any = {
-          sheetUrl,
-          sheetName: localStorage.getItem("jpt_nhan_su_sheet_name") || "NhanSu",
-          userAccessToken,
-          userRefreshToken,
-          userClientId,
-          userClientSecret,
-          mode: "sync_diff",
-        };
-
-        const res = await fetch("/api/nhan-su/sync-sheets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (data.success) {
-          const nowStr = new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
-          localStorage.setItem("jpt_nhan_su_last_sync_time", nowStr);
-          tableRef.current?.loadNhanSu?.();
-          loadStats();
-        }
-      } catch (err) {
-        console.error("Auto sync nhan su error:", err);
-      }
-    };
-
-    checkAndRunAutoSync(true);
-
-    const intervalMin = parseInt(localStorage.getItem("jpt_customer_auto_sync_interval") || "15", 10);
-    timer = setInterval(() => checkAndRunAutoSync(false), intervalMin * 60 * 1000);
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, []);
 
   const handleModalSuccess = () => {
     tableRef.current?.loadNhanSu?.();
@@ -187,6 +128,19 @@ export default function NhanSuPage() {
           <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
+                <p className="text-[11px] text-slate-500 font-medium">Phòng ban / Bộ phận</p>
+                <p className="text-xl font-bold text-amber-600 mt-0.5">{stats.departments}</p>
+                <p className="text-[11px] text-amber-500">Đơn vị trực thuộc</p>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                <Building2 size={16} className="text-amber-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
                 <p className="text-[11px] text-slate-500 font-medium">Có Số Điện Thoại</p>
                 <p className="text-xl font-bold text-teal-600 mt-0.5">{stats.withPhone}</p>
                 <p className="text-[11px] text-teal-500">Đầu mối liên lạc</p>
@@ -206,34 +160,6 @@ export default function NhanSuPage() {
               </div>
               <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
                 <Mail size={16} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setIsImportOpen(true)}
-            className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm hover:border-emerald-300 hover:shadow-md transition cursor-pointer group"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] text-slate-500 font-medium">Google Sheet Sync (NhanSu)</p>
-                {stats.lastSync && stats.lastSync !== "Chưa đồng bộ" ? (
-                  <>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <p className="text-xs font-bold text-emerald-700">Đã đồng bộ</p>
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-mono truncate max-w-[140px]">{stats.lastSync}</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs font-bold text-slate-600 mt-1">Chưa đồng bộ</p>
-                    <p className="text-[10px] text-emerald-600 font-medium">Tự động 1 chiều</p>
-                  </>
-                )}
-              </div>
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition">
-                <RefreshCw size={16} className="text-emerald-600 group-hover:rotate-180 transition duration-500" />
               </div>
             </div>
           </div>
@@ -269,18 +195,20 @@ export default function NhanSuPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsImportOpen(true)}
+              id="btn-import-nhansu"
               className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition shadow-sm"
             >
               <FileSpreadsheet size={15} className="text-emerald-600" />
-              Đồng bộ Google Sheet / Import
+              Nhập Excel / CSV
             </button>
 
             <button
               onClick={handleExport}
+              id="btn-export-nhansu"
               className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition shadow-sm"
             >
               <Download size={14} />
-              Export CSV
+              Xuất file Excel / CSV
             </button>
           </div>
         </div>

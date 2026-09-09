@@ -92,6 +92,17 @@ const NhanSuTable = forwardRef<any, NhanSuTableProps>(({ onRefresh, onEdit, sear
     return avatarColors[idx];
   };
 
+  const formatDate = (val: string | null | undefined) => {
+    if (!val) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+    const parts = str.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return str;
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-auto">
@@ -128,7 +139,7 @@ const NhanSuTable = forwardRef<any, NhanSuTableProps>(({ onRefresh, onEdit, sear
                   <div className="flex flex-col items-center justify-center gap-1.5">
                     <UserCheck size={32} className="text-slate-300 stroke-[1.5]" />
                     <p className="font-semibold text-slate-600 text-xs">Không có dữ liệu nhân sự</p>
-                    <p className="text-[11px] text-slate-400">Thêm mới hoặc đồng bộ nhân sự từ Google Sheets</p>
+                    <p className="text-[11px] text-slate-400">Thêm mới hoặc nhập nhân sự từ file Excel / CSV</p>
                   </div>
                 </td>
               </tr>
@@ -147,12 +158,18 @@ const NhanSuTable = forwardRef<any, NhanSuTableProps>(({ onRefresh, onEdit, sear
                   {/* Họ và tên */}
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs ${getAvatarColor(ns.ten_nhan_su || "")}`}>
-                        {getInitials(ns.ten_nhan_su || "")}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs ${getAvatarColor(ns.ten_nhan_su || ns.ma_nhan_su || "")}`}>
+                        {getInitials(ns.ten_nhan_su || ns.ma_nhan_su || "?")}
                       </div>
-                      <span className="font-semibold text-slate-800 truncate" title={ns.ten_nhan_su}>
-                        {ns.ten_nhan_su}
-                      </span>
+                      {ns.ten_nhan_su ? (
+                        <span className="font-semibold text-slate-800 truncate" title={ns.ten_nhan_su}>
+                          {ns.ten_nhan_su}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-amber-600 italic text-[11px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          (Chưa có tên)
+                        </span>
+                      )}
                     </div>
                   </td>
 
@@ -178,8 +195,8 @@ const NhanSuTable = forwardRef<any, NhanSuTableProps>(({ onRefresh, onEdit, sear
                   </td>
 
                   {/* Ngày sinh */}
-                  <td className="px-2 py-2 text-slate-500 font-mono text-[11px] truncate" title={ns.ngay_sinh}>
-                    {ns.ngay_sinh || <span className="text-slate-300">—</span>}
+                  <td className="px-2 py-2 text-slate-500 font-mono text-[11px] truncate" title={formatDate(ns.ngay_sinh) || ""}>
+                    {formatDate(ns.ngay_sinh) || <span className="text-slate-300">—</span>}
                   </td>
 
                   {/* CCCD */}
