@@ -23,6 +23,8 @@ import {
   Bell,
 } from "lucide-react";
 
+import { fetchRequests } from "@/lib/request-operations";
+
 interface MenuItemProps {
   isActive: boolean;
 }
@@ -41,9 +43,12 @@ export default function Sidebar() {
   useEffect(() => {
     const fetchOngoingCount = async () => {
       try {
+        // 1. Fetch tickets from Supabase for ongoing tickets and customer requests
         const { data, error } = await supabase
           .from("tickets")
           .select("ticket_id, tt_type, tt_status");
+        
+        let pendingCustomer = 0;
         if (!error && data) {
           const ongoing = data.filter((t) => {
             const tid = (t.ticket_id || '').toUpperCase();
@@ -54,17 +59,25 @@ export default function Sidebar() {
           }).length;
           setOngoingCount(ongoing);
 
-          const pendingRequests = data.filter((t) => {
+          pendingCustomer = data.filter((t) => {
             const tid = (t.ticket_id || '').toUpperCase();
-            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) {
+            if (tid.startsWith('CR-') || tid.startsWith('TH-')) {
               return t.tt_status === 'New' || t.tt_status === 'Chờ tiếp nhận';
             }
             return false;
           }).length;
-          setPendingRequestsCount(pendingRequests);
         }
+
+        // 2. Internal Service requests & Task requests
+        const localRequests = fetchRequests();
+        const pendingInternal = localRequests.filter(
+          (r) => r.status === 'New' || (r.status as string) === 'Chờ tiếp nhận'
+        ).length;
+
+        // Total of all 3 parts (Customer + Service + Task)
+        setPendingRequestsCount(pendingCustomer + pendingInternal);
       } catch (err) {
-        console.error("Error fetching ongoing count:", err);
+        console.error("Error fetching counts:", err);
       }
     };
 
