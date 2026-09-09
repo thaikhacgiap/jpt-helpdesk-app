@@ -32,6 +32,7 @@ export default function Sidebar() {
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
   const [ongoingCount, setOngoingCount] = useState<number>(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -52,6 +53,15 @@ export default function Sidebar() {
             return ["In progress", "On Hold", "Reporting"].includes(t.tt_status || "");
           }).length;
           setOngoingCount(ongoing);
+
+          const pendingRequests = data.filter((t) => {
+            const tid = (t.ticket_id || '').toUpperCase();
+            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) {
+              return t.tt_status === 'New' || t.tt_status === 'Chờ tiếp nhận';
+            }
+            return false;
+          }).length;
+          setPendingRequestsCount(pendingRequests);
         }
       } catch (err) {
         console.error("Error fetching ongoing count:", err);
@@ -129,6 +139,14 @@ export default function Sidebar() {
                 >
                   <Inbox size={18} className="shrink-0" />
                   <span className="truncate">Yêu cầu</span>
+                  {pendingRequestsCount > 0 && (
+                    <span className="ml-auto relative flex items-center justify-center shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative bg-red-600 text-white text-[10px] font-extrabold rounded-full px-1.5 min-w-[20px] h-5 flex items-center justify-center animate-pulse shadow-sm">
+                        {pendingRequestsCount}
+                      </span>
+                    </span>
+                  )}
                 </Link>
               )}
 

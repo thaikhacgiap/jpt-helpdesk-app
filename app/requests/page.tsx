@@ -499,8 +499,13 @@ export default function RequestsPage() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const pendingCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status === "New");
-  const processedCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status !== "New");
+  const pendingCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status === "New" || t.tt_status === "Chờ tiếp nhận");
+  const processedCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status !== "New" && t.tt_status !== "Chờ tiếp nhận");
+
+  // Pending counts for tab alert badges
+  const totalPendingCustomerCount = customerTickets.filter(
+    t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && (t.tt_status === "New" || t.tt_status === "Chờ tiếp nhận")
+  ).length;
 
   // 2. FILTER & SPLIT FOR SERVICE REQUESTS (Tab 2)
   const serviceRequests = requests.filter(req => req.type !== "Yêu cầu công việc");
@@ -519,8 +524,12 @@ export default function RequestsPage() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const pendingServiceRequests = filteredServiceRequests.filter(r => r.status === "New");
-  const processedServiceRequests = filteredServiceRequests.filter(r => r.status !== "New");
+  const pendingServiceRequests = filteredServiceRequests.filter(r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận");
+  const processedServiceRequests = filteredServiceRequests.filter(r => r.status !== "New" && (r.status as string) !== "Chờ tiếp nhận");
+
+  const totalPendingServiceCount = serviceRequests.filter(
+    r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận"
+  ).length;
 
   // 3. FILTER & SPLIT FOR TASK REQUESTS (Tab 3)
   const taskRequests = requests.filter(req => req.type === "Yêu cầu công việc");
@@ -538,8 +547,12 @@ export default function RequestsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const pendingTaskRequests = filteredTaskRequests.filter(r => r.status === "New");
-  const processedTaskRequests = filteredTaskRequests.filter(r => r.status !== "New");
+  const pendingTaskRequests = filteredTaskRequests.filter(r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận");
+  const processedTaskRequests = filteredTaskRequests.filter(r => r.status !== "New" && (r.status as string) !== "Chờ tiếp nhận");
+
+  const totalPendingTaskCount = taskRequests.filter(
+    r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận"
+  ).length;
 
   // 3. RENDER CUSTOMER TICKETS TABLE (Tab 1)
   const renderCustomerTicketsTable = (title: string, list: ServiceTicket[], emptyMsg: string, isPending: boolean) => {
@@ -881,9 +894,18 @@ export default function RequestsPage() {
             >
               <Inbox size={12} className={activeTab === "customer" ? "text-slate-950" : ""} />
               <span>Customer request</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "customer" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
-                {customerTickets.length}
-              </span>
+              {totalPendingCustomerCount > 0 ? (
+                <span className="relative flex items-center justify-center shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex items-center justify-center px-1.5 py-0.5 min-w-[20px] rounded-full text-xs font-extrabold bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.7)] animate-pulse">
+                    {totalPendingCustomerCount}
+                  </span>
+                </span>
+              ) : (
+                <span className={`px-1.5 py-0.5 min-w-[20px] text-center rounded-full text-xs font-normal ${activeTab === "customer" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                  0
+                </span>
+              )}
             </button>
 
             <button
@@ -901,9 +923,18 @@ export default function RequestsPage() {
             >
               <Users size={12} className={activeTab === "service" ? "text-slate-950" : ""} />
               <span>Service request</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "service" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
-                {serviceRequests.length}
-              </span>
+              {totalPendingServiceCount > 0 ? (
+                <span className="relative flex items-center justify-center shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex items-center justify-center px-1.5 py-0.5 min-w-[20px] rounded-full text-xs font-extrabold bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.7)] animate-pulse">
+                    {totalPendingServiceCount}
+                  </span>
+                </span>
+              ) : (
+                <span className={`px-1.5 py-0.5 min-w-[20px] text-center rounded-full text-xs font-normal ${activeTab === "service" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                  0
+                </span>
+              )}
             </button>
 
             <button
@@ -921,9 +952,18 @@ export default function RequestsPage() {
             >
               <CheckSquare size={12} className={activeTab === "task" ? "text-slate-950" : ""} />
               <span>Task request</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-normal ${activeTab === "task" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
-                {taskRequests.length}
-              </span>
+              {totalPendingTaskCount > 0 ? (
+                <span className="relative flex items-center justify-center shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex items-center justify-center px-1.5 py-0.5 min-w-[20px] rounded-full text-xs font-extrabold bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.7)] animate-pulse">
+                    {totalPendingTaskCount}
+                  </span>
+                </span>
+              ) : (
+                <span className={`px-1.5 py-0.5 min-w-[20px] text-center rounded-full text-xs font-normal ${activeTab === "task" ? "bg-orange-600/20 text-orange-950" : "bg-slate-800 text-slate-300"}`}>
+                  0
+                </span>
+              )}
             </button>
           </div>
         </div>
