@@ -33,7 +33,6 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
-  const [ongoingCount, setOngoingCount] = useState<number>(0);
   const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
 
   useEffect(() => {
@@ -41,24 +40,15 @@ export default function Sidebar() {
   }, []);
 
   useEffect(() => {
-    const fetchOngoingCount = async () => {
+    const fetchCounts = async () => {
       try {
-        // 1. Fetch tickets from Supabase for ongoing tickets and customer requests
+        // 1. Fetch tickets from Supabase for customer requests
         const { data, error } = await supabase
           .from("tickets")
           .select("ticket_id, tt_type, tt_status");
         
         let pendingCustomer = 0;
         if (!error && data) {
-          const ongoing = data.filter((t) => {
-            const tid = (t.ticket_id || '').toUpperCase();
-            if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-')) {
-              return false;
-            }
-            return ["In progress", "On Hold", "Reporting"].includes(t.tt_status || "");
-          }).length;
-          setOngoingCount(ongoing);
-
           pendingCustomer = data.filter((t) => {
             const tid = (t.ticket_id || '').toUpperCase();
             if (tid.startsWith('CR-') || tid.startsWith('TH-')) {
@@ -81,8 +71,8 @@ export default function Sidebar() {
       }
     };
 
-    fetchOngoingCount();
-    const interval = setInterval(fetchOngoingCount, 5000);
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -173,11 +163,6 @@ export default function Sidebar() {
                   >
                     <AlertCircle size={18} className="shrink-0" />
                     <span className="truncate">Quản Lý Ticket</span>
-                    {ongoingCount > 0 && (
-                      <span className="ml-auto bg-orange-500 text-white text-[10px] font-extrabold rounded-full w-5 h-5 flex items-center justify-center shrink-0">
-                        {ongoingCount}
-                      </span>
-                    )}
                   </Link>
                 </div>
               )}
