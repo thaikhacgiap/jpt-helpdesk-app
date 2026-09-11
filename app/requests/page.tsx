@@ -1426,8 +1426,8 @@ export default function RequestsPage() {
 
               {/* 2-Column Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-                {/* Left Column: Yêu cầu & Phân loại */}
-                <div className="space-y-3">
+                {/* Left Column: Tất cả thông tin */}
+                <div className="space-y-2.5">
                   {/* Row 1: Code & Title */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <div className="text-left">
@@ -1462,7 +1462,7 @@ export default function RequestsPage() {
                   </div>
 
                   {/* Row 2: Type & Status / Start Time */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Loại yêu cầu <span className="text-red-500">*</span>
@@ -1522,7 +1522,7 @@ export default function RequestsPage() {
                   </div>
 
                   {/* Row 3: Requester & Follower */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Người yêu cầu
@@ -1557,35 +1557,12 @@ export default function RequestsPage() {
                       </select>
                     </div>
                   </div>
-                </div>
 
-                {/* Right Column: Tiếp nhận & Nội dung */}
-                <div className="space-y-3 flex flex-col justify-between">
-                  {/* Assignee */}
+                  {/* Row 4: Assignee */}
                   <div className="text-left">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
-                        Người tiếp nhận / Được giao
-                      </label>
-                      {(!formData.assignee || formData.assignee !== getCurrentUser()?.name) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentUser = getCurrentUser();
-                            const name = currentUser?.name || "Kỹ thuật viên";
-                            setFormData(prev => ({
-                              ...prev,
-                              assignee: name,
-                              status: prev.status === "New" ? "In Progress" : prev.status,
-                              receiveTime: prev.receiveTime || new Date().toISOString().substring(0, 16)
-                            }));
-                          }}
-                          className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 cursor-pointer"
-                        >
-                          + Tôi nhận
-                        </button>
-                      )}
-                    </div>
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Người tiếp nhận / Được giao
+                    </label>
                     <select
                       name="assignee"
                       value={formData.assignee}
@@ -1599,9 +1576,9 @@ export default function RequestsPage() {
                     </select>
                   </div>
 
-                  {/* Receive & Complete Time */}
+                  {/* Row 5: Receive & Complete Time */}
                   {editingRequest && (
-                    <div className="grid grid-cols-2 gap-3 text-left">
+                    <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
@@ -1629,21 +1606,20 @@ export default function RequestsPage() {
                       </div>
                     </div>
                   )}
+                </div>
 
-                  {/* Description */}
-                  <div className="text-left flex-1 flex flex-col">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Mô tả yêu cầu
-                    </label>
-                    <textarea
-                      name="description"
-                      value={formData.description}
-                      onChange={handleInputChange}
-                      placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ..."
-                      rows={editingRequest ? 4 : 6}
-                      className="w-full flex-1 min-h-[85px] px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
-                    />
-                  </div>
+                {/* Right Column: Chỉ dành cho Mô tả yêu cầu */}
+                <div className="flex flex-col h-full text-left">
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                    Mô tả yêu cầu
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ..."
+                    className="w-full flex-1 min-h-[220px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                  />
                 </div>
               </div>
 
@@ -1738,8 +1714,8 @@ export default function RequestsPage() {
 
               {/* 2-Column Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-                {/* Left Column: Yêu cầu & Hợp đồng */}
-                <div className="space-y-3">
+                {/* Left Column: Tất cả thông tin */}
+                <div className="space-y-2.5">
                   {/* Customer Selection */}
                   <div className="text-left">
                     <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -1772,7 +1748,7 @@ export default function RequestsPage() {
                   </div>
 
                   {/* Type and Category */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Loại yêu cầu <span className="text-red-500">*</span>
@@ -1819,7 +1795,7 @@ export default function RequestsPage() {
 
                   {/* Conditional Incident Fields */}
                   {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
-                    <div className="grid grid-cols-2 gap-3 text-left animate-fade-in">
+                    <div className="grid grid-cols-2 gap-2.5 text-left animate-fade-in">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian sự cố <span className="text-red-500">*</span>
@@ -1893,13 +1869,10 @@ export default function RequestsPage() {
                       );
                     })()}
                   </div>
-                </div>
 
-                {/* Right Column: Xử lý, Tiếp nhận & Mô tả */}
-                <div className="space-y-3 flex flex-col justify-between">
                   {/* Edit-Only Fields: Trạng thái & Người tiếp nhận */}
                   {editingCustomerTicket && (
-                    <div className="grid grid-cols-2 gap-3 text-left">
+                    <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Trạng thái <span className="text-red-500">*</span>
@@ -1919,29 +1892,9 @@ export default function RequestsPage() {
                       </div>
 
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide truncate">
-                            Người tiếp nhận
-                          </label>
-                          {(!customerFormData.assigned || customerFormData.assigned !== getCurrentUser()?.name) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentUser = getCurrentUser();
-                                const name = currentUser?.name || "Kỹ thuật viên";
-                                setCustomerFormData(prev => ({
-                                  ...prev,
-                                  assigned: name,
-                                  tt_status: prev.tt_status === "New" ? "In Progress" : prev.tt_status,
-                                  receive_time: prev.receive_time || new Date().toISOString().substring(0, 16)
-                                }));
-                              }}
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
-                            >
-                              + Tôi nhận
-                            </button>
-                          )}
-                        </div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Người tiếp nhận
+                        </label>
                         <select
                           name="assigned"
                           value={customerFormData.assigned}
@@ -1959,7 +1912,7 @@ export default function RequestsPage() {
 
                   {/* Edit-Only Fields: Thời gian tiếp nhận & Thời gian hoàn thành */}
                   {editingCustomerTicket && (
-                    <div className="grid grid-cols-2 gap-3 text-left">
+                    <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
@@ -1987,21 +1940,20 @@ export default function RequestsPage() {
                       </div>
                     </div>
                   )}
+                </div>
 
-                  {/* Description */}
-                  <div className="text-left flex-1 flex flex-col">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Mô tả chi tiết
-                    </label>
-                    <textarea
-                      name="description"
-                      value={customerFormData.description}
-                      onChange={handleCustomerInputChange}
-                      placeholder="Mô tả cụ thể nội dung sự cố, mã lỗi, hoặc các hướng dẫn chi tiết..."
-                      rows={editingCustomerTicket ? 4 : 7}
-                      className="w-full flex-1 min-h-[90px] px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
-                    />
-                  </div>
+                {/* Right Column: Chỉ dành cho Mô tả chi tiết */}
+                <div className="flex flex-col h-full text-left">
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                    Mô tả chi tiết
+                  </label>
+                  <textarea
+                    name="description"
+                    value={customerFormData.description}
+                    onChange={handleCustomerInputChange}
+                    placeholder="Mô tả cụ thể nội dung sự cố, thông tin máy chủ, mã lỗi, hoặc các hướng dẫn chi tiết..."
+                    className="w-full flex-1 min-h-[220px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                  />
                 </div>
               </div>
 
