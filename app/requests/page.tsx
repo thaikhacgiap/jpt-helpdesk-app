@@ -388,8 +388,8 @@ export default function RequestsPage() {
   const handleCustomerReceive = async (ticket: ServiceTicket) => {
     try {
       const currentUser = getCurrentUser();
-      const receiver = ticket.assigned || currentUser?.name || "Kỹ thuật viên";
-      const receiveTime = ticket.start_time || new Date().toISOString();
+      const receiver = currentUser?.name || "Kỹ thuật viên";
+      const receiveTime = new Date().toISOString();
       await updateServiceTicket(ticket.id, {
         tt_status: "In Progress",
         assigned: receiver,
@@ -403,11 +403,45 @@ export default function RequestsPage() {
     }
   };
 
+  const handleModalCustomerReceive = async () => {
+    const currentUser = getCurrentUser();
+    const receiverName = currentUser?.name || "Kỹ thuật viên";
+    const nowIso = new Date().toISOString();
+    const nowLocal = nowIso.substring(0, 16);
+
+    setCustomerFormData(prev => ({
+      ...prev,
+      assigned: receiverName,
+      tt_status: "In Progress",
+      receive_time: prev.receive_time || nowLocal
+    }));
+
+    if (editingCustomerTicket) {
+      try {
+        await updateServiceTicket(editingCustomerTicket.id, {
+          tt_status: "In Progress",
+          assigned: receiverName,
+          start_time: customerFormData.receive_time ? new Date(customerFormData.receive_time).toISOString() : nowIso,
+          updated_at: nowIso
+        });
+        loadCustomerTicketsList();
+      } catch (err) {
+        console.error("Error receiving customer ticket in modal:", err);
+        alert("Lỗi khi tiếp nhận yêu cầu: " + String(err));
+      }
+    }
+  };
+
+  const handleModalCreateTicket = () => {
+    if (!editingCustomerTicket) return;
+    window.location.href = `/tickets/create?customerId=${customerFormData.customerId}&title=${encodeURIComponent(customerFormData.title)}&description=${encodeURIComponent(customerFormData.description)}&priority=${customerFormData.priority}&category=${customerFormData.category}&requestTicketId=${editingCustomerTicket.ticket_id}&requestDbId=${editingCustomerTicket.id}`;
+  };
+
   const handleInternalReceive = (req: RequestTask) => {
     try {
       const currentUser = getCurrentUser();
-      const receiver = req.assignee || currentUser?.name || "Kỹ thuật viên";
-      const receiveTime = req.receiveTime || new Date().toISOString();
+      const receiver = currentUser?.name || "Kỹ thuật viên";
+      const receiveTime = new Date().toISOString();
       updateRequest(req.id, {
         status: "In Progress",
         assignee: receiver,
@@ -417,6 +451,29 @@ export default function RequestsPage() {
     } catch (err) {
       console.error("Error receiving internal request:", err);
       alert("Lỗi khi tiếp nhận yêu cầu: " + String(err));
+    }
+  };
+
+  const handleModalInternalReceive = () => {
+    const currentUser = getCurrentUser();
+    const receiverName = currentUser?.name || "Kỹ thuật viên";
+    const nowIso = new Date().toISOString();
+    const nowLocal = nowIso.substring(0, 16);
+
+    setFormData(prev => ({
+      ...prev,
+      assignee: receiverName,
+      status: "In Progress",
+      receiveTime: prev.receiveTime || nowLocal
+    }));
+
+    if (editingRequest) {
+      updateRequest(editingRequest.id, {
+        status: "In Progress",
+        assignee: receiverName,
+        receiveTime: formData.receiveTime || nowIso
+      });
+      refreshRequests();
     }
   };
 
@@ -1483,9 +1540,29 @@ export default function RequestsPage() {
                 </div>
 
                 <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Người tiếp nhận / Được giao
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Người tiếp nhận / Được giao
+                    </label>
+                    {(!formData.assignee || formData.assignee !== getCurrentUser()?.name) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentUser = getCurrentUser();
+                          const name = currentUser?.name || "Kỹ thuật viên";
+                          setFormData(prev => ({
+                            ...prev,
+                            assignee: name,
+                            status: prev.status === "New" ? "In Progress" : prev.status,
+                            receiveTime: prev.receiveTime || new Date().toISOString().substring(0, 16)
+                          }));
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 cursor-pointer"
+                      >
+                        + Tôi tiếp nhận
+                      </button>
+                    )}
+                  </div>
                   <select
                     name="assignee"
                     value={formData.assignee}
@@ -1570,7 +1647,7 @@ export default function RequestsPage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
                 {editingRequest ? (
                   <button
                     type="button"
@@ -1586,7 +1663,19 @@ export default function RequestsPage() {
                   </button>
                 ) : <div />}
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {editingRequest && (formData.status === "New" || !formData.assignee) && (
+                    <button
+                      type="button"
+                      onClick={handleModalInternalReceive}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      title="Bấm để nhận tiếp nhận yêu cầu này"
+                    >
+                      <Check size={15} />
+                      <span>Tiếp Nhận</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -1822,16 +1911,36 @@ export default function RequestsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Người tiếp nhận
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Người tiếp nhận
+                      </label>
+                      {(!customerFormData.assigned || customerFormData.assigned !== getCurrentUser()?.name) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentUser = getCurrentUser();
+                            const name = currentUser?.name || "Kỹ thuật viên";
+                            setCustomerFormData(prev => ({
+                              ...prev,
+                              assigned: name,
+                              tt_status: prev.tt_status === "New" ? "In Progress" : prev.tt_status,
+                              receive_time: prev.receive_time || new Date().toISOString().substring(0, 16)
+                            }));
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 cursor-pointer"
+                        >
+                          + Tôi tiếp nhận
+                        </button>
+                      )}
+                    </div>
                     <select
                       name="assigned"
                       value={customerFormData.assigned}
                       onChange={handleCustomerInputChange}
                       className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
                     >
-                      <option value="">-- Chọn nhân sự tiếp nhận --</option>
+                      <option value="">-- Chưa có người tiếp nhận --</option>
                       {staffList.map((s) => (
                         <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
                       ))}
@@ -1887,7 +1996,7 @@ export default function RequestsPage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
                 {editingCustomerTicket ? (
                   <button
                     type="button"
@@ -1903,7 +2012,46 @@ export default function RequestsPage() {
                   </button>
                 ) : <div />}
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Nút Tiếp nhận trong Form */}
+                  {editingCustomerTicket && (customerFormData.tt_status === "New" || !customerFormData.assigned) && (
+                    <button
+                      type="button"
+                      onClick={handleModalCustomerReceive}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      title="Bấm để nhận tiếp nhận yêu cầu này (tự động gán bạn làm người tiếp nhận và chuyển sang Đang xử lý)"
+                    >
+                      <Check size={15} />
+                      <span>Tiếp Nhận</span>
+                    </button>
+                  )}
+
+                  {/* Nút Tạo Ticket trong Form */}
+                  {editingCustomerTicket && (
+                    !editingCustomerTicket.document_link || !editingCustomerTicket.document_link.startsWith("TK-") ? (
+                      <button
+                        type="button"
+                        onClick={handleModalCreateTicket}
+                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        title="Tạo Ticket kỹ thuật từ yêu cầu này"
+                      >
+                        <Plus size={15} />
+                        <span>Tạo Ticket</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.href = `/tickets?search=${editingCustomerTicket.document_link}`;
+                        }}
+                        className="px-3.5 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl font-medium text-xs transition cursor-pointer flex items-center gap-1.5"
+                        title="Xem chi tiết ticket liên kết"
+                      >
+                        <span>Đã liên kết: {editingCustomerTicket.document_link}</span>
+                      </button>
+                    )
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
