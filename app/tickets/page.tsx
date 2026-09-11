@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 /* ─── Dropdown options ─────────────────────────────────────── */
-const TT_TYPE_OPTIONS = ["Technical support", "Implementation", "Health-Check", "Consultation"];
+const TT_TYPE_OPTIONS = ["Xử lý sự cố", "HTKT thông thường", "HTKT nâng cao", "Thay đổi hệ thống", "Tư vấn kỹ thuật", "Bảo Trì", "Triển khai dự án"];
 const CONTRACT_SCOPE_OPTIONS = ["In scope", "Out scope", "Presale"];
 const CATEGORY_OPTIONS = ["Hardware", "Software", "Network", "Security", "Cloud", "Other"];
 const PRIORITY_OPTIONS = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
@@ -36,6 +36,7 @@ interface Ticket {
   creator_name?: string;
   created_at?: string;
   created_time?: string;
+  request_time?: string;
   start_time?: string;
   startTime?: string;
   event_time?: string;

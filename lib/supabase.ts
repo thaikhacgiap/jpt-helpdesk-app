@@ -91,6 +91,7 @@ export interface Ticket {
   tt_status?: string
   progress?: string
   start_time?: string
+  request_time?: string
   end_time?: string
   close_time?: string
   hold_time?: string

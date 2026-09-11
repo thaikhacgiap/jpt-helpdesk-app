@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   X, ChevronDown, Save, Edit2, CheckCircle,
   Search, Building2, FileText, Check, Maximize2,
-  Trash2, Pause, Info, Calendar, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
+  Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
   Filter, AlertCircle, HardDrive
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate } from "@/lib/ticket-operations";
@@ -43,6 +43,7 @@ export interface TicketData {
   sla_status?: string;
   sla_time?: string;
   progress?: string;
+  request_time?: string;
   start_time?: string;
   end_time?: string;
   tt_close_time?: string;
@@ -68,7 +69,7 @@ interface TicketFormModalProps {
 /* ═══════════════════════════════════════════════════════════ */
 /* Options                                                     */
 /* ═══════════════════════════════════════════════════════════ */
-const TT_TYPE_OPTIONS   = ["Technical support", "Implementation", "Health-Check", "Consultation"];
+const TT_TYPE_OPTIONS   = ["Xử lý sự cố", "HTKT thông thường", "HTKT nâng cao", "Thay đổi hệ thống", "Tư vấn kỹ thuật", "Bảo Trì", "Triển khai dự án"];
 const CATEGORY_OPTIONS  = ["Hardware", "Software", "Network", "Security", "Database", "Cloud", "Other"];
 const PRIORITY_OPTIONS  = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
 const TT_STATUS_OPTIONS = ["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"];
@@ -169,11 +170,12 @@ function serializeProgress(completed: Set<StepKey>, saved: Set<StepKey>): string
 /* Shared UI: Fixed-position dropdown (escapes overflow:hidden) */
 /* ═══════════════════════════════════════════════════════════ */
 function TealSelect({
-  value, onChange, options, placeholder, readOnly, fullWidth,
+  value, onChange, options, placeholder, readOnly, fullWidth, dropUp,
 }: {
   value: string; onChange: (v: string) => void;
   options: string[]; placeholder?: string;
   readOnly?: boolean; fullWidth?: boolean;
+  dropUp?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -246,7 +248,7 @@ function TealSelect({
         };
       default:
         return {
-          bg: "bg-slate-55 hover:bg-slate-100",
+          bg: "bg-slate-50 hover:bg-slate-100",
           text: "text-slate-700",
           border: "border-slate-200 focus-within:border-slate-400",
           dot: "bg-slate-400",
@@ -269,6 +271,8 @@ function TealSelect({
     );
   }
 
+  const isUp = dropUp || (rect ? (window.innerHeight - rect.bottom < 260) : false);
+
   return (
     <div ref={ref} className={`relative ${fullWidth ? "w-full" : "inline-block min-w-[140px]"}`}>
       <button
@@ -283,8 +287,15 @@ function TealSelect({
       </button>
       {open && rect && (
         <div
-          style={{ position: "fixed", top: rect.bottom + 2, left: rect.left, width: rect.width, zIndex: 9999 }}
-          className="bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden py-1"
+          style={{
+            position: "fixed",
+            ...(isUp
+              ? { bottom: window.innerHeight - rect.top + 4, left: rect.left }
+              : { top: rect.bottom + 2, left: rect.left }),
+            width: Math.max(rect.width, 140),
+            zIndex: 9999
+          }}
+          className="bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden py-1 animate-fade-in"
         >
           <div className="max-h-52 overflow-y-auto">
             {options.map((opt) => {
@@ -636,6 +647,7 @@ function FooterBar({
               value={ttStatus} onChange={setTtStatus}
               options={TT_STATUS_OPTIONS} placeholder="In progress"
               readOnly={isStepDone && !editing} fullWidth={false}
+              dropUp={true}
             />
           </div>
         )}
@@ -646,6 +658,7 @@ function FooterBar({
               value={onsite} onChange={setOnsite}
               options={["onsite", "remote", "onsite/remote", "onsite and remote"]} placeholder="— Chọn Onsite —"
               readOnly={isStepDone && !editing} fullWidth={false}
+              dropUp={true}
             />
           </div>
         )}
@@ -692,7 +705,7 @@ function FooterBar({
 /* ═══════════════════════════════════════════════════════════ */
 interface CreateFormData {
   title: string; description: string;
-  ttType: string; category: string; startTime: string; priority: string;
+  ttType: string; category: string; requestTime?: string; startTime: string; priority: string;
 }
 function CreateTicketForm({ editing, data, onChange }: {
   editing: boolean; data: CreateFormData;
@@ -800,13 +813,32 @@ function CreateTicketForm({ editing, data, onChange }: {
         </div>
       </div>
 
-      {/* Start Time and Priority */}
+      {/* Request Time and Start Time */}
       <div className="grid grid-cols-2 gap-6">
+        {/* Request Time */}
+        <div className="space-y-1">
+          <label className={labelStyle}>
+            Request time
+            <span title="Thời điểm nhận yêu cầu từ khách hàng"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
+          </label>
+          <div className={inputWrapperStyle(!!data.requestTime)}>
+            <Clock size={16} className="text-slate-400 mr-2.5 shrink-0" />
+            <input
+              type={editing ? "datetime-local" : "text"}
+              value={data.requestTime || ""}
+              readOnly={!editing}
+              onChange={(e) => onChange({ requestTime: e.target.value })}
+              placeholder="—"
+              className="w-full bg-transparent text-sm text-slate-800 outline-none"
+            />
+          </div>
+        </div>
+
         {/* Start Time */}
         <div className="space-y-1">
           <label className={labelStyle}>
             Start time
-            <span title="Thời điểm bắt đầu phát sinh sự cố"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
+            <span title="Thời điểm bắt đầu phát sinh sự cố / tiếp nhận"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.startTime)}>
             <Calendar size={16} className="text-slate-400 mr-2.5 shrink-0" />
@@ -820,8 +852,10 @@ function CreateTicketForm({ editing, data, onChange }: {
             />
           </div>
         </div>
+      </div>
 
-        {/* Priority */}
+      {/* Priority */}
+      <div className="grid grid-cols-2 gap-6">
         <div className="space-y-1">
           <label className={labelStyle}>
             Priority {req}
@@ -3412,124 +3446,9 @@ function ReportingForm({
             />
           </div>
           
-          <div className="space-y-1.5">
-            <label className={labelCls}>Phạm vi ảnh hưởng</label>
-            <TealField
-              value={data.phamVi}
-              onChange={(v) => onChange({ phamVi: v })}
-              editing={editing}
-              placeholder="Ví dụ: Một vài tài khoản, Toàn bộ hệ thống..."
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* KẾT QUẢ VÀ GIẢI PHÁP */}
-      <div className="bg-[#fafeff] p-5 rounded-xl border border-[#b2e5f5] space-y-4">
-        <h4 className="text-sm font-bold text-[#0099cc] border-b border-[#e1f5fe] pb-2">Kết quả kiểm tra & Giải pháp xử lý</h4>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className={labelCls}>Kết quả kiểm tra</label>
-            <TealField
-              value={data.ketQuaKiemTra}
-              onChange={(v) => onChange({ ketQuaKiemTra: v })}
-              editing={editing}
-              rows={3}
-              placeholder="Kết quả ghi nhận khi kiểm tra hệ thống..."
-            />
-          </div>
-          
-          <div className="space-y-1.5">
-            <label className={labelCls}>Chẩn đoán nguyên nhân</label>
-            <TealField
-              value={data.chanDoan}
-              onChange={(v) => onChange({ chanDoan: v })}
-              editing={editing}
-              rows={3}
-              placeholder="Nguyên nhân gây ra sự cố..."
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className={labelCls}>Giải pháp thực hiện</label>
-            <TealField
-              value={data.giaiPhap}
-              onChange={(v) => onChange({ giaiPhap: v })}
-              editing={editing}
-              rows={3}
-              placeholder="Các bước giải quyết hoặc phương án xử lý..."
-            />
-          </div>
-          
-          <div className="space-y-1.5">
-            <label className={labelCls}>Kết quả thực hiện</label>
-            <TealField
-              value={data.ketQuaThucHien}
-              onChange={(v) => onChange({ ketQuaThucHien: v })}
-              editing={editing}
-              rows={3}
-              placeholder="Trạng thái hệ thống sau khi áp dụng giải pháp..."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════ */
-/* Placeholder for upcoming forms                              */
-/* ═══════════════════════════════════════════════════════════ */
-function PlaceholderForm({ title }: { title: string }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <FileText size={28} className="text-slate-300" />
-        </div>
-        <p className="text-lg font-semibold text-slate-400">{title}</p>
-        <p className="text-sm text-slate-300 mt-1">Form này sẽ được bổ sung</p>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════ */
-/* MAIN MODAL — all state lifted here                          */
-/* ═══════════════════════════════════════════════════════════ */
-export default function TicketFormModal({ 
-  mode, ticket, isOpen, onClose, onSuccess, isPage = false 
-}: TicketFormModalProps & { isPage?: boolean }) {
-  const router = useRouter();
-  const handleClose = () => {
-    if (isPage) {
-      router.push("/tickets");
-    } else {
-      onClose?.();
-    }
-  };
-
-  /* Navigation */
-  const [currentStep,    setCurrentStep]    = useState<StepKey>("create");
-  const [completedSteps, setCompletedSteps] = useState<Set<StepKey>>(new Set());
-  const [savedSteps,     setSavedSteps]     = useState<Set<StepKey>>(new Set());
-  const [editing,        setEditing]        = useState(mode === "create");
-  const [submitting,     setSubmitting]     = useState(false);
-  const [ttStatus,       setTtStatus]       = useState("In progress");
-  const [savedTicketId,  setSavedTicketId]  = useState<string>("");  // DB id after create
-
-  /* Shared customer list */
-  const [customers,        setCustomers]        = useState<Customer[]>([]);
-  const [loadingCustomers, setLoadingCustomers] = useState(false);
-
-  /* ── Form 1: Create Ticket data ── */
+      /* ── Form 1: Create Ticket data ── */
   const [createData, setCreateData] = useState<CreateFormData>({
-    title: "", description: "", ttType: "", category: "", startTime: "", priority: "",
+    title: "", description: "", ttType: "", category: "", requestTime: "", startTime: "", priority: "",
   });
 
   /* ── Form 2: Check Contract data ── */
@@ -3630,7 +3549,10 @@ export default function TicketFormModal({
       let initialDescription = ticket?.description || "";
       let initialTtType = ticket?.tt_type || "";
       let initialCategory = ticket?.category || "";
-      let initialStartTime = ticket?.start_time || new Date().toISOString().split("T")[0];
+      let initialRequestTime = ticket?.request_time 
+        ? new Date(ticket.request_time).toISOString().slice(0, 16) 
+        : (ticket?.created_at ? new Date(ticket.created_at).toISOString().slice(0, 16) : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+      let initialStartTime = ticket?.start_time || new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       let initialPriority = ticket?.priority || "";
       let initialCustomerId = ticket?.customer_id || "";
       let initialCustomerName = ticket?.customer_name || "";
@@ -3686,6 +3608,7 @@ export default function TicketFormModal({
         description: initialDescription,
         ttType: initialTtType,
         category: initialCategory,
+        requestTime: initialRequestTime,
         startTime: initialStartTime,
         priority: initialPriority,
       });
@@ -3774,6 +3697,7 @@ export default function TicketFormModal({
         description: ticket.description  || "",
         ttType:      ticket.tt_type      || "",
         category:    ticket.category     || "",
+        requestTime: ticket.request_time ? (ticket.request_time.includes("T") ? ticket.request_time.slice(0, 16) : new Date(ticket.request_time).toISOString().slice(0, 16)) : (ticket.created_at ? new Date(ticket.created_at).toISOString().slice(0, 16) : ""),
         startTime:   ticket.start_time   || "",
         priority:    ticket.priority     || "",
       });
@@ -4189,15 +4113,16 @@ export default function TicketFormModal({
         const { error } = await supabase
           .from("tickets")
           .update({
-            title:       createData.title       || null,
-            description: createData.description || null,
-            tt_type:     createData.ttType      || null,
-            category:    createData.category    || null,
-            priority:    createData.priority    || null,
-            tt_status:   ttStatus,
-            start_time:  createData.startTime   || null,
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
+            title:        createData.title       || null,
+            description:  createData.description || null,
+            tt_type:      createData.ttType      || null,
+            category:     createData.category    || null,
+            priority:     createData.priority    || null,
+            tt_status:    ttStatus,
+            request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+            start_time:   createData.startTime   || null,
+            progress:     progressStr,
+            updated_at:   new Date().toISOString(),
           })
           .eq("id", dbId);
         if (error) { alert("Lỗi lưu ticket: " + error.message); return; }
@@ -4383,6 +4308,7 @@ export default function TicketFormModal({
             category:     createData.category,
             priority:     createData.priority,
             ttStatus,
+            requestTime:  createData.requestTime ? new Date(createData.requestTime).toISOString() : undefined,
             startTime:    createData.startTime,
             progress:     progressStr,
             customerId:   checkData.customerId   || null,
@@ -4414,15 +4340,16 @@ export default function TicketFormModal({
           const { error } = await supabase
             .from("tickets")
             .update({
-              title:       createData.title       || null,
-              description: createData.description || null,
-              tt_type:     createData.ttType      || null,
-              category:    createData.category    || null,
-              priority:    createData.priority    || null,
-              tt_status:   ttStatus,
-              start_time:  createData.startTime   || null,
-              progress:    progressStr,
-              updated_at:  new Date().toISOString(),
+              title:        createData.title       || null,
+              description:  createData.description || null,
+              tt_type:      createData.ttType      || null,
+              category:     createData.category    || null,
+              priority:     createData.priority    || null,
+              tt_status:    ttStatus,
+              request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+              start_time:   createData.startTime   || null,
+              progress:     progressStr,
+              updated_at:   new Date().toISOString(),
             })
             .eq("id", dbId);
           if (error) { alert("Lỗi cập nhật ticket: " + error.message); return; }

@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   contract_status VARCHAR(50),
   tt_status VARCHAR(50) DEFAULT 'New',
   progress VARCHAR(20),
+  request_time TIMESTAMP WITH TIME ZONE,
   start_time TIMESTAMP WITH TIME ZONE,
   end_time TIMESTAMP WITH TIME ZONE,
   close_time TIMESTAMP WITH TIME ZONE,

@@ -94,6 +94,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
 
     const nowIso = new Date().toISOString();
     const startTime = formData.startTime || formData.start_time || nowIso;
+    const requestTime = formData.requestTime || formData.request_time || nowIso;
     const slaTime = formData.slaTime || formData.sla_time || getDefaultSlaDuration(formData.priority);
 
     const { data, error } = await supabase
@@ -116,6 +117,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
         tt_status:      formData.ttStatus      || 'In progress',
         sla_status:     formData.slaStatus     || 'Under SLA',
         sla_time:       slaTime,
+        request_time:   requestTime,
         start_time:     startTime,
         end_time:       formData.endTime       || null,
         tt_close_time:  formData.closeTime     || null,

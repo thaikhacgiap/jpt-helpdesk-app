@@ -15,7 +15,7 @@ interface NewTicketModalProps {
 }
 
 /* ── Static lists ─────────────────────────────────────────── */
-const TT_TYPE_OPTIONS    = ["Technical support", "Implementation", "Health-Check", "Consultation"];
+const TT_TYPE_OPTIONS    = ["Xử lý sự cố", "HTKT thông thường", "HTKT nâng cao", "Thay đổi hệ thống", "Tư vấn kỹ thuật", "Bảo Trì", "Triển khai dự án"];
 const CONTRACT_SCOPE_OPT = ["In scope", "Out scope", "Presale"];
 const CATEGORY_OPTIONS   = ["Hardware", "Software", "Network", "Security", "Cloud", "Other"];
 const PRIORITY_OPTIONS   = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
@@ -330,7 +330,7 @@ const EMPTY_FORM = {
   creatorName: STAFF_LIST[0],
   assigned: [] as string[], following: [] as string[],
   ttStatus: "In progress", slaStatus: "", slaTime: "",
-  startTime: "", endTime: "", closeTime: "",
+  requestTime: "", startTime: "", endTime: "", closeTime: "",
   holdTime: "", holdReason: "", remark: "", documentLink: "",
 };
 
@@ -555,6 +555,10 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
 
           {/* ─ Thời gian ─ */}
           <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Request Time</label>
+              <input type="datetime-local" name="requestTime" value={formData.requestTime} onChange={handleChange} className={inputCls} />
+            </div>
             <div>
               <label className={labelCls}>Start Time</label>
               <input type="datetime-local" name="startTime" value={formData.startTime} onChange={handleChange} className={inputCls} />

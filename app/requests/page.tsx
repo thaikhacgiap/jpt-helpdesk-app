@@ -1415,6 +1415,8 @@ export default function RequestsPage() {
                     <option value="HTKT nâng cao">HTKT nâng cao</option>
                     <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
                     <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
+                    <option value="Bảo Trì">Bảo Trì</option>
+                    <option value="Triển khai dự án">Triển khai dự án</option>
                   </select>
                 </div>
 
