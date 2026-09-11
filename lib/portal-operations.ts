@@ -100,11 +100,11 @@ export async function createServiceRequest(customerId: string, data: {
   tt_type: string;
   category: string;
   priority: string;
-  contract_no?: string;
-  affected_service?: string;
-  start_time?: string;
-  assigned?: string;
-  end_time?: string;
+  contract_no?: string | null;
+  affected_service?: string | null;
+  start_time?: string | null;
+  assigned?: string | null;
+  end_time?: string | null;
 }): Promise<ServiceTicket> {
   // Generate next ticket ID — use shared TH-YYYYMMDD-NNN format
   const ticket_id = await generateNextPortalTicketId();
