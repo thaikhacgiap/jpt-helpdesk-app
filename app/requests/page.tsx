@@ -1386,21 +1386,21 @@ export default function RequestsPage() {
 
       {/* Modal Popup for internal requests creation/editing */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 sticky top-0 bg-white z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-                  <Inbox size={18} />
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                  <Inbox size={16} />
                 </div>
                 <div className="text-left">
-                  <h2 className="text-base font-bold text-slate-900">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
                     {editingRequest 
                       ? (editingRequest.type === "Yêu cầu công việc" ? "Chỉnh Sửa Yêu Cầu Công Việc" : "Chỉnh Sửa Yêu Cầu Dịch Vụ") 
                       : (activeTab === "task" ? "Tạo Yêu Cầu Công Việc Mới" : "Tạo Yêu Cầu Dịch Vụ Nội Bộ Mới")}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     {editingRequest 
                       ? `Cập nhật thông tin: ${editingRequest.code}` 
                       : (activeTab === "task" ? "Lập phiếu phân công công việc cá nhân mới." : "Lập phiếu ghi nhận yêu cầu dịch vụ nội bộ mới.")}
@@ -1409,245 +1409,246 @@ export default function RequestsPage() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
-                className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex-1 overflow-y-auto flex flex-col justify-between space-y-3.5">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle size={15} className="shrink-0" />
+                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2 shrink-0">
+                  <AlertCircle size={14} className="shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Row 1: Code & Title */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Mã yêu cầu <span className="text-slate-400 font-normal">(Tự sinh nếu trống)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={formData.code}
-                    onChange={handleInputChange}
-                    placeholder="VD: TR-20260911-001"
-                    disabled={!!editingRequest}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
-                  />
-                </div>
+              {/* 2-Column Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+                {/* Left Column: Yêu cầu & Phân loại */}
+                <div className="space-y-3">
+                  {/* Row 1: Code & Title */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="text-left">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Mã <span className="text-slate-400 font-normal">(Tự sinh)</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="code"
+                        value={formData.code}
+                        onChange={handleInputChange}
+                        placeholder="TR-..."
+                        disabled={!!editingRequest}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
+                      />
+                    </div>
 
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Tên công việc / Yêu cầu <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    placeholder="Nhập tên tóm tắt yêu cầu..."
-                    required
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                  />
-                </div>
-              </div>
+                    <div className="text-left sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Tên công việc / Yêu cầu <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleInputChange}
+                        placeholder="Nhập tên tóm tắt yêu cầu..."
+                        required
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                      />
+                    </div>
+                  </div>
 
-              {/* Row 2: Type & Status (when editing) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Loại yêu cầu <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="type"
-                    value={formData.type}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    {activeTab === "task" ? (
-                      <option value="Yêu cầu công việc">Yêu cầu công việc (Work Request)</option>
+                  {/* Row 2: Type & Status / Start Time */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Loại yêu cầu <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="type"
+                        value={formData.type}
+                        onChange={handleInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        {activeTab === "task" ? (
+                          <option value="Yêu cầu công việc">Yêu cầu công việc</option>
+                        ) : (
+                          <>
+                            <option value="Yêu cầu triển khai">Triển khai</option>
+                            <option value="Yêu cầu hỗ trợ kỹ thuật">Hỗ trợ kỹ thuật</option>
+                            <option value="Yêu cầu tư vấn">Tư vấn</option>
+                            <option value="Yêu cầu">Chung</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    {editingRequest ? (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Tình trạng <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="status"
+                          value={formData.status}
+                          onChange={handleInputChange}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                        >
+                          <option value="New">Chờ tiếp nhận</option>
+                          <option value="In Progress">Đang xử lý</option>
+                          <option value="Completed">Hoàn thành</option>
+                          <option value="Rejected">Hủy bỏ / Từ chối</option>
+                          <option value="On Hold">Tạm dừng</option>
+                        </select>
+                      </div>
                     ) : (
-                      <>
-                        <option value="Yêu cầu triển khai">Yêu cầu triển khai (Deployment)</option>
-                        <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật (Technical Support)</option>
-                        <option value="Yêu cầu tư vấn">Yêu cầu tư vấn (Consultancy)</option>
-                        <option value="Yêu cầu">Yêu cầu (General Request)</option>
-                      </>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian bắt đầu <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          name="startTime"
+                          value={formData.startTime}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                        />
+                      </div>
                     )}
-                  </select>
+                  </div>
+
+                  {/* Row 3: Requester & Follower */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Người yêu cầu
+                      </label>
+                      <select
+                        name="requester"
+                        value={formData.requester}
+                        onChange={handleInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Chọn nhân sự --</option>
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Người theo dõi
+                      </label>
+                      <select
+                        name="follower"
+                        value={formData.follower}
+                        onChange={handleInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Chọn nhân sự --</option>
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                {editingRequest ? (
+                {/* Right Column: Tiếp nhận & Nội dung */}
+                <div className="space-y-3 flex flex-col justify-between">
+                  {/* Assignee */}
                   <div className="text-left">
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Tình trạng <span className="text-red-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+                        Người tiếp nhận / Được giao
+                      </label>
+                      {(!formData.assignee || formData.assignee !== getCurrentUser()?.name) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentUser = getCurrentUser();
+                            const name = currentUser?.name || "Kỹ thuật viên";
+                            setFormData(prev => ({
+                              ...prev,
+                              assignee: name,
+                              status: prev.status === "New" ? "In Progress" : prev.status,
+                              receiveTime: prev.receiveTime || new Date().toISOString().substring(0, 16)
+                            }));
+                          }}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 cursor-pointer"
+                        >
+                          + Tôi nhận
+                        </button>
+                      )}
+                    </div>
                     <select
-                      name="status"
-                      value={formData.status}
+                      name="assignee"
+                      value={formData.assignee}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                     >
-                      <option value="New">Chờ tiếp nhận (New)</option>
-                      <option value="In Progress">Đang xử lý (In Progress)</option>
-                      <option value="Completed">Hoàn thành (Completed)</option>
-                      <option value="Rejected">Hủy bỏ / Từ chối (Rejected)</option>
-                      <option value="On Hold">Tạm dừng (On Hold)</option>
+                      <option value="">-- Chưa giao / Chưa nhận --</option>
+                      {staffList.map((s) => (
+                        <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                      ))}
                     </select>
                   </div>
-                ) : (
-                  <div className="text-left">
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian bắt đầu <span className="text-red-500">*</span>
+
+                  {/* Receive & Complete Time */}
+                  {editingRequest && (
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian tiếp nhận
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="receiveTime"
+                          value={formData.receiveTime}
+                          onChange={handleInputChange}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian hoàn thành
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="completeTime"
+                          value={formData.completeTime}
+                          onChange={handleInputChange}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <div className="text-left flex-1 flex flex-col">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Mô tả yêu cầu
                     </label>
-                    <input
-                      type="date"
-                      name="startTime"
-                      value={formData.startTime}
+                    <textarea
+                      name="description"
+                      value={formData.description}
                       onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Row 3: Requester, Assignee & Follower */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Người yêu cầu
-                  </label>
-                  <select
-                    name="requester"
-                    value={formData.requester}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn nhân sự --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                    ))}
-                    <option value="John D.">John D.</option>
-                    <option value="Mike R.">Mike R.</option>
-                    <option value="Jane S.">Jane S.</option>
-                  </select>
-                </div>
-
-                <div className="text-left">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      Người tiếp nhận / Được giao
-                    </label>
-                    {(!formData.assignee || formData.assignee !== getCurrentUser()?.name) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentUser = getCurrentUser();
-                          const name = currentUser?.name || "Kỹ thuật viên";
-                          setFormData(prev => ({
-                            ...prev,
-                            assignee: name,
-                            status: prev.status === "New" ? "In Progress" : prev.status,
-                            receiveTime: prev.receiveTime || new Date().toISOString().substring(0, 16)
-                          }));
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 cursor-pointer"
-                      >
-                        + Tôi tiếp nhận
-                      </button>
-                    )}
-                  </div>
-                  <select
-                    name="assignee"
-                    value={formData.assignee}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn nhân sự --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                    ))}
-                    <option value="John D.">John D.</option>
-                    <option value="Mike R.">Mike R.</option>
-                    <option value="Tom H.">Tom H.</option>
-                  </select>
-                </div>
-
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Người theo dõi
-                  </label>
-                  <select
-                    name="follower"
-                    value={formData.follower}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn nhân sự --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                    ))}
-                    <option value="Tom H.">Tom H.</option>
-                    <option value="Sarah L.">Sarah L.</option>
-                    <option value="Mike R.">Mike R.</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 4: Receive Time & Complete Time when editing */}
-              {editingRequest && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="text-left">
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian tiếp nhận
-                    </label>
-                    <input
-                      type="datetime-local"
-                      name="receiveTime"
-                      value={formData.receiveTime}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                    />
-                  </div>
-
-                  <div className="text-left">
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian hoàn thành
-                    </label>
-                    <input
-                      type="datetime-local"
-                      name="completeTime"
-                      value={formData.completeTime}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                      placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ..."
+                      rows={editingRequest ? 4 : 6}
+                      className="w-full flex-1 min-h-[85px] px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
                     />
                   </div>
                 </div>
-              )}
-
-              {/* Description */}
-              <div className="text-left">
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Mô tả yêu cầu
-                </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ..."
-                  rows={4}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition resize-none"
-                />
               </div>
 
-              {/* Buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              {/* Buttons Footer */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100 shrink-0">
                 {editingRequest ? (
                   <button
                     type="button"
@@ -1656,22 +1657,22 @@ export default function RequestsPage() {
                         handleDelete(editingRequest);
                       }
                     }}
-                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
                     <span>Xóa Yêu Cầu</span>
                   </button>
                 ) : <div />}
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   {editingRequest && (formData.status === "New" || !formData.assignee) && (
                     <button
                       type="button"
                       onClick={handleModalInternalReceive}
-                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                       title="Bấm để nhận tiếp nhận yêu cầu này"
                     >
-                      <Check size={15} />
+                      <Check size={14} />
                       <span>Tiếp Nhận</span>
                     </button>
                   )}
@@ -1679,13 +1680,13 @@ export default function RequestsPage() {
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
+                    className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-xs sm:text-sm transition cursor-pointer shadow-xs"
                   >
                     {editingRequest ? "Cập Nhật" : "Tạo Yêu Cầu"}
                   </button>
@@ -1698,19 +1699,19 @@ export default function RequestsPage() {
 
       {/* Modal Popup for Customer On-Behalf Ticket Creation/Editing */}
       {isCustomerModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 sticky top-0 bg-white z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                  <Inbox size={18} />
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <Inbox size={16} />
                 </div>
                 <div className="text-left">
-                  <h2 className="text-base font-bold text-slate-900">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
                     {editingCustomerTicket ? "Chi Tiết & Chỉnh Sửa Yêu Cầu Khách Hàng" : "Tạo Yêu Cầu Hộ Khách Hàng"}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     {editingCustomerTicket ? `Đang xem và chỉnh sửa mã yêu cầu ${editingCustomerTicket.ticket_id.replace(/^TH-/, "CR-")}` : "Ghi nhận sự cố hoặc yêu cầu dịch vụ thay mặt cho khách hàng."}
                   </p>
                 </div>
@@ -1720,283 +1721,292 @@ export default function RequestsPage() {
                   setIsCustomerModalOpen(false);
                   setEditingCustomerTicket(null);
                 }} 
-                className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleCustomerSubmit} className="px-6 py-5 space-y-4">
+            <form onSubmit={handleCustomerSubmit} className="p-4 sm:p-5 flex-1 overflow-y-auto flex flex-col justify-between space-y-3.5">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle size={15} className="shrink-0" />
+                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2 shrink-0">
+                  <AlertCircle size={14} className="shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Customer Selection */}
-              <div className="text-left">
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Khách hàng <span className="text-red-500">*</span>
-                </label>
-                <CustomerSearchSelect
-                  value={customerFormData.customerId}
-                  onChange={(val) => setCustomerFormData((prev) => ({ ...prev, customerId: val }))}
-                  customers={dbCustomers}
-                  disabled={!!editingCustomerTicket}
-                  required
-                  placeholder="-- Chọn khách hàng nhận yêu cầu --"
-                />
-              </div>
-
-              {/* Title */}
-              <div className="text-left">
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Tiêu đề yêu cầu <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={customerFormData.title}
-                  onChange={handleCustomerInputChange}
-                  placeholder="Nhập tên tóm tắt sự cố hoặc yêu cầu..."
-                  required
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                />
-              </div>
-
-              {/* Type and Category */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Loại yêu cầu <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="tt_type"
-                    value={customerFormData.tt_type}
-                    onChange={handleCustomerInputChange}
-                    required
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn loại yêu cầu --</option>
-                    <option value="Xử lý sự cố">Xử lý sự cố</option>
-                    <option value="HTKT thông thường">HTKT thông thường</option>
-                    <option value="HTKT nâng cao">HTKT nâng cao</option>
-                    <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
-                    <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
-                    <option value="Bảo Trì">Bảo Trì</option>
-                    <option value="Triển khai dự án">Triển khai dự án</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Danh mục <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="category"
-                    value={customerFormData.category}
-                    onChange={handleCustomerInputChange}
-                    required
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn danh mục --</option>
-                    <option value="Phần cứng">Phần cứng</option>
-                    <option value="Phần mềm">Phần mềm</option>
-                    <option value="Database">Database</option>
-                    <option value="Network">Network</option>
-                    <option value="Security">Security</option>
-                    <option value="Khác">Khác</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Conditional Incident Fields */}
-              {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left animate-fade-in">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian bắt đầu sự cố <span className="text-red-500">*</span>
+              {/* 2-Column Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+                {/* Left Column: Yêu cầu & Hợp đồng */}
+                <div className="space-y-3">
+                  {/* Customer Selection */}
+                  <div className="text-left">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Khách hàng <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      name="incident_start_time"
-                      value={customerFormData.incident_start_time}
-                      onChange={handleCustomerInputChange}
+                    <CustomerSearchSelect
+                      value={customerFormData.customerId}
+                      onChange={(val) => setCustomerFormData((prev) => ({ ...prev, customerId: val }))}
+                      customers={dbCustomers}
+                      disabled={!!editingCustomerTicket}
                       required
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                      placeholder="-- Chọn khách hàng nhận yêu cầu --"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Dịch vụ bị ảnh hưởng <span className="text-red-500">*</span>
+
+                  {/* Title */}
+                  <div className="text-left">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Tiêu đề yêu cầu <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      name="affected_service"
-                      value={customerFormData.affected_service}
+                      name="title"
+                      value={customerFormData.title}
                       onChange={handleCustomerInputChange}
-                      placeholder="ERP, Website, Email..."
+                      placeholder="Nhập tên tóm tắt sự cố hoặc yêu cầu..."
                       required
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
                     />
                   </div>
-                </div>
-              )}
 
-              {/* Contract Selector & Contract Description */}
-              <div className="text-left">
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Chọn hợp đồng liên quan
-                </label>
-                <select
-                  name="contract_no"
-                  value={customerFormData.contract_no}
-                  onChange={handleCustomerInputChange}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                >
-                  <option value="">-- Không liên kết hợp đồng --</option>
-                  {customerContracts.map((c) => (
-                    <option key={c.id} value={c.contract_no || c.code}>
-                      {c.name} ({c.contract_no || c.code})
-                    </option>
-                  ))}
-                </select>
+                  {/* Type and Category */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Loại yêu cầu <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="tt_type"
+                        value={customerFormData.tt_type}
+                        onChange={handleCustomerInputChange}
+                        required
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Loại --</option>
+                        <option value="Xử lý sự cố">Xử lý sự cố</option>
+                        <option value="HTKT thông thường">HTKT thông thường</option>
+                        <option value="HTKT nâng cao">HTKT nâng cao</option>
+                        <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
+                        <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
+                        <option value="Bảo Trì">Bảo Trì</option>
+                        <option value="Triển khai dự án">Triển khai dự án</option>
+                      </select>
+                    </div>
 
-                {/* Contract Description Display */}
-                {(() => {
-                  const selectedContract = customerContracts.find(
-                    c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                         (c.code && c.code === customerFormData.contract_no) ||
-                         (c.name && c.name === customerFormData.contract_no)
-                  ) || allContracts.find(
-                    c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                         (c.code && c.code === customerFormData.contract_no) ||
-                         (c.name && c.name === customerFormData.contract_no)
-                  );
-                  
-                  if (!selectedContract?.description) return null;
-                  return (
-                    <div className="mt-2 p-2.5 bg-blue-50/70 border border-blue-200/60 rounded-xl text-xs text-slate-700 flex items-start gap-2 animate-fade-in">
-                      <FileText size={15} className="text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Danh mục <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="category"
+                        value={customerFormData.category}
+                        onChange={handleCustomerInputChange}
+                        required
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Danh mục --</option>
+                        <option value="Phần cứng">Phần cứng</option>
+                        <option value="Phần mềm">Phần mềm</option>
+                        <option value="Database">Database</option>
+                        <option value="Network">Network</option>
+                        <option value="Security">Security</option>
+                        <option value="Khác">Khác</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Conditional Incident Fields */}
+                  {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
+                    <div className="grid grid-cols-2 gap-3 text-left animate-fade-in">
                       <div>
-                        <span className="font-semibold text-blue-900 block mb-0.5">Mô tả hợp đồng:</span>
-                        <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian sự cố <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="incident_start_time"
+                          value={customerFormData.incident_start_time}
+                          onChange={handleCustomerInputChange}
+                          required
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Dịch vụ ảnh hưởng <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="affected_service"
+                          value={customerFormData.affected_service}
+                          onChange={handleCustomerInputChange}
+                          placeholder="ERP, Website..."
+                          required
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
+                        />
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
+                  )}
 
-              {/* Edit-Only Fields: Trạng thái & Người tiếp nhận */}
-              {editingCustomerTicket && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Trạng thái <span className="text-red-500">*</span>
+                  {/* Contract Selector & Contract Description */}
+                  <div className="text-left">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Chọn hợp đồng liên quan
                     </label>
                     <select
-                      name="tt_status"
-                      value={customerFormData.tt_status}
+                      name="contract_no"
+                      value={customerFormData.contract_no}
                       onChange={handleCustomerInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer font-medium"
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                     >
-                      <option value="New">Chờ tiếp nhận</option>
-                      <option value="In Progress">Đang xử lý</option>
-                      <option value="On Hold">Tạm dừng</option>
-                      <option value="Resolved">Hoàn thành</option>
-                      <option value="Rejected">Hủy bỏ</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                        Người tiếp nhận
-                      </label>
-                      {(!customerFormData.assigned || customerFormData.assigned !== getCurrentUser()?.name) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentUser = getCurrentUser();
-                            const name = currentUser?.name || "Kỹ thuật viên";
-                            setCustomerFormData(prev => ({
-                              ...prev,
-                              assigned: name,
-                              tt_status: prev.tt_status === "New" ? "In Progress" : prev.tt_status,
-                              receive_time: prev.receive_time || new Date().toISOString().substring(0, 16)
-                            }));
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 cursor-pointer"
-                        >
-                          + Tôi tiếp nhận
-                        </button>
-                      )}
-                    </div>
-                    <select
-                      name="assigned"
-                      value={customerFormData.assigned}
-                      onChange={handleCustomerInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                    >
-                      <option value="">-- Chưa có người tiếp nhận --</option>
-                      {staffList.map((s) => (
-                        <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                      <option value="">-- Không liên kết hợp đồng --</option>
+                      {customerContracts.map((c) => (
+                        <option key={c.id} value={c.contract_no || c.code}>
+                          {c.name} ({c.contract_no || c.code})
+                        </option>
                       ))}
                     </select>
+
+                    {/* Contract Description Display */}
+                    {(() => {
+                      const selectedContract = customerContracts.find(
+                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                             (c.code && c.code === customerFormData.contract_no) ||
+                             (c.name && c.name === customerFormData.contract_no)
+                      ) || allContracts.find(
+                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                             (c.code && c.code === customerFormData.contract_no) ||
+                             (c.name && c.name === customerFormData.contract_no)
+                      );
+                      
+                      if (!selectedContract?.description) return null;
+                      return (
+                        <div className="mt-1.5 p-2 bg-blue-50/80 border border-blue-200/60 rounded-lg text-xs text-slate-700 flex items-start gap-2 max-h-16 overflow-y-auto animate-fade-in">
+                          <FileText size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                          <div className="leading-tight text-[11px]">
+                            <span className="font-semibold text-blue-900 mr-1">Mô tả hợp đồng:</span>
+                            <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
-              )}
 
-              {/* Edit-Only Fields: Thời gian tiếp nhận & Thời gian hoàn thành */}
-              {editingCustomerTicket && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian tiếp nhận
-                    </label>
-                    <input
-                      type="datetime-local"
-                      name="receive_time"
-                      value={customerFormData.receive_time}
-                      onChange={handleCustomerInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                    />
-                  </div>
+                {/* Right Column: Xử lý, Tiếp nhận & Mô tả */}
+                <div className="space-y-3 flex flex-col justify-between">
+                  {/* Edit-Only Fields: Trạng thái & Người tiếp nhận */}
+                  {editingCustomerTicket && (
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Trạng thái <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="tt_status"
+                          value={customerFormData.tt_status}
+                          onChange={handleCustomerInputChange}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                        >
+                          <option value="New">Chờ tiếp nhận</option>
+                          <option value="In Progress">Đang xử lý</option>
+                          <option value="On Hold">Tạm dừng</option>
+                          <option value="Resolved">Hoàn thành</option>
+                          <option value="Rejected">Hủy bỏ</option>
+                        </select>
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Thời gian hoàn thành
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide truncate">
+                            Người tiếp nhận
+                          </label>
+                          {(!customerFormData.assigned || customerFormData.assigned !== getCurrentUser()?.name) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentUser = getCurrentUser();
+                                const name = currentUser?.name || "Kỹ thuật viên";
+                                setCustomerFormData(prev => ({
+                                  ...prev,
+                                  assigned: name,
+                                  tt_status: prev.tt_status === "New" ? "In Progress" : prev.tt_status,
+                                  receive_time: prev.receive_time || new Date().toISOString().substring(0, 16)
+                                }));
+                              }}
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
+                            >
+                              + Tôi nhận
+                            </button>
+                          )}
+                        </div>
+                        <select
+                          name="assigned"
+                          value={customerFormData.assigned}
+                          onChange={handleCustomerInputChange}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                        >
+                          <option value="">-- Chưa nhận --</option>
+                          {staffList.map((s) => (
+                            <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Edit-Only Fields: Thời gian tiếp nhận & Thời gian hoàn thành */}
+                  {editingCustomerTicket && (
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian tiếp nhận
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="receive_time"
+                          value={customerFormData.receive_time}
+                          onChange={handleCustomerInputChange}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Thời gian hoàn thành
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="end_time"
+                          value={customerFormData.end_time}
+                          onChange={handleCustomerInputChange}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <div className="text-left flex-1 flex flex-col">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Mô tả chi tiết
                     </label>
-                    <input
-                      type="datetime-local"
-                      name="end_time"
-                      value={customerFormData.end_time}
+                    <textarea
+                      name="description"
+                      value={customerFormData.description}
                       onChange={handleCustomerInputChange}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                      placeholder="Mô tả cụ thể nội dung sự cố, mã lỗi, hoặc các hướng dẫn chi tiết..."
+                      rows={editingCustomerTicket ? 4 : 7}
+                      className="w-full flex-1 min-h-[90px] px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
                     />
                   </div>
                 </div>
-              )}
-
-              {/* Description */}
-              <div className="text-left">
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Mô tả chi tiết
-                </label>
-                <textarea
-                  name="description"
-                  value={customerFormData.description}
-                  onChange={handleCustomerInputChange}
-                  placeholder="Mô tả cụ thể nội dung sự cố, thông tin máy chủ, mã lỗi, hoặc các hướng dẫn chi tiết..."
-                  rows={4}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition resize-none leading-relaxed"
-                />
               </div>
 
-              {/* Buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              {/* Buttons Footer */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100 shrink-0">
                 {editingCustomerTicket ? (
                   <button
                     type="button"
@@ -2005,23 +2015,23 @@ export default function RequestsPage() {
                         handleCustomerDelete(editingCustomerTicket);
                       }
                     }}
-                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
                     <span>Xóa Yêu Cầu</span>
                   </button>
                 ) : <div />}
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Nút Tiếp nhận trong Form */}
                   {editingCustomerTicket && (customerFormData.tt_status === "New" || !customerFormData.assigned) && (
                     <button
                       type="button"
                       onClick={handleModalCustomerReceive}
-                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                      title="Bấm để nhận tiếp nhận yêu cầu này (tự động gán bạn làm người tiếp nhận và chuyển sang Đang xử lý)"
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      title="Bấm để nhận tiếp nhận yêu cầu này"
                     >
-                      <Check size={15} />
+                      <Check size={14} />
                       <span>Tiếp Nhận</span>
                     </button>
                   )}
@@ -2032,10 +2042,10 @@ export default function RequestsPage() {
                       <button
                         type="button"
                         onClick={handleModalCreateTicket}
-                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                         title="Tạo Ticket kỹ thuật từ yêu cầu này"
                       >
-                        <Plus size={15} />
+                        <Plus size={14} />
                         <span>Tạo Ticket</span>
                       </button>
                     ) : (
@@ -2044,7 +2054,7 @@ export default function RequestsPage() {
                         onClick={() => {
                           window.location.href = `/tickets?search=${editingCustomerTicket.document_link}`;
                         }}
-                        className="px-3.5 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl font-medium text-xs transition cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl font-medium text-xs transition cursor-pointer flex items-center gap-1.5"
                         title="Xem chi tiết ticket liên kết"
                       >
                         <span>Đã liên kết: {editingCustomerTicket.document_link}</span>
@@ -2058,13 +2068,13 @@ export default function RequestsPage() {
                       setIsCustomerModalOpen(false);
                       setEditingCustomerTicket(null);
                     }}
-                    className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
+                    className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-xs sm:text-sm transition cursor-pointer shadow-xs"
                   >
                     {editingCustomerTicket ? "Cập Nhật Yêu Cầu" : "Tạo Yêu Cầu Hộ"}
                   </button>
