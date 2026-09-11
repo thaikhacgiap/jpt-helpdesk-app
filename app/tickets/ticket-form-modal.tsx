@@ -2220,6 +2220,8 @@ interface TroubleshootFormProps {
   submitting: boolean;
   holdsList: any[];
   setHoldsList: React.Dispatch<React.SetStateAction<any[]>>;
+  nhanSuList?: any[];
+  ticket?: any;
 }
 
 const DEFAULT_RUNBOOKS = [
@@ -2263,6 +2265,7 @@ function TroubleshootForm({
   activeSubTab, setActiveSubTab,
   onSave, onEdit, submitting,
   holdsList, setHoldsList,
+  nhanSuList, ticket,
 }: TroubleshootFormProps) {
   const isOnHold = ttStatus === "On Hold";
   const [isFullScreenRunbook, setIsFullScreenRunbook] = useState(false);
@@ -2277,12 +2280,25 @@ function TroubleshootForm({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOrder, setFilterOrder] = useState<"asc" | "desc">("desc");
 
-
+  const resolveUpdaterName = (upd: any) => {
+    if (upd.updated_by) {
+      const match = nhanSuList?.find((ns: any) => ns.id === upd.updated_by || ns.ma_nhan_su === upd.updated_by || ns.ten_nhan_su === upd.updated_by);
+      if (match) return match.ten_nhan_su;
+      return upd.updated_by;
+    }
+    if (upd.updater_name) return upd.updater_name;
+    if (upd.user_name) return upd.user_name;
+    if (upd.creator_name) return upd.creator_name;
+    return ticket?.creator_name || "Kỹ thuật viên";
+  };
 
   const filteredUpdates = [...updatesLog]
     .filter((upd) => {
       if (!searchQuery.trim()) return true;
-      return (upd.update_content || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const content = (upd.update_content || "").toLowerCase();
+      const user = (resolveUpdaterName(upd) || "").toLowerCase();
+      const q = searchQuery.toLowerCase();
+      return content.includes(q) || user.includes(q);
     })
     .sort((a, b) => {
       const timeA = new Date(a.created_at || 0).getTime();
@@ -2597,6 +2613,7 @@ function TroubleshootForm({
                 ) : (
                   filteredUpdates.map((upd, idx) => {
                     const { datePart, timePart } = splitDateTime(upd.created_at);
+                    const updaterName = resolveUpdaterName(upd);
                     return (
                       <div key={upd.id || idx} className="relative flex gap-4">
                         {/* Left: Date/Time */}
@@ -2615,9 +2632,17 @@ function TroubleshootForm({
 
                         {/* Right: Content */}
                         <div className="flex-1 pb-4 border-b border-slate-50 last:border-0 pl-1">
-                          <div className="flex items-start gap-3">
-                            <span className="text-blue-500 text-[11px] font-semibold shrink-0 mt-0.5">(updated)</span>
-                            <div className="text-slate-700 text-xs whitespace-pre-wrap leading-relaxed">
+                          <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
+                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                              <span className="text-blue-500 text-[11px] font-semibold">(updated)</span>
+                              {updaterName && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-medium rounded border border-slate-200">
+                                  <User size={10} className="text-slate-500" />
+                                  <span>{updaterName}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-700 text-xs whitespace-pre-wrap leading-relaxed flex-1">
                               {upd.update_content}
                             </div>
                           </div>
@@ -4304,9 +4329,11 @@ export default function TicketFormModal({
         if (error) { alert("Lỗi lưu troubleshoot: " + error.message); return; }
 
         if (troubleshootData.newUpdate.trim()) {
+          const currentUser = getCurrentUser();
           const success = await addTicketUpdate(dbId, {
             updates: troubleshootData.newUpdate.trim(),
             ttStatus,
+            updated_by: currentUser?.name || currentUser?.email || "Kỹ thuật viên",
           });
           if (success) {
             setTroubleshootData(prev => ({ ...prev, newUpdate: "" }));
@@ -4544,9 +4571,11 @@ export default function TicketFormModal({
         if (error) { alert("Lỗi lưu troubleshoot: " + error.message); return; }
 
         if (troubleshootData.newUpdate.trim()) {
+          const currentUser = getCurrentUser();
           const success = await addTicketUpdate(dbId, {
             updates: troubleshootData.newUpdate.trim(),
             ttStatus,
+            updated_by: currentUser?.name || currentUser?.email || "Kỹ thuật viên",
           });
           if (success) {
             setTroubleshootData(prev => ({ ...prev, newUpdate: "" }));
@@ -5026,6 +5055,8 @@ export default function TicketFormModal({
             submitting={submitting}
             holdsList={holdsList}
             setHoldsList={setHoldsList}
+            nhanSuList={nhanSuList}
+            ticket={ticket}
           />
         )}
         {currentStep === "finished" && (
@@ -5147,6 +5178,7 @@ export default function TicketFormModal({
                     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
                     .map((upd, idx, arr) => {
                       const { datePart, timePart } = splitDateTime(upd.created_at);
+                      const updaterName = upd.updated_by || upd.updater_name || upd.user_name || upd.creator_name || ticket?.creator_name || "Kỹ thuật viên";
                       return (
                         <div key={upd.id || idx} className="relative flex gap-4">
                           {/* Left: Date/Time */}
@@ -5165,9 +5197,17 @@ export default function TicketFormModal({
 
                           {/* Right: Content */}
                           <div className="flex-1 pb-4 border-b border-slate-100 last:border-0 pl-2">
-                            <div className="flex items-start gap-3">
-                              <span className="text-blue-500 text-xs font-bold shrink-0 mt-0.5">(updated)</span>
-                              <div className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">
+                            <div className="flex items-start gap-2.5 flex-wrap sm:flex-nowrap">
+                              <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                                <span className="text-blue-500 text-xs font-bold">(updated)</span>
+                                {updaterName && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-xs font-medium rounded border border-slate-200 shadow-2xs">
+                                    <User size={11} className="text-slate-500" />
+                                    <span>{updaterName}</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed flex-1">
                                 {upd.update_content}
                               </div>
                             </div>
@@ -5213,9 +5253,11 @@ export default function TicketFormModal({
                     alert("Vui lòng nhập nội dung cập nhật");
                     return;
                   }
+                  const currentUser = getCurrentUser();
                   const success = await addTicketUpdate(dbId, {
                     updates: troubleshootData.newUpdate.trim(),
                     ttStatus,
+                    updated_by: currentUser?.name || currentUser?.email || "Kỹ thuật viên",
                   });
                   if (success) {
                     setTroubleshootData((prev) => ({ ...prev, newUpdate: "" }));
@@ -5238,9 +5280,11 @@ export default function TicketFormModal({
                   }
                   // Save log first if there's text
                   if (troubleshootData.newUpdate.trim()) {
+                    const currentUser = getCurrentUser();
                     const success = await addTicketUpdate(dbId, {
                       updates: troubleshootData.newUpdate.trim(),
                       ttStatus,
+                      updated_by: currentUser?.name || currentUser?.email || "Kỹ thuật viên",
                     });
                     if (success) {
                       setTroubleshootData((prev) => ({ ...prev, newUpdate: "" }));

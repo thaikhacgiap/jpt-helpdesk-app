@@ -258,23 +258,56 @@ export async function updateTicket(ticketId: string, updates: any): Promise<{ su
 // Add ticket update/note
 export async function addTicketUpdate(ticketDbId: string, updateData: any): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('ticket_updates')
-      .insert([{
-        ticket_id: ticketDbId,
-        update_content: updateData.updates,
-        new_status: updateData.ttStatus,
-      }])
-
-    if (error) {
-      console.error('Error adding ticket update:', error)
-      return false
+    let updatedByName = updateData.updatedBy || updateData.updated_by || updateData.updater_name || null;
+    if (!updatedByName && typeof window !== 'undefined') {
+      try {
+        const authSession = localStorage.getItem('jpt_auth_session');
+        if (authSession) {
+          const parsed = JSON.parse(authSession);
+          if (parsed?.name) {
+            updatedByName = parsed.name;
+          } else if (parsed?.email) {
+            updatedByName = parsed.email;
+          }
+        }
+      } catch {}
     }
 
-    return true
+    const payload: any = {
+      ticket_id: ticketDbId,
+      update_content: updateData.updates || updateData.update_content || "",
+      new_status: updateData.ttStatus || updateData.new_status || null,
+    };
+
+    if (updatedByName) {
+      payload.updated_by = updatedByName;
+    }
+
+    const { error } = await supabase
+      .from('ticket_updates')
+      .insert([payload]);
+
+    if (error) {
+      console.warn('Error inserting ticket_update with updated_by, retrying without updated_by:', error.message);
+      const fallbackPayload: any = {
+        ticket_id: ticketDbId,
+        update_content: updateData.updates || updateData.update_content || "",
+        new_status: updateData.ttStatus || updateData.new_status || null,
+      };
+      const { error: fallbackError } = await supabase
+        .from('ticket_updates')
+        .insert([fallbackPayload]);
+
+      if (fallbackError) {
+        console.error('Error adding ticket update (fallback):', fallbackError);
+        return false;
+      }
+    }
+
+    return true;
   } catch (error) {
-    console.error('Error adding ticket update:', error)
-    return false
+    console.error('Error adding ticket update:', error);
+    return false;
   }
 }
 
