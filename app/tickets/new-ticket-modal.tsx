@@ -326,7 +326,7 @@ function FormSelect({ label, name, value, onChange, options, required }: {
 /* ── Form initial state ───────────────────────────────────── */
 const EMPTY_FORM = {
   title: "", description: "",
-  ttType: "", contractScope: "", category: "", priority: "",
+  ttType: "", contractScope: "In scope", category: "", priority: "",
   creatorName: STAFF_LIST[0],
   assigned: [] as string[], following: [] as string[],
   ttStatus: "In progress", slaStatus: "", slaTime: "",

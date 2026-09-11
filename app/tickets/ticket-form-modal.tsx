@@ -1002,6 +1002,7 @@ function CheckContractForm({
       contractId: "", contractNo: "", contractName: "",
       saleResp: "", contractStart: "", contractEnd: "", contractStatus: "",
       healthCheckRound: "",
+      scope: data.scope || "In scope",
     });
   };
 
@@ -1161,10 +1162,10 @@ function CheckContractForm({
             <label className={labelCls}>Scope {req}</label>
             <div className="flex-1">
               <TealSelect
-                value={data.scope}
+                value={data.scope || "In scope"}
                 onChange={(v) => onChange({ scope: v })}
                 options={SCOPE_OPTIONS}
-                placeholder="In Scope"
+                placeholder="In scope"
                 readOnly={!editing}
                 fullWidth
               />
@@ -3591,7 +3592,7 @@ export default function TicketFormModal({
   /* ── Form 2: Check Contract data ── */
   const [checkData, setCheckData] = useState<CheckFormData>({
     customerId: "", customerName: "", contractId: "", contractNo: "", contractName: "",
-    scope: "", saleResp: "", contractStart: "", contractEnd: "", contractStatus: "",
+    scope: "In scope", saleResp: "", contractStart: "", contractEnd: "", contractStatus: "",
     saleName: "", confirmStatus: "", saleRemark: "",
     healthCheckRound: "",
   });
@@ -3695,7 +3696,7 @@ export default function TicketFormModal({
       let initialCustomerName = ticket?.customer_name || "";
       let initialContractId = ticket?.contract_id || "";
       let initialContractNo = ticket?.contract_no || "";
-      let initialContractScope = ticket?.contract_scope || "";
+      let initialContractScope = ticket?.contract_scope || "In scope";
       let initialRemark = ticket?.remark || "";
 
       if (typeof window !== "undefined") {
@@ -3894,7 +3895,7 @@ export default function TicketFormModal({
         contractId:     ticket.contract_id    || (ticket.contract_no === "No Contract" ? "no-contract" : ""),
         contractNo:     ticket.contract_no    || "",
         contractName:   "",   // filled when contract loads
-        scope:          ticket.contract_scope || "",
+        scope:          ticket.contract_scope || "In scope",
         saleResp:       "",   // filled when contract loads
         contractStart:  "",
         contractEnd:    "",

@@ -106,7 +106,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       contract_id:    formData.contractId    || null,
       contract_no:    formData.contractNo    || null,
       tt_type:        formData.ttType        || null,
-      contract_scope: formData.contractScope || null,
+      contract_scope: formData.contractScope || formData.contract_scope || 'In scope',
       category:       formData.category      || null,
       priority:       formData.priority      || null,
       creator_name:   creatorName,
