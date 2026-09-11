@@ -5,10 +5,12 @@ export interface RequestTask {
   type: 'Yêu cầu triển khai' | 'Yêu cầu hỗ trợ kỹ thuật' | 'Yêu cầu tư vấn' | 'Yêu cầu' | 'Yêu cầu công việc';
   description: string;
   requester: string;  // Người yêu cầu
-  assignee: string;   // Người được giao
+  assignee: string;   // Người được giao / Người tiếp nhận
   follower: string;   // Người theo dõi
   startTime: string;  // Thời gian bắt đầu
-  status: 'New' | 'In Progress' | 'Completed' | 'Rejected'; // Tình trạng
+  receiveTime?: string; // Thời gian tiếp nhận
+  completeTime?: string; // Thời gian hoàn thành
+  status: 'New' | 'In Progress' | 'Completed' | 'Rejected' | 'On Hold'; // Tình trạng
 }
 
 const DEFAULT_REQUESTS: RequestTask[] = [

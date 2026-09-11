@@ -13,7 +13,8 @@ import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServiceTicket, ServiceTicket } from "@/lib/portal-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
-import { fetchContractsByCustomer } from "@/lib/contract-operations";
+import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+import { getCurrentUser } from "@/lib/auth-operations";
 import { supabase } from "@/lib/supabase";
 import { 
   Search, 
@@ -23,12 +24,14 @@ import {
   Clock, 
   AlertCircle, 
   X, 
-  Inbox,
-  Filter,
-  Users,
-  CheckSquare,
-  Tag,
-  Calendar
+  Inbox, 
+  Filter, 
+  Users, 
+  CheckSquare, 
+  Check, 
+  FileText,
+  Tag, 
+  Calendar 
 } from "lucide-react";
 
 export default function RequestsPage() {
@@ -39,6 +42,7 @@ export default function RequestsPage() {
   const [staffList, setStaffList] = useState<NhanSu[]>([]);
   const [customerTickets, setCustomerTickets] = useState<ServiceTicket[]>([]);
   const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
+  const [allContracts, setAllContracts] = useState<Contract[]>([]);
   
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,12 +63,15 @@ export default function RequestsPage() {
     requester: "",
     assignee: "",
     follower: "",
-    startTime: ""
+    startTime: "",
+    receiveTime: "",
+    completeTime: "",
+    status: "New" as RequestTask["status"]
   });
 
   // Customer On-Behalf Modal States
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [customerContracts, setCustomerContracts] = useState<any[]>([]);
+  const [customerContracts, setCustomerContracts] = useState<Contract[]>([]);
   const [customerFormData, setCustomerFormData] = useState({
     customerId: "",
     title: "",
@@ -74,7 +81,11 @@ export default function RequestsPage() {
     priority: "Medium",
     contract_no: "",
     incident_start_time: new Date().toISOString().substring(0, 16),
-    affected_service: ""
+    affected_service: "",
+    assigned: "",
+    receive_time: "",
+    end_time: "",
+    tt_status: "New"
   });
 
   // Load contracts when selected customer changes
@@ -123,7 +134,11 @@ export default function RequestsPage() {
       incident_start_time: ticket.start_time 
         ? new Date(ticket.start_time).toISOString().substring(0, 16) 
         : new Date().toISOString().substring(0, 16),
-      affected_service: ticket.hold_reason || ""
+      affected_service: ticket.hold_reason || "",
+      assigned: ticket.assigned || "",
+      receive_time: ticket.start_time ? new Date(ticket.start_time).toISOString().substring(0, 16) : "",
+      end_time: ticket.end_time ? new Date(ticket.end_time).toISOString().substring(0, 16) : "",
+      tt_status: ticket.tt_status || "New"
     });
     setError("");
     setIsCustomerModalOpen(true);
@@ -140,7 +155,11 @@ export default function RequestsPage() {
       priority: "Medium",
       contract_no: "",
       incident_start_time: new Date().toISOString().substring(0, 16),
-      affected_service: ""
+      affected_service: "",
+      assigned: "",
+      receive_time: "",
+      end_time: "",
+      tt_status: "New"
     });
     setError("");
     setIsCustomerModalOpen(true);
@@ -176,6 +195,16 @@ export default function RequestsPage() {
       const remarkParts: string[] = [];
       if (customerFormData.contract_no) remarkParts.push(`Hợp đồng: ${customerFormData.contract_no}`);
 
+      const startTimeValue = customerFormData.receive_time
+        ? new Date(customerFormData.receive_time).toISOString()
+        : (customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi")
+          ? new Date(customerFormData.incident_start_time).toISOString()
+          : new Date().toISOString();
+
+      const endTimeValue = customerFormData.end_time
+        ? new Date(customerFormData.end_time).toISOString()
+        : null;
+
       const updateData = {
         title: customerFormData.title.trim(),
         description: finalDescription,
@@ -184,9 +213,10 @@ export default function RequestsPage() {
         priority: customerFormData.priority,
         remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
         hold_reason: customerFormData.affected_service || null,
-        start_time: (customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi")
-          ? new Date(customerFormData.incident_start_time).toISOString()
-          : new Date().toISOString()
+        assigned: customerFormData.assigned || null,
+        tt_status: customerFormData.tt_status || "New",
+        start_time: startTimeValue,
+        end_time: endTimeValue
       };
 
       if (editingCustomerTicket) {
@@ -203,7 +233,9 @@ export default function RequestsPage() {
           priority: customerFormData.priority,
           contract_no: customerFormData.contract_no,
           affected_service: customerFormData.affected_service,
-          start_time: updateData.start_time
+          start_time: updateData.start_time,
+          assigned: updateData.assigned,
+          end_time: updateData.end_time
         });
       }
       setIsCustomerModalOpen(false);
@@ -259,6 +291,7 @@ export default function RequestsPage() {
     }
 
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
+    fetchContracts().then(setAllContracts).catch(err => console.error("Error loading all contracts:", err));
     
     // Customer tickets and customers
     loadCustomerTicketsList();
@@ -324,7 +357,10 @@ export default function RequestsPage() {
       requester: "",
       assignee: "",
       follower: "",
-      startTime: new Date().toISOString().split('T')[0]
+      startTime: new Date().toISOString().split('T')[0],
+      receiveTime: "",
+      completeTime: "",
+      status: "New"
     });
     setError("");
     setIsModalOpen(true);
@@ -340,10 +376,48 @@ export default function RequestsPage() {
       requester: req.requester || "",
       assignee: req.assignee || "",
       follower: req.follower || "",
-      startTime: req.startTime || ""
+      startTime: req.startTime || "",
+      receiveTime: req.receiveTime || "",
+      completeTime: req.completeTime || "",
+      status: req.status || "New"
     });
     setError("");
     setIsModalOpen(true);
+  };
+
+  const handleCustomerReceive = async (ticket: ServiceTicket) => {
+    try {
+      const currentUser = getCurrentUser();
+      const receiver = ticket.assigned || currentUser?.name || "Kỹ thuật viên";
+      const receiveTime = ticket.start_time || new Date().toISOString();
+      await updateServiceTicket(ticket.id, {
+        tt_status: "In Progress",
+        assigned: receiver,
+        start_time: receiveTime,
+        updated_at: new Date().toISOString()
+      });
+      loadCustomerTicketsList();
+    } catch (err) {
+      console.error("Error receiving ticket:", err);
+      alert("Lỗi khi tiếp nhận yêu cầu: " + String(err));
+    }
+  };
+
+  const handleInternalReceive = (req: RequestTask) => {
+    try {
+      const currentUser = getCurrentUser();
+      const receiver = req.assignee || currentUser?.name || "Kỹ thuật viên";
+      const receiveTime = req.receiveTime || new Date().toISOString();
+      updateRequest(req.id, {
+        status: "In Progress",
+        assignee: receiver,
+        receiveTime: receiveTime
+      });
+      refreshRequests();
+    } catch (err) {
+      console.error("Error receiving internal request:", err);
+      alert("Lỗi khi tiếp nhận yêu cầu: " + String(err));
+    }
   };
 
   const handleCustomerDelete = async (ticket: ServiceTicket) => {
@@ -454,7 +528,10 @@ export default function RequestsPage() {
           requester: formData.requester,
           assignee: formData.assignee,
           follower: formData.follower,
-          startTime: formData.startTime
+          startTime: formData.startTime,
+          receiveTime: formData.receiveTime || undefined,
+          completeTime: formData.completeTime || undefined,
+          status: formData.status
         });
       } else {
         createRequest({
@@ -466,7 +543,9 @@ export default function RequestsPage() {
           assignee: formData.assignee,
           follower: formData.follower,
           startTime: formData.startTime,
-          status: "New"
+          receiveTime: formData.receiveTime || undefined,
+          completeTime: formData.completeTime || undefined,
+          status: formData.status || "New"
         });
       }
       setIsModalOpen(false);
@@ -476,26 +555,12 @@ export default function RequestsPage() {
     }
   };
 
-  const handleQuickStatusChange = (id: string, newStatus: RequestTask["status"]) => {
-    updateRequest(id, { status: newStatus });
-    refreshRequests();
-  };
-
-  const handleCustomerStatusChange = async (id: string, newStatus: string) => {
-    try {
-      await updateServiceTicket(id, { tt_status: newStatus });
-      loadCustomerTicketsList();
-    } catch (err) {
-      console.error("Error updating customer ticket status:", err);
-      alert("Lỗi khi cập nhật trạng thái yêu cầu khách hàng: " + String(err));
-    }
-  };
-
   // Helper date formatter
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
     if (dateStr.includes("T")) {
       const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
       return date.toLocaleDateString("vi-VN") + " " + date.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
     }
     const parts = dateStr.split('-');
@@ -505,45 +570,58 @@ export default function RequestsPage() {
     return dateStr;
   };
 
-  // Status/Priority Helpers for customer tickets
-  const getTicketPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case "Critical": return "Cấp bách";
-      case "High": return "Cao";
-      case "Medium": return "Trung bình";
-      case "Low": return "Thấp";
-      default: return priority;
+  // Helper to extract contract code and description
+  const getContractInfo = (remark?: string) => {
+    if (!remark) return { code: "", desc: "" };
+    let contractNo = "";
+    if (remark.startsWith("Hợp đồng: ")) {
+      contractNo = remark.replace(/^Hợp đồng:\s*/i, "").split(" | ")[0].trim();
+    } else {
+      contractNo = remark.trim();
     }
+    if (!contractNo) return { code: "", desc: "" };
+
+    const found = allContracts.find(
+      c => (c.contract_no && c.contract_no.toLowerCase() === contractNo.toLowerCase()) ||
+           (c.code && c.code.toLowerCase() === contractNo.toLowerCase()) ||
+           (c.name && c.name.toLowerCase() === contractNo.toLowerCase()) ||
+           c.id === contractNo
+    );
+    return {
+      code: contractNo,
+      name: found?.name || contractNo,
+      desc: found?.description || ""
+    };
   };
 
-  const getTicketPriorityStyle = (priority: string) => {
-    switch (priority) {
-      case "Critical":
-      case "High":
-        return "bg-rose-50 text-rose-700 border-rose-200/50";
-      case "Medium":
-        return "bg-amber-50 text-amber-700 border-amber-200/50";
-      case "Low":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
-      default:
-        return "bg-slate-50 text-slate-700 border-slate-200";
-     }
+  // Status/Priority Helpers for customer tickets
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "New": return "Chờ tiếp nhận";
+      case "In Progress": return "Đang xử lý";
+      case "On Hold": return "Tạm dừng";
+      case "Resolved":
+      case "Completed": return "Hoàn thành";
+      case "Rejected": return "Hủy bỏ";
+      case "Closed": return "Đã đóng";
+      default: return status || "Chờ tiếp nhận";
+    }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "New":
-        return "bg-blue-50 text-blue-700 border-blue-200/50";
+        return "bg-blue-50 text-blue-700 border-blue-200";
       case "In Progress":
-        return "bg-amber-50 text-amber-700 border-amber-200/50";
+        return "bg-amber-50 text-amber-700 border-amber-200";
       case "Completed":
       case "Resolved":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
       case "Rejected":
       case "Closed":
-        return "bg-rose-50 text-rose-700 border-rose-200/50";
+        return "bg-rose-50 text-rose-700 border-rose-200";
       case "On Hold":
-        return "bg-purple-50 text-purple-700 border-purple-200/50";
+        return "bg-purple-50 text-purple-700 border-purple-200";
       default:
         return "bg-slate-50 text-slate-650 border-slate-200";
     }
@@ -570,7 +648,8 @@ export default function RequestsPage() {
       t.ticket_id.toLowerCase().includes(query) ||
       formattedId.includes(query) ||
       t.title.toLowerCase().includes(query) ||
-      (t.description || "").toLowerCase().includes(query);
+      (t.description || "").toLowerCase().includes(query) ||
+      (t.assigned || "").toLowerCase().includes(query);
 
     const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
     const matchesType = typeFilter === "All" || t.tt_type === typeFilter;
@@ -648,27 +727,29 @@ export default function RequestsPage() {
         </div>
 
         <div className="table-scroll flex-1 min-h-0 overflow-auto">
-          <table className="w-full text-sm" style={{minWidth:'1200px'}}>
+          <table className="w-full text-sm" style={{minWidth:'1450px'}}>
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
               <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
-                <th className="px-4 py-1.5 w-44 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mã yêu cầu</th>
+                <th className="px-4 py-1.5 w-40 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mã yêu cầu</th>
                 <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Trạng thái</th>
-                <th className="px-4 py-1.5 min-w-[300px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Tiêu đề</th>
-                <th className="px-4 py-1.5 min-w-[180px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả</th>
+                <th className="px-4 py-1.5 min-w-[260px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Tiêu đề</th>
+                <th className="px-4 py-1.5 min-w-[160px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả</th>
                 <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Loại yêu cầu</th>
                 <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Danh mục</th>
-                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian sự cố</th>
-                <th className="px-4 py-1.5 min-w-[140px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Dịch vụ ảnh hưởng</th>
                 <th className="px-4 py-1.5 min-w-[130px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Hợp đồng</th>
-                <th className="px-4 py-1.5 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Khách hàng</th>
+                <th className="px-4 py-1.5 min-w-[180px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả HĐ</th>
+                <th className="px-4 py-1.5 min-w-[140px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Khách hàng</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Người tiếp nhận</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian tiếp nhận</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian hoàn thành</th>
                 <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Ticket liên kết</th>
-                <th className="px-4 py-1.5 text-center w-24 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thao tác</th>
+                <th className="px-4 py-1.5 text-center w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-20 text-center text-slate-400 text-sm font-normal">
+                  <td colSpan={14} className="py-20 text-center text-slate-400 text-sm font-normal">
                     <Inbox size={28} className="mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-normal">{emptyMsg}</p>
                   </td>
@@ -678,10 +759,7 @@ export default function RequestsPage() {
                   const customer = dbCustomers.find(c => c.id === t.customer_id);
                   const customerName = customer ? `${customer.name} (${customer.code})` : "Khách hàng Portal";
                   const hasLinkedTicket = t.document_link && t.document_link.startsWith("TK-");
-                  // Extract contract name from remark
-                  const contractName = t.remark
-                    ? t.remark.replace(/^Hợp đồng:\s*/i, "").split(" | ")[0]
-                    : null;
+                  const contractInfo = getContractInfo(t.remark);
 
                   return (
                     <tr key={t.id} className="hover:bg-blue-50/20 transition text-sm font-normal">
@@ -695,32 +773,21 @@ export default function RequestsPage() {
                         </span>
                       </td>
 
-                      {/* Trạng thái - dropdown đổi ngược lên đầu */}
-                      <td className="px-4 py-1">
-                        <div className="relative">
-                          <select
-                            value={t.tt_status}
-                            onChange={(e) => handleCustomerStatusChange(t.id, e.target.value)}
-                            className={`text-sm font-normal px-2 py-0.5 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(t.tt_status)}`}
-                          >
-                            <option value="New">Chờ tiếp nhận</option>
-                            <option value="In Progress">Đang xử lý</option>
-                            <option value="On Hold">Tạm Dừng</option>
-                            <option value="Rejected">Hủy Bỏ</option>
-                            <option value="Resolved">Hoàn Thành</option>
-                          </select>
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[7px] text-slate-500 pointer-events-none">▼</span>
-                        </div>
+                      {/* Trạng thái - Chỉ xem, chỉnh sửa trong modal edit */}
+                      <td className="px-4 py-1 whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(t.tt_status)}`}>
+                          {getStatusLabel(t.tt_status)}
+                        </span>
                       </td>
 
                       {/* Tiêu đề */}
                       <td className="px-4 py-1">
-                        <p className="text-slate-800 text-sm font-normal truncate max-w-[300px]" title={t.title}>{t.title}</p>
+                        <p className="text-slate-800 text-sm font-normal truncate max-w-[260px]" title={t.title}>{t.title}</p>
                       </td>
 
                       {/* Mô tả */}
                       <td className="px-4 py-1">
-                        <p className="text-slate-500 text-sm font-normal truncate max-w-[180px]" title={t.description}>
+                        <p className="text-slate-500 text-sm font-normal truncate max-w-[160px]" title={t.description}>
                           {t.description || "—"}
                         </p>
                       </td>
@@ -733,7 +800,8 @@ export default function RequestsPage() {
                           t.tt_type === "HTKT nâng cao" ? "bg-purple-50 text-purple-700 border-purple-200" :
                           t.tt_type === "Thay đổi hệ thống" || t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
                           t.tt_type === "Tư vấn kỹ thuật" ? "bg-teal-50 text-teal-700 border-teal-200" :
-                          t.tt_type === "Cài đặt - Nâng cấp" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                          t.tt_type === "Bảo Trì" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          t.tt_type === "Triển khai dự án" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
                           "bg-slate-50 text-slate-600 border-slate-200"
                         }`}>{t.tt_type || "—"}</span>
                       </td>
@@ -743,25 +811,22 @@ export default function RequestsPage() {
                         {t.category || "—"}
                       </td>
 
-                      {/* Thời gian sự cố */}
-                      <td className="px-4 py-1 font-mono text-slate-500 text-sm font-normal whitespace-nowrap">
-                        {(t.tt_type === "Xử lý sự cố" || t.tt_type === "Xử lý lỗi") && t.start_time
-                          ? formatDate(t.start_time)
-                          : <span className="text-slate-300">—</span>}
-                      </td>
-
-                      {/* Dịch vụ ảnh hưởng */}
-                      <td className="px-4 py-1">
-                        <p className="text-slate-500 text-sm font-normal truncate max-w-[140px]" title={t.hold_reason}>
-                          {t.hold_reason || <span className="text-slate-300">—</span>}
-                        </p>
-                      </td>
-
                       {/* Hợp đồng */}
                       <td className="px-4 py-1">
-                        {contractName
-                          ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-sm font-normal whitespace-nowrap">{contractName}</span>
-                          : <span className="text-slate-300">—</span>}
+                        {contractInfo.code ? (
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-xs font-normal whitespace-nowrap" title={contractInfo.name}>
+                            {contractInfo.code}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* Mô tả HĐ */}
+                      <td className="px-4 py-1">
+                        <p className="text-slate-600 text-xs font-normal truncate max-w-[180px]" title={contractInfo.desc}>
+                          {contractInfo.desc || <span className="text-slate-300">—</span>}
+                        </p>
                       </td>
 
                       {/* Khách hàng */}
@@ -769,12 +834,36 @@ export default function RequestsPage() {
                         {customerName}
                       </td>
 
+                      {/* Người tiếp nhận */}
+                      <td className="px-4 py-1 text-slate-700 text-sm font-normal whitespace-nowrap">
+                        {t.assigned ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-blue-50 text-xs font-normal flex items-center justify-center text-blue-600 border border-blue-200">
+                              {t.assigned.charAt(0)}
+                            </div>
+                            <span>{t.assigned}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Chưa tiếp nhận</span>
+                        )}
+                      </td>
+
+                      {/* Thời gian tiếp nhận */}
+                      <td className="px-4 py-1 font-mono text-slate-500 text-xs font-normal whitespace-nowrap">
+                        {t.start_time ? formatDate(t.start_time) : <span className="text-slate-300">—</span>}
+                      </td>
+
+                      {/* Thời gian hoàn thành */}
+                      <td className="px-4 py-1 font-mono text-slate-500 text-xs font-normal whitespace-nowrap">
+                        {t.end_time ? formatDate(t.end_time) : <span className="text-slate-300">—</span>}
+                      </td>
+
                       {/* Ticket liên kết */}
                       <td className="px-4 py-1 whitespace-nowrap font-mono text-sm font-normal">
                         {hasLinkedTicket ? (
                           <span
                             onClick={() => { window.location.href = `/tickets?search=${t.document_link}`; }}
-                            className="px-2.5 py-0.5 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-sm font-normal cursor-pointer hover:bg-green-100 transition"
+                            className="px-2.5 py-0.5 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-xs font-normal cursor-pointer hover:bg-green-100 transition"
                             title="Bấm để xem chi tiết ticket"
                           >
                             {t.document_link}
@@ -787,19 +876,39 @@ export default function RequestsPage() {
                       {/* Thao tác */}
                       <td className="px-4 py-1 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
+                          {isPending && (
+                            <button
+                              onClick={() => handleCustomerReceive(t)}
+                              className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition shadow-xs cursor-pointer whitespace-nowrap"
+                              title="Tiếp nhận yêu cầu này để chuyển sang Đang xử lý"
+                            >
+                              <Check size={11} />
+                              <span>Tiếp nhận</span>
+                            </button>
+                          )}
+
                           {!hasLinkedTicket ? (
                             <button
                               onClick={() => {
                                 window.location.href = `/tickets/create?customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
                               }}
-                              className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
                             >
                               <Plus size={10} />
                               <span>Tạo Ticket</span>
                             </button>
                           ) : (
-                            <span className="text-slate-400 text-sm italic">Đã liên kết</span>
+                            <span className="text-slate-400 text-xs italic">Đã liên kết</span>
                           )}
+
+                          <button
+                            onClick={() => handleCustomerEditOpen(t)}
+                            className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                            title="Chỉnh sửa yêu cầu"
+                          >
+                            <Pencil size={13} />
+                          </button>
+
                           <button
                             onClick={() => handleCustomerDelete(t)}
                             className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition cursor-pointer"
@@ -820,7 +929,7 @@ export default function RequestsPage() {
     );
   };
 
-  // 4. RENDER INTERNAL TASKS TABLE (Tab 2)
+  // 4. RENDER INTERNAL TASKS TABLE (Tab 2 & 3)
   const renderInternalTasksTable = (title: string, list: RequestTask[], emptyMsg: string, isPending: boolean) => {
     return (
       <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[250px] shrink-0' : 'flex-1'}`}>
@@ -835,24 +944,25 @@ export default function RequestsPage() {
         </div>
 
         <div className="table-scroll flex-1 min-h-0 overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{minWidth:'1350px'}}>
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
               <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
-                <th className="px-6 py-1.5 w-44 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
-                <th className="px-4 py-1.5 min-w-[350px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tên công việc / Yêu cầu</th>
-                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
-                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người yêu cầu</th>
-                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người được giao</th>
-                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người theo dõi</th>
-                <th className="px-4 py-1.5 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian bắt đầu</th>
-                <th className="px-4 py-1.5 w-40 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tình trạng</th>
-                <th className="px-4 py-1.5 text-center w-24 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
+                <th className="px-6 py-1.5 w-40 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
+                <th className="px-4 py-1.5 w-28 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tình trạng</th>
+                <th className="px-4 py-1.5 min-w-[300px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tên công việc / Yêu cầu</th>
+                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
+                <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người yêu cầu</th>
+                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người tiếp nhận</th>
+                <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người theo dõi</th>
+                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian tiếp nhận</th>
+                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian hoàn thành</th>
+                <th className="px-4 py-1.5 text-center w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-20 text-center text-slate-400 text-sm font-normal">
+                  <td colSpan={10} className="py-20 text-center text-slate-400 text-sm font-normal">
                     <Inbox size={28} className="mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-normal">{emptyMsg}</p>
                   </td>
@@ -868,16 +978,26 @@ export default function RequestsPage() {
                         {req.code}
                       </span>
                     </td>
+                    
+                    {/* Tình trạng - Read only, edit qua modal */}
+                    <td className="px-4 py-1 whitespace-nowrap text-left">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(req.status)}`}>
+                        {getStatusLabel(req.status)}
+                      </span>
+                    </td>
+
                     <td className="px-4 py-1 text-left">
-                      <p className="text-slate-800 text-sm font-normal truncate max-w-[450px]" title={req.description || req.title}>
+                      <p className="text-slate-800 text-sm font-normal truncate max-w-[400px]" title={req.description || req.title}>
                         {req.title}
                       </p>
                     </td>
+
                     <td className="px-4 py-1 text-left">
                       <span className={`px-2.5 py-0.5 rounded text-sm font-normal border ${getTypeColor(req.type)}`}>
                         {req.type}
                       </span>
                     </td>
+
                     <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
                       <div className="flex items-center gap-1">
                         <div className="w-5 h-5 rounded-full bg-slate-100 text-xs font-normal flex items-center justify-center text-slate-500">
@@ -886,43 +1006,46 @@ export default function RequestsPage() {
                         <span>{req.requester || "—"}</span>
                       </div>
                     </td>
+
                     <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
                       <div className="flex items-center gap-1">
                         {req.assignee ? (
                           <>
-                            <div className="w-5 h-5 rounded-full bg-blue-50 text-xs font-normal flex items-center justify-center text-blue-600">
+                            <div className="w-5 h-5 rounded-full bg-blue-50 text-xs font-normal flex items-center justify-center text-blue-600 border border-blue-200">
                               {req.assignee.charAt(0)}
                             </div>
                             <span>{req.assignee}</span>
                           </>
                         ) : (
-                          <span className="text-slate-400 text-sm italic">Chưa giao</span>
+                          <span className="text-slate-400 text-xs italic">Chưa giao</span>
                         )}
                       </div>
                     </td>
+
                     <td className="px-4 py-1 text-slate-500 text-sm font-normal text-left">
                       {req.follower || "—"}
                     </td>
-                    <td className="px-4 py-1 text-slate-500 font-mono text-sm font-normal text-left">
-                      {formatDate(req.startTime)}
+
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left">
+                      {formatDate(req.receiveTime || req.startTime)}
                     </td>
-                    <td className="px-4 py-1 text-left">
-                      <div className="relative">
-                        <select
-                          value={req.status}
-                          onChange={(e) => handleQuickStatusChange(req.id, e.target.value as RequestTask["status"])}
-                          className={`text-sm font-normal px-2.5 py-0.5 border rounded-full outline-none bg-white cursor-pointer appearance-none pr-6 ${getStatusBadge(req.status)}`}
-                        >
-                          <option value="New">Mới tạo</option>
-                          <option value="In Progress">Đang xử lý</option>
-                          <option value="Completed">Hoàn thành</option>
-                          <option value="Rejected">Từ chối</option>
-                        </select>
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[7px] text-slate-500 pointer-events-none">▼</span>
-                      </div>
+
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left">
+                      {formatDate(req.completeTime)}
                     </td>
+
                     <td className="px-4 py-1 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {isPending && (
+                          <button
+                            onClick={() => handleInternalReceive(req)}
+                            className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition shadow-xs cursor-pointer whitespace-nowrap"
+                            title="Tiếp nhận yêu cầu này"
+                          >
+                            <Check size={11} />
+                            <span>Tiếp nhận</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEditOpen(req)}
                           className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
@@ -1064,7 +1187,7 @@ export default function RequestsPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm kiếm mã, tiêu đề, mô tả..."
+                placeholder="Tìm kiếm mã, tiêu đề, người tiếp nhận..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-lg text-sm font-normal focus:outline-none focus:ring-1 focus:ring-teal-500 transition bg-white text-slate-800"
@@ -1087,6 +1210,8 @@ export default function RequestsPage() {
                     <option value="HTKT nâng cao">HTKT nâng cao</option>
                     <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
                     <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
+                    <option value="Bảo Trì">Bảo Trì</option>
+                    <option value="Triển khai dự án">Triển khai dự án</option>
                   </select>
                 ) : (
                   <select
@@ -1112,11 +1237,11 @@ export default function RequestsPage() {
                 className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
               >
                 <option value="All">Tất cả tình trạng</option>
-                <option value="New">Mới tạo</option>
+                <option value="New">Chờ tiếp nhận</option>
                 <option value="In Progress">Đang xử lý</option>
-                {activeTab === "customer" && <option value="On Hold">Chờ phản hồi</option>}
-                {activeTab === "customer" ? <option value="Resolved">Hoàn thành</option> : <option value="Completed">Hoàn thành</option>}
-                {activeTab === "customer" ? <option value="Closed">Đã đóng</option> : <option value="Rejected">Từ chối</option>}
+                <option value="On Hold">Tạm dừng</option>
+                <option value="Resolved">Hoàn thành</option>
+                <option value="Rejected">Hủy bỏ / Từ chối</option>
               </select>
             </div>
           </div>
@@ -1253,7 +1378,7 @@ export default function RequestsPage() {
                     name="code"
                     value={formData.code}
                     onChange={handleInputChange}
-                    placeholder="VD: YC-HELP-01"
+                    placeholder="VD: TR-20260911-001"
                     disabled={!!editingRequest}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
                   />
@@ -1275,7 +1400,7 @@ export default function RequestsPage() {
                 </div>
               </div>
 
-              {/* Row 2: Type & Start Time */}
+              {/* Row 2: Type & Status (when editing) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="text-left">
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
@@ -1300,22 +1425,42 @@ export default function RequestsPage() {
                   </select>
                 </div>
 
-                <div className="text-left">
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Thời gian bắt đầu <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    name="startTime"
-                    value={formData.startTime}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition cursor-pointer"
-                  />
-                </div>
+                {editingRequest ? (
+                  <div className="text-left">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Tình trạng <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                    >
+                      <option value="New">Chờ tiếp nhận (New)</option>
+                      <option value="In Progress">Đang xử lý (In Progress)</option>
+                      <option value="Completed">Hoàn thành (Completed)</option>
+                      <option value="Rejected">Hủy bỏ / Từ chối (Rejected)</option>
+                      <option value="On Hold">Tạm dừng (On Hold)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="text-left">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Thời gian bắt đầu <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      name="startTime"
+                      value={formData.startTime}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition cursor-pointer"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Row 3: Requester & Assignee */}
+              {/* Row 3: Requester, Assignee & Follower */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-left">
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
@@ -1339,7 +1484,7 @@ export default function RequestsPage() {
 
                 <div className="text-left">
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Người được giao
+                    Người tiếp nhận / Được giao
                   </label>
                   <select
                     name="assignee"
@@ -1377,6 +1522,37 @@ export default function RequestsPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Row 4: Receive Time & Complete Time when editing */}
+              {editingRequest && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="text-left">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Thời gian tiếp nhận
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="receiveTime"
+                      value={formData.receiveTime}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                    />
+                  </div>
+
+                  <div className="text-left">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Thời gian hoàn thành
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="completeTime"
+                      value={formData.completeTime}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Description */}
               <div className="text-left">
@@ -1431,7 +1607,7 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {/* Modal Popup for Customer On-Behalf Ticket Creation */}
+      {/* Modal Popup for Customer On-Behalf Ticket Creation/Editing */}
       {isCustomerModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -1580,7 +1756,7 @@ export default function RequestsPage() {
                 </div>
               )}
 
-              {/* Contract Selector */}
+              {/* Contract Selector & Contract Description */}
               <div className="text-left">
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                   Chọn hợp đồng liên quan
@@ -1598,7 +1774,102 @@ export default function RequestsPage() {
                     </option>
                   ))}
                 </select>
+
+                {/* Contract Description Display */}
+                {(() => {
+                  const selectedContract = customerContracts.find(
+                    c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                         (c.code && c.code === customerFormData.contract_no) ||
+                         (c.name && c.name === customerFormData.contract_no)
+                  ) || allContracts.find(
+                    c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                         (c.code && c.code === customerFormData.contract_no) ||
+                         (c.name && c.name === customerFormData.contract_no)
+                  );
+                  
+                  if (!selectedContract?.description) return null;
+                  return (
+                    <div className="mt-2 p-2.5 bg-blue-50/70 border border-blue-200/60 rounded-xl text-xs text-slate-700 flex items-start gap-2 animate-fade-in">
+                      <FileText size={15} className="text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold text-blue-900 block mb-0.5">Mô tả hợp đồng:</span>
+                        <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
+
+              {/* Edit-Only Fields: Trạng thái & Người tiếp nhận */}
+              {editingCustomerTicket && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Trạng thái <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="tt_status"
+                      value={customerFormData.tt_status}
+                      onChange={handleCustomerInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer font-medium"
+                    >
+                      <option value="New">Chờ tiếp nhận</option>
+                      <option value="In Progress">Đang xử lý</option>
+                      <option value="On Hold">Tạm dừng</option>
+                      <option value="Resolved">Hoàn thành</option>
+                      <option value="Rejected">Hủy bỏ</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Người tiếp nhận
+                    </label>
+                    <select
+                      name="assigned"
+                      value={customerFormData.assigned}
+                      onChange={handleCustomerInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                    >
+                      <option value="">-- Chọn nhân sự tiếp nhận --</option>
+                      {staffList.map((s) => (
+                        <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit-Only Fields: Thời gian tiếp nhận & Thời gian hoàn thành */}
+              {editingCustomerTicket && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Thời gian tiếp nhận
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="receive_time"
+                      value={customerFormData.receive_time}
+                      onChange={handleCustomerInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Thời gian hoàn thành
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="end_time"
+                      value={customerFormData.end_time}
+                      onChange={handleCustomerInputChange}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Description */}
               <div className="text-left">
@@ -1658,3 +1929,4 @@ export default function RequestsPage() {
     </MainLayout>
   );
 }
+

@@ -11,13 +11,16 @@ export interface ServiceTicket {
   priority: string;
   tt_status: string;
   start_time: string;
-  end_time: string;
+  request_time?: string;
+  end_time?: string;
   created_at: string;
   customer_id: string;
   document_link?: string;
   remark?: string;       // stores contract info: "Hợp đồng: XYZ"
   hold_reason?: string;  // stores affected service description
   contract_no?: string;  // contract number (if column exists)
+  assigned?: string;     // Người tiếp nhận
+  creator_name?: string;
 }
 
 export interface DashboardStats {
@@ -75,7 +78,7 @@ export async function getDashboardStats(customerId: string): Promise<DashboardSt
   if (resolvedTickets.length > 0) {
     const totalTime = resolvedTickets.reduce((sum, ticket) => {
       const start = new Date(ticket.start_time).getTime();
-      const end = new Date(ticket.end_time).getTime();
+      const end = new Date(ticket.end_time!).getTime();
       return sum + (end - start);
     }, 0);
     average_resolution_time = Math.round(totalTime / resolvedTickets.length / (1000 * 60 * 60)); // Convert to hours
@@ -100,6 +103,8 @@ export async function createServiceRequest(customerId: string, data: {
   contract_no?: string;
   affected_service?: string;
   start_time?: string;
+  assigned?: string;
+  end_time?: string;
 }): Promise<ServiceTicket> {
   // Generate next ticket ID — use shared TH-YYYYMMDD-NNN format
   const ticket_id = await generateNextPortalTicketId();
@@ -119,24 +124,27 @@ export async function createServiceRequest(customerId: string, data: {
   const remarkParts: string[] = [];
   if (data.contract_no) remarkParts.push(`Hợp đồng: ${data.contract_no}`);
 
+  const insertPayload: any = {
+    ticket_id,
+    title: data.title,
+    description: data.description,
+    customer_id: validCustomerId,
+    tt_type: data.tt_type,
+    category: data.category,
+    priority: data.priority,
+    remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
+    hold_reason: data.affected_service || null,
+    assigned: data.assigned || null,
+    tt_status: "New",
+    start_time: data.start_time || new Date().toISOString(),
+    end_time: data.end_time || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   const { data: newTicket, error } = await supabase
     .from("tickets")
-    .insert({
-      ticket_id,
-      title: data.title,
-      description: data.description,
-      customer_id: validCustomerId,
-      tt_type: data.tt_type,
-      category: data.category,
-      priority: data.priority,
-      remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
-      // Store affected service separately in hold_reason for easy display
-      hold_reason: data.affected_service || null,
-      tt_status: "New",
-      start_time: data.start_time || new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
