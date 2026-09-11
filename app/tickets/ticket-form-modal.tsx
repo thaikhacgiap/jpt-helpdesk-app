@@ -3445,8 +3445,120 @@ function ReportingForm({
               placeholder="Ví dụ: Thỉnh thoảng, Liên tục, Chỉ xảy ra khi..."
             />
           </div>
+          <div className="space-y-1.5">
+            <label className={labelCls}>Phạm vi ảnh hưởng</label>
+            <TealField
+              value={data.phamVi}
+              onChange={(v) => onChange({ phamVi: v })}
+              editing={editing}
+              placeholder="Ví dụ: Một vài tài khoản, Toàn bộ hệ thống..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* KẾT QUẢ VÀ GIẢI PHÁP */}
+      <div className="bg-[#fafeff] p-5 rounded-xl border border-[#b2e5f5] space-y-4">
+        <h4 className="text-sm font-bold text-[#0099cc] border-b border-[#e1f5fe] pb-2">Kết quả kiểm tra & Giải pháp xử lý</h4>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelCls}>Kết quả kiểm tra</label>
+            <TealField
+              value={data.ketQuaKiemTra}
+              onChange={(v) => onChange({ ketQuaKiemTra: v })}
+              editing={editing}
+              rows={3}
+              placeholder="Kết quả ghi nhận khi kiểm tra hệ thống..."
+            />
+          </div>
           
-      /* ── Form 1: Create Ticket data ── */
+          <div className="space-y-1.5">
+            <label className={labelCls}>Chẩn đoán nguyên nhân</label>
+            <TealField
+              value={data.chanDoan}
+              onChange={(v) => onChange({ chanDoan: v })}
+              editing={editing}
+              rows={3}
+              placeholder="Nguyên nhân gây ra sự cố..."
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelCls}>Giải pháp thực hiện</label>
+            <TealField
+              value={data.giaiPhap}
+              onChange={(v) => onChange({ giaiPhap: v })}
+              editing={editing}
+              rows={3}
+              placeholder="Các bước giải quyết hoặc phương án xử lý..."
+            />
+          </div>
+          
+          <div className="space-y-1.5">
+            <label className={labelCls}>Kết quả thực hiện</label>
+            <TealField
+              value={data.ketQuaThucHien}
+              onChange={(v) => onChange({ ketQuaThucHien: v })}
+              editing={editing}
+              rows={3}
+              placeholder="Trạng thái hệ thống sau khi áp dụng giải pháp..."
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Placeholder for upcoming forms                              */
+/* ═══════════════════════════════════════════════════════════ */
+function PlaceholderForm({ title }: { title: string }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <FileText size={28} className="text-slate-300" />
+        </div>
+        <p className="text-lg font-semibold text-slate-400">{title}</p>
+        <p className="text-sm text-slate-300 mt-1">Form này sẽ được bổ sung</p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* MAIN MODAL — all state lifted here                          */
+/* ═══════════════════════════════════════════════════════════ */
+export default function TicketFormModal({ 
+  mode, ticket, isOpen, onClose, onSuccess, isPage = false 
+}: TicketFormModalProps & { isPage?: boolean }) {
+  const router = useRouter();
+  const handleClose = () => {
+    if (isPage) {
+      router.push("/tickets");
+    } else {
+      onClose?.();
+    }
+  };
+
+  /* Navigation */
+  const [currentStep,    setCurrentStep]    = useState<StepKey>("create");
+  const [completedSteps, setCompletedSteps] = useState<Set<StepKey>>(new Set());
+  const [savedSteps,     setSavedSteps]     = useState<Set<StepKey>>(new Set());
+  const [editing,        setEditing]        = useState(mode === "create");
+  const [submitting,     setSubmitting]     = useState(false);
+  const [ttStatus,       setTtStatus]       = useState("In progress");
+  const [savedTicketId,  setSavedTicketId]  = useState<string>("");  // DB id after create
+
+  /* Shared customer list */
+  const [customers,        setCustomers]        = useState<Customer[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+
+  /* ── Form 1: Create Ticket data ── */
   const [createData, setCreateData] = useState<CreateFormData>({
     title: "", description: "", ttType: "", category: "", requestTime: "", startTime: "", priority: "",
   });
