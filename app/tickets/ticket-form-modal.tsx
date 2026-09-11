@@ -6,7 +6,7 @@ import {
   X, ChevronDown, Save, Edit2, CheckCircle,
   Search, Building2, FileText, Check, Maximize2,
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
-  Filter, AlertCircle, HardDrive
+  Filter, AlertCircle, HardDrive, MessageSquare, Loader2
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
@@ -2223,6 +2223,8 @@ interface TroubleshootFormProps {
   setHoldsList: React.Dispatch<React.SetStateAction<any[]>>;
   nhanSuList?: any[];
   ticket?: any;
+  savedTicketId?: string;
+  setUpdatesLog?: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const DEFAULT_RUNBOOKS = [
@@ -2267,6 +2269,7 @@ function TroubleshootForm({
   onSave, onEdit, submitting,
   holdsList, setHoldsList,
   nhanSuList, ticket,
+  savedTicketId, setUpdatesLog,
 }: TroubleshootFormProps) {
   const isOnHold = ttStatus === "On Hold";
   const [isFullScreenRunbook, setIsFullScreenRunbook] = useState(false);
@@ -2280,6 +2283,19 @@ function TroubleshootForm({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOrder, setFilterOrder] = useState<"asc" | "desc">("desc");
+  const [quickInput, setQuickInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const currentUser = getCurrentUser();
+  const currentUserName = currentUser?.name || currentUser?.email || "Kỹ thuật viên";
+
+  const getInitials = (name: string) => {
+    if (!name) return "KT";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   const resolveUpdaterName = (upd: any) => {
     if (upd.updated_by) {
@@ -2291,6 +2307,45 @@ function TroubleshootForm({
     if (upd.user_name) return upd.user_name;
     if (upd.creator_name) return upd.creator_name;
     return ticket?.creator_name || "Kỹ thuật viên";
+  };
+
+  const handleQuickSend = async () => {
+    const text = quickInput.trim();
+    if (!text) return;
+    const dbId = savedTicketId || ticket?.id || "";
+    if (!dbId) {
+      alert("Vui lòng Confirm bước đầu tiên hoặc lưu Ticket trước khi cập nhật.");
+      return;
+    }
+    setIsSending(true);
+    try {
+      const success = await addTicketUpdate(dbId, {
+        updates: text,
+        ttStatus,
+        updated_by: currentUserName,
+      });
+      if (success) {
+        setQuickInput("");
+        const freshLogs = await fetchTicketUpdates(dbId);
+        setUpdatesLog?.(freshLogs);
+        setTimeout(() => {
+          chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      } else {
+        alert("Không thể gửi cập nhật. Vui lòng thử lại.");
+      }
+    } catch (err: any) {
+      alert("Lỗi khi gửi cập nhật: " + (err?.message || err));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleQuickSend();
+    }
   };
 
   const filteredUpdates = [...updatesLog]
@@ -2572,86 +2627,170 @@ function TroubleshootForm({
       <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm min-h-0">
         {activeSubTab === "troubleshoot" ? (
           <div className="flex-1 flex flex-col p-4 space-y-4 min-h-0 overflow-y-auto bg-slate-50/30">
-            {/* Updates History (Redesigned Log Section) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 flex-1 flex flex-col min-h-0 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+            {/* Updates History (Modern Interactive Chat UI) */}
+            <div className="bg-white border border-slate-200 rounded-xl flex-1 flex flex-col min-h-0 shadow-2xs overflow-hidden">
+              {/* Chat Top Bar */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 bg-slate-50/70 shrink-0">
                 <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-blue-500" />
-                  <span className="text-sm font-bold text-slate-800">Nhật ký xử lý (Log)</span>
-                  <span className="bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                  <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <MessageSquare size={14} />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">Nhật ký xử lý (Log / Chat)</span>
+                  <span className="bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-bold px-2 py-0.2 rounded-full">
                     {updatesLog.length}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Search input */}
-                  <div className="relative w-48">
+                  <div className="relative w-44">
                     <input
                       type="text"
                       placeholder="Tìm kiếm nội dung..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full text-xs pl-3 pr-8 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                      className="w-full text-xs pl-3 pr-7 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                     />
-                    <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   </div>
                   {/* Filter button */}
                   <button
                     type="button"
                     onClick={() => setFilterOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-medium transition cursor-pointer"
+                    className="flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-medium transition cursor-pointer"
+                    title={filterOrder === "desc" ? "Mới nhất trước" : "Cũ nhất trước"}
                   >
-                    <Filter size={13} className="text-slate-400" />
-                    <span>Bộ lọc</span>
+                    <Filter size={12} className="text-slate-400" />
+                    <span>{filterOrder === "desc" ? "Mới nhất" : "Cũ nhất"}</span>
                   </button>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 space-y-4 min-h-[120px]">
+              {/* Chat Message List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[140px] bg-slate-50/30">
                 {filteredUpdates.length === 0 ? (
-                  <div className="text-slate-400 italic text-center py-8 text-xs">
-                    {searchQuery ? "Không tìm thấy kết quả phù hợp" : "Chưa có tiến độ cập nhật nào"}
+                  <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center mb-1.5">
+                      <MessageSquare size={16} className="text-slate-300" />
+                    </div>
+                    <p className="text-xs font-medium">{searchQuery ? "Không tìm thấy kết quả phù hợp" : "Chưa có tiến độ cập nhật nào"}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Nhập nội dung bên dưới để cập nhật nhanh tiến độ</p>
                   </div>
                 ) : (
                   filteredUpdates.map((upd, idx) => {
                     const { datePart, timePart } = splitDateTime(upd.created_at);
                     const updaterName = resolveUpdaterName(upd);
+                    const isMe = currentUserName && (
+                      updaterName.toLowerCase() === currentUserName.toLowerCase() ||
+                      updaterName.toLowerCase().includes((currentUser?.name || "").toLowerCase()) ||
+                      updaterName.toLowerCase().includes((currentUser?.email || "").toLowerCase())
+                    );
+                    const initials = getInitials(updaterName);
+
                     return (
-                      <div key={upd.id || idx} className="relative flex gap-4">
-                        {/* Left: Date/Time */}
-                        <div className="w-24 shrink-0 text-right pr-2">
-                          <p className="text-[11px] font-medium text-slate-500 font-mono">{datePart}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{timePart}</p>
+                      <div
+                        key={upd.id || idx}
+                        className={`flex items-start gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                      >
+                        {/* Avatar */}
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 shadow-2xs ${
+                            isMe
+                              ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white"
+                              : "bg-gradient-to-tr from-slate-600 to-slate-800 text-white"
+                          }`}
+                          title={updaterName}
+                        >
+                          {initials}
                         </div>
 
-                        {/* Middle: Timeline Node & Line */}
-                        <div className="relative flex flex-col items-center shrink-0">
-                          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white shadow-xs z-10 mt-1" />
-                          {idx < filteredUpdates.length - 1 && (
-                            <div className="w-0.5 bg-blue-100 absolute top-3 bottom-0 left-1/2 -translate-x-1/2" />
-                          )}
-                        </div>
+                        {/* Bubble Container */}
+                        <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
+                          {/* Header info */}
+                          <div className={`flex items-center gap-1.5 mb-1 px-1 text-[11px] flex-wrap ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                            <span className="font-semibold text-slate-800">{updaterName}</span>
+                            {isMe && (
+                              <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 font-bold text-[9px] rounded">
+                                Bạn
+                              </span>
+                            )}
+                            <span className="text-slate-400 text-[10px] font-mono">
+                              {datePart} {timePart}
+                            </span>
+                            <span className="text-blue-600 font-medium text-[10px] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
+                              {upd.new_status ? `(${upd.new_status})` : "(updated)"}
+                            </span>
+                          </div>
 
-                        {/* Right: Content */}
-                        <div className="flex-1 pb-4 border-b border-slate-50 last:border-0 pl-1">
-                          <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
-                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                              <span className="text-blue-500 text-[11px] font-semibold">(updated)</span>
-                              {updaterName && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-medium rounded border border-slate-200">
-                                  <User size={10} className="text-slate-500" />
-                                  <span>{updaterName}</span>
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-slate-700 text-xs whitespace-pre-wrap leading-relaxed flex-1">
-                              {upd.update_content}
-                            </div>
+                          {/* Message Body */}
+                          <div
+                            className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words shadow-2xs ${
+                              isMe
+                                ? "bg-blue-600 text-white rounded-tr-xs"
+                                : "bg-white text-slate-800 border border-slate-200/90 rounded-tl-xs"
+                            }`}
+                          >
+                            {upd.update_content}
                           </div>
                         </div>
                       </div>
                     );
                   })
                 )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Chat Input Bar */}
+              <div className="p-3 bg-white border-t border-slate-200 shrink-0 space-y-2">
+                {/* Account info strip */}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Account đang cập nhật:</span>
+                    <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 inline-flex items-center gap-1">
+                      <User size={11} className="text-blue-600" />
+                      {currentUserName}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 hidden sm:inline">
+                    Nhấn <strong>Enter</strong> để gửi nhanh, <strong>Shift + Enter</strong> để xuống dòng
+                  </span>
+                </div>
+
+                {/* Textarea + Send button */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 relative">
+                    <textarea
+                      value={quickInput}
+                      onChange={(e) => setQuickInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Nhập nội dung cập nhật tiến độ xử lý..."
+                      rows={2}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none bg-slate-50/50 hover:bg-white focus:bg-white transition"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isSending || !quickInput.trim()}
+                    onClick={handleQuickSend}
+                    className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shrink-0 transition shadow-sm cursor-pointer ${
+                      isSending || !quickInput.trim()
+                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-md"
+                    }`}
+                  >
+                    {isSending ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Đang gửi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} />
+                        <span>Gửi</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -5058,6 +5197,8 @@ export default function TicketFormModal({
             setHoldsList={setHoldsList}
             nhanSuList={nhanSuList}
             ticket={ticket}
+            savedTicketId={savedTicketId}
+            setUpdatesLog={setUpdatesLog}
           />
         )}
         {currentStep === "finished" && (
@@ -5219,7 +5360,14 @@ export default function TicketFormModal({
                 )}
               </div>
               {/* Input */}
-              <div className="pt-4 border-t border-slate-200 shrink-0">
+              <div className="pt-3 border-t border-slate-200 shrink-0 space-y-2">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Account cập nhật:</span>
+                  <span className="font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {getCurrentUser()?.name || getCurrentUser()?.email || "Kỹ thuật viên"}
+                  </span>
+                </div>
                 <textarea
                   value={troubleshootData.newUpdate}
                   onChange={(e) => setTroubleshootData((prev) => ({ ...prev, newUpdate: e.target.value }))}
