@@ -176,3 +176,13 @@ export async function updateServiceTicket(id: string, updates: any): Promise<voi
 
   if (error) throw error;
 }
+
+// Delete a service request ticket
+export async function deleteServiceTicket(id: string): Promise<void> {
+  const { deleteTicket } = await import("@/lib/ticket-operations");
+  const res = await deleteTicket(id);
+  if (!res.success) {
+    throw new Error(res.error || "Không thể xóa yêu cầu");
+  }
+}
+

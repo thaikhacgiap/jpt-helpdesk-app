@@ -10,7 +10,7 @@ import {
   RequestTask 
 } from "@/lib/request-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
-import { fetchAllTickets, updateServiceTicket, createServiceRequest, ServiceTicket } from "@/lib/portal-operations";
+import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServiceTicket, ServiceTicket } from "@/lib/portal-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
@@ -346,10 +346,89 @@ export default function RequestsPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa yêu cầu này?")) {
-      deleteRequest(id);
-      refreshRequests();
+  const handleCustomerDelete = async (ticket: ServiceTicket) => {
+    try {
+      // Check if there is an active ticket attached/linked to this request
+      const ticketIdToCheck = ticket.ticket_id;
+      const altTicketId = ticket.ticket_id.startsWith("TH-")
+        ? ticket.ticket_id.replace(/^TH-/, "CR-")
+        : ticket.ticket_id.replace(/^CR-/, "TH-");
+      const linkedCode = ticket.document_link;
+
+      let query = supabase
+        .from("tickets")
+        .select("id, ticket_id, title")
+        .neq("id", ticket.id);
+
+      if (linkedCode && linkedCode.startsWith("TK-")) {
+        query = query.or(`ticket_id.eq.${linkedCode},remark.ilike.%${ticketIdToCheck}%,remark.ilike.%${altTicketId}%`);
+      } else {
+        query = query.or(`remark.ilike.%${ticketIdToCheck}%,remark.ilike.%${altTicketId}%`);
+      }
+
+      const { data: linkedTickets, error } = await query;
+      if (error) {
+        console.error("Error checking linked tickets:", error);
+      }
+
+      const existingLinkedTickets = (linkedTickets || []).filter(
+        (tk) => !tk.ticket_id.startsWith("CR-") && !tk.ticket_id.startsWith("TH-") && !tk.ticket_id.startsWith("SR-") && !tk.ticket_id.startsWith("TR-")
+      );
+
+      if (existingLinkedTickets.length > 0) {
+        const ticketCodes = existingLinkedTickets.map((t) => t.ticket_id).join(", ");
+        alert(
+          `⚠️ Không thể xóa yêu cầu "${ticket.ticket_id.replace(/^TH-/, "CR-")}" vì đang có Ticket đi kèm (${ticketCodes}).\n\nVui lòng xóa Ticket (${ticketCodes}) trước khi xóa yêu cầu!`
+        );
+        return;
+      }
+
+      const displayCode = ticket.ticket_id.replace(/^TH-/, "CR-");
+      if (window.confirm(`Bạn có chắc chắn muốn xóa yêu cầu "${displayCode}"?`)) {
+        await deleteServiceTicket(ticket.id);
+        setIsCustomerModalOpen(false);
+        setEditingCustomerTicket(null);
+        loadCustomerTicketsList();
+      }
+    } catch (err) {
+      console.error("Error deleting customer ticket:", err);
+      alert("Lỗi khi xóa yêu cầu: " + String(err));
+    }
+  };
+
+  const handleDelete = async (req: RequestTask) => {
+    try {
+      // Check if any ticket is linked to this request code in Supabase
+      const { data: linkedTickets, error } = await supabase
+        .from("tickets")
+        .select("id, ticket_id, title")
+        .or(`ticket_id.eq.${req.code},remark.ilike.%${req.code}%,document_link.eq.${req.code}`);
+
+      if (error) {
+        console.error("Error checking linked tickets:", error);
+      }
+
+      const existingLinkedTickets = (linkedTickets || []).filter(
+        (tk) => !tk.ticket_id.startsWith("CR-") && !tk.ticket_id.startsWith("TH-") && !tk.ticket_id.startsWith("SR-") && !tk.ticket_id.startsWith("TR-")
+      );
+
+      if (existingLinkedTickets.length > 0) {
+        const ticketCodes = existingLinkedTickets.map((t) => t.ticket_id).join(", ");
+        alert(
+          `⚠️ Không thể xóa yêu cầu "${req.code}" vì đang có Ticket đi kèm (${ticketCodes}).\n\nVui lòng xóa Ticket (${ticketCodes}) trước khi xóa yêu cầu!`
+        );
+        return;
+      }
+
+      if (window.confirm(`Bạn có chắc chắn muốn xóa yêu cầu "${req.code}" này?`)) {
+        deleteRequest(req.id);
+        setIsModalOpen(false);
+        setEditingRequest(null);
+        refreshRequests();
+      }
+    } catch (err) {
+      console.error("Error deleting request:", err);
+      alert("Lỗi khi xóa yêu cầu: " + String(err));
     }
   };
 
@@ -707,19 +786,28 @@ export default function RequestsPage() {
 
                       {/* Thao tác */}
                       <td className="px-4 py-1 text-center whitespace-nowrap">
-                        {!hasLinkedTicket ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          {!hasLinkedTicket ? (
+                            <button
+                              onClick={() => {
+                                window.location.href = `/tickets/create?customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
+                              }}
+                              className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
+                            >
+                              <Plus size={10} />
+                              <span>Tạo Ticket</span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 text-sm italic">Đã liên kết</span>
+                          )}
                           <button
-                            onClick={() => {
-                              window.location.href = `/tickets/create?customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
-                            }}
-                            className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
+                            onClick={() => handleCustomerDelete(t)}
+                            className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition cursor-pointer"
+                            title="Xóa yêu cầu"
                           >
-                            <Plus size={10} />
-                            <span>Tạo Ticket</span>
+                            <Trash2 size={13} />
                           </button>
-                        ) : (
-                          <span className="text-slate-400 text-sm italic">Đã liên kết</span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -843,7 +931,7 @@ export default function RequestsPage() {
                           <Pencil size={13} />
                         </button>
                         <button
-                          onClick={() => handleDelete(req.id)}
+                          onClick={() => handleDelete(req)}
                           className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-500 rounded transition cursor-pointer"
                           title="Xóa yêu cầu"
                         >
@@ -1306,20 +1394,37 @@ export default function RequestsPage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
-                >
-                  {editingRequest ? "Cập Nhật" : "Tạo Yêu Cầu"}
-                </button>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                {editingRequest ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editingRequest) {
+                        handleDelete(editingRequest);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 size={15} />
+                    <span>Xóa Yêu Cầu</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
+                  >
+                    {editingRequest ? "Cập Nhật" : "Tạo Yêu Cầu"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1511,23 +1616,40 @@ export default function RequestsPage() {
               </div>
 
               {/* Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomerModalOpen(false);
-                    setEditingCustomerTicket(null);
-                  }}
-                  className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
-                >
-                  {editingCustomerTicket ? "Cập Nhật Yêu Cầu" : "Tạo Yêu Cầu Hộ"}
-                </button>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                {editingCustomerTicket ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editingCustomerTicket) {
+                        handleCustomerDelete(editingCustomerTicket);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-semibold text-sm transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 size={15} />
+                    <span>Xóa Yêu Cầu</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomerModalOpen(false);
+                      setEditingCustomerTicket(null);
+                    }}
+                    className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-sm transition cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold text-sm transition cursor-pointer"
+                  >
+                    {editingCustomerTicket ? "Cập Nhật Yêu Cầu" : "Tạo Yêu Cầu Hộ"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
