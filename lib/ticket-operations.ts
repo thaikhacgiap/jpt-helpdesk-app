@@ -97,42 +97,54 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
     const requestTime = formData.requestTime || formData.request_time || nowIso;
     const slaTime = formData.slaTime || formData.sla_time || getDefaultSlaDuration(formData.priority);
 
-    const { data, error } = await supabase
+    const insertPayload: any = {
+      ticket_id:      ticketId,
+      title:          formData.title,
+      description:    formData.description,
+      customer_id:    formData.customerId    || null,
+      customer_name:  formData.customerName  || null,
+      contract_id:    formData.contractId    || null,
+      contract_no:    formData.contractNo    || null,
+      tt_type:        formData.ttType        || null,
+      contract_scope: formData.contractScope || null,
+      category:       formData.category      || null,
+      priority:       formData.priority      || null,
+      creator_name:   creatorName,
+      assigned:       Array.isArray(formData.assigned) ? formData.assigned.join(', ') : (formData.assigned || null),
+      following:      Array.isArray(formData.following) ? formData.following.join(', ') : (formData.following || null),
+      tt_status:      formData.ttStatus      || 'In progress',
+      sla_status:     formData.slaStatus     || 'Under SLA',
+      sla_time:       slaTime,
+      request_time:   requestTime,
+      start_time:     startTime,
+      end_time:       formData.endTime       || null,
+      tt_close_time:  formData.closeTime     || null,
+      hold_time:      formData.holdTime      || null,
+      hold_reason:    formData.holdReason    || null,
+      remark:         formData.remark        || null,
+      document_link:  formData.documentLink  || null,
+      progress:       formData.progress      || null,
+      unhold_time:    formData.unholdTime    || null,
+      onsite:         formData.onsite        || null,
+      runbook:        formData.runbook       || null,
+      created_at:     nowIso,
+      updated_at:     nowIso,
+    };
+
+    let { data, error } = await supabase
       .from('tickets')
-      .insert([{
-        ticket_id:      ticketId,
-        title:          formData.title,
-        description:    formData.description,
-        customer_id:    formData.customerId    || null,
-        customer_name:  formData.customerName  || null,
-        contract_id:    formData.contractId    || null,
-        contract_no:    formData.contractNo    || null,
-        tt_type:        formData.ttType        || null,
-        contract_scope: formData.contractScope || null,
-        category:       formData.category      || null,
-        priority:       formData.priority      || null,
-        creator_name:   creatorName,
-        assigned:       Array.isArray(formData.assigned) ? formData.assigned.join(', ') : (formData.assigned || null),
-        following:      Array.isArray(formData.following) ? formData.following.join(', ') : (formData.following || null),
-        tt_status:      formData.ttStatus      || 'In progress',
-        sla_status:     formData.slaStatus     || 'Under SLA',
-        sla_time:       slaTime,
-        request_time:   requestTime,
-        start_time:     startTime,
-        end_time:       formData.endTime       || null,
-        tt_close_time:  formData.closeTime     || null,
-        hold_time:      formData.holdTime      || null,
-        hold_reason:    formData.holdReason    || null,
-        remark:         formData.remark        || null,
-        document_link:  formData.documentLink  || null,
-        progress:       formData.progress      || null,
-        unhold_time:    formData.unholdTime    || null,
-        onsite:         formData.onsite        || null,
-        runbook:        formData.runbook       || null,
-        created_at:     nowIso,
-        updated_at:     nowIso,
-      }])
-      .select()
+      .insert([insertPayload])
+      .select();
+
+    if (error && error.message?.includes('request_time')) {
+      delete insertPayload.request_time;
+      const retry = await supabase
+        .from('tickets')
+        .insert([insertPayload])
+        .select();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Error creating ticket:', error)

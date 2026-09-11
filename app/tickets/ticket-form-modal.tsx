@@ -4222,21 +4222,30 @@ export default function TicketFormModal({
       const progressStr = serializeProgress(nextCompleted, nextSaved);
 
       if (currentStep === "create") {
-        const { error } = await supabase
+        const updatePayload: any = {
+          title:        createData.title       || null,
+          description:  createData.description || null,
+          tt_type:      createData.ttType      || null,
+          category:     createData.category    || null,
+          priority:     createData.priority    || null,
+          tt_status:    ttStatus,
+          request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+          start_time:   createData.startTime   || null,
+          progress:     progressStr,
+          updated_at:   new Date().toISOString(),
+        };
+        let { error } = await supabase
           .from("tickets")
-          .update({
-            title:        createData.title       || null,
-            description:  createData.description || null,
-            tt_type:      createData.ttType      || null,
-            category:     createData.category    || null,
-            priority:     createData.priority    || null,
-            tt_status:    ttStatus,
-            request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
-            start_time:   createData.startTime   || null,
-            progress:     progressStr,
-            updated_at:   new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", dbId);
+        if (error && error.message?.includes("request_time")) {
+          delete updatePayload.request_time;
+          const retry = await supabase
+            .from("tickets")
+            .update(updatePayload)
+            .eq("id", dbId);
+          error = retry.error;
+        }
         if (error) { alert("Lỗi lưu ticket: " + error.message); return; }
 
       } else if (currentStep === "check") {
@@ -4449,21 +4458,30 @@ export default function TicketFormModal({
         } else {
           /* Update existing ticket */
           if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-          const { error } = await supabase
+          const updatePayload: any = {
+            title:        createData.title       || null,
+            description:  createData.description || null,
+            tt_type:      createData.ttType      || null,
+            category:     createData.category    || null,
+            priority:     createData.priority    || null,
+            tt_status:    ttStatus,
+            request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+            start_time:   createData.startTime   || null,
+            progress:     progressStr,
+            updated_at:   new Date().toISOString(),
+          };
+          let { error } = await supabase
             .from("tickets")
-            .update({
-              title:        createData.title       || null,
-              description:  createData.description || null,
-              tt_type:      createData.ttType      || null,
-              category:     createData.category    || null,
-              priority:     createData.priority    || null,
-              tt_status:    ttStatus,
-              request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
-              start_time:   createData.startTime   || null,
-              progress:     progressStr,
-              updated_at:   new Date().toISOString(),
-            })
+            .update(updatePayload)
             .eq("id", dbId);
+          if (error && error.message?.includes("request_time")) {
+            delete updatePayload.request_time;
+            const retry = await supabase
+              .from("tickets")
+              .update(updatePayload)
+              .eq("id", dbId);
+            error = retry.error;
+          }
           if (error) { alert("Lỗi cập nhật ticket: " + error.message); return; }
         }
 
