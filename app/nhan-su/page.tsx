@@ -7,7 +7,7 @@ import NhanSuTable from "@/components/nhan-su/nhan-su-table";
 import NhanSuModal from "@/components/nhan-su/nhan-su-modal";
 import NhanSuImportModal from "@/components/nhan-su/nhan-su-import-modal";
 import {
-  Plus, Download, Search,
+  Plus, Download, Search, X,
   UserCheck, Users, UsersRound, FileText, Target,
   FileSpreadsheet, RefreshCw, CheckCircle2, Phone, Mail, Building2
 } from "lucide-react";
@@ -185,9 +185,20 @@ export default function NhanSuPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm theo mã NV, họ tên, bộ phận, chức vụ, email, SĐT..."
-                className="w-80 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition shadow-sm"
+                className="w-80 h-9 pl-3.5 pr-8 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition shadow-sm"
               />
-              <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={13} />
+                </button>
+              ) : (
+                <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              )}
             </div>
           </div>
 

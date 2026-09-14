@@ -7,7 +7,7 @@ import OpportunityTable from "@/components/opportunity/opportunity-table";
 import OpportunityModal from "@/components/opportunity/opportunity-modal";
 import OpportunityImportModal from "@/components/opportunity/opportunity-import-modal";
 import {
-  Plus, Download, Search,
+  Plus, Download, Search, X,
   Target, Building2,
   RefreshCw, FileSpreadsheet, UserCheck, TrendingUp
 } from "lucide-react";
@@ -259,9 +259,20 @@ export default function OpportunitiesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm theo mã, tên, khách hàng, phụ trách..."
-                className="w-72 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition shadow-sm"
+                className="w-72 h-9 pl-3.5 pr-8 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition shadow-sm"
               />
-              <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={13} />
+                </button>
+              ) : (
+                <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              )}
             </div>
           </div>
 

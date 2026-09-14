@@ -470,12 +470,22 @@ export default function SlaPage() {
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
           {/* Search */}
           <div className="relative flex-1 min-w-52">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text" placeholder="Tìm theo khách hàng, số HĐ, SLA ID..."
               value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                title="Xóa tìm kiếm"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
           {/* Priority filter */}

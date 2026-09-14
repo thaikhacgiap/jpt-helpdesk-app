@@ -7,7 +7,7 @@ import CustomerTable from "@/components/customer/customer-table";
 import CustomerModal from "@/components/customer/new-customer-modal";
 import CustomerImportModal from "@/components/customer/customer-import-modal";
 import {
-  Plus, Download, Search,
+  Plus, Download, Search, X,
   Users, Building2,
   RefreshCw, FileSpreadsheet, UserCheck
 } from "lucide-react";
@@ -257,9 +257,20 @@ export default function CustomersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm theo mã, tên, TTKD, phụ trách..."
-                className="w-72 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition shadow-sm"
+                className="w-72 h-9 pl-3.5 pr-8 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition shadow-sm"
               />
-              <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={13} />
+                </button>
+              ) : (
+                <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              )}
             </div>
           </div>
 

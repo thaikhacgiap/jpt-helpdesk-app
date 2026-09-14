@@ -7,7 +7,7 @@ import ContactTable from "@/components/contact/contact-table";
 import ContactModal from "@/components/contact/contact-modal";
 import ContactImportModal from "@/components/contact/contact-import-modal";
 import {
-  Plus, Download, Search,
+  Plus, Download, Search, X,
   UsersRound, Building2, Phone, Mail,
   Users, UserCheck, FileText, Target,
   FileSpreadsheet, RefreshCw, CheckCircle2
@@ -261,9 +261,20 @@ export default function ContactsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm theo mã LH, họ tên, khách hàng, bộ phận, email, SĐT..."
-                className="w-80 h-9 pl-3.5 pr-9 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition shadow-sm"
+                className="w-80 h-9 pl-3.5 pr-8 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition shadow-sm"
               />
-              <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={13} />
+                </button>
+              ) : (
+                <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              )}
             </div>
           </div>
 

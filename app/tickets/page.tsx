@@ -413,6 +413,19 @@ export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const [filters, setFilters] = useState<Filters>({
     tt_type: "",
     contract_scope: "",
@@ -669,10 +682,13 @@ export default function TicketsPage() {
     return true;
   });
 
-  const activeFiltersCount = Object.values(filters).filter(Boolean).length;
+  const activeFiltersCount = Object.values(filters).filter(Boolean).length + (search.trim() ? 1 : 0);
 
-  const clearAllFilters = () =>
+  const clearAllFilters = () => {
     setFilters({ tt_type: "", contract_scope: "", category: "", priority: "", tt_status: "", sla_status: "" });
+    setSearch("");
+    setCurrentPage(1);
+  };
 
   // Pagination calculations
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -699,17 +715,29 @@ export default function TicketsPage() {
           {/* Search Input inside Header */}
           <div className="relative w-full max-w-[340px]">
             <input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               type="text"
               placeholder="Tìm kiếm ticket, khách hàng, người tạo..."
               className="h-9 w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-14 text-sm text-white placeholder-white/40 outline-none focus:bg-white/10 focus:border-white/20 shadow-inner transition font-normal"
             />
-            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50">
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none">
               <Search size={14} />
             </div>
             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-white/40">
-              <span className="text-[8px] font-normal border border-white/10 rounded px-1 py-0.5 bg-white/5 shadow-2xs">Ctrl + K</span>
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(""); setCurrentPage(1); }}
+                  className="p-0.5 text-white/60 hover:text-white rounded-md hover:bg-white/10 transition cursor-pointer"
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
+              ) : (
+                <span className="text-[8px] font-normal border border-white/10 rounded px-1 py-0.5 bg-white/5 shadow-2xs">Ctrl + K</span>
+              )}
             </div>
           </div>
 
