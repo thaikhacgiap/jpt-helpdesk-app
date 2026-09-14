@@ -143,8 +143,9 @@ function FilterDropdown({
 }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
-const parseServerDate = (dateStr?: string): Date | null => {
+const parseServerDate = (dateStr?: string | Date | null): Date | null => {
   if (!dateStr) return null;
+  if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
   try {
     let s = String(dateStr).trim();
     if (!s || s === "—" || s === "null" || s === "undefined") return null;
@@ -163,10 +164,23 @@ const parseServerDate = (dateStr?: string): Date | null => {
       }
     }
 
-    // Handle format YYYY-MM-DD HH:mm:ss without timezone: Supabase timestamp is UTC, so treat as UTC
-    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/.test(s)) {
-      if (!s.endsWith("Z") && !/[+-]\d{2}(:?\d{2})?$/.test(s)) {
-        s = s.replace(" ", "T") + "Z";
+    // If it has timezone offset or 'Z' (e.g. Supabase created_at ISO strings)
+    if (s.endsWith("Z") || /[+-]\d{2}(:?\d{2})?$/.test(s)) {
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Format YYYY-MM-DD or YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm without timezone -> local time
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
+      const parts = s.split(/[-/ T:]/);
+      if (parts.length >= 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const min = parts[4] ? parseInt(parts[4], 10) : 0;
+        const sec = parts[5] ? parseInt(parts[5], 10) : 0;
+        return new Date(year, month, day, hour, min, sec);
       }
     }
 

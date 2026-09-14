@@ -35,6 +35,14 @@ import {
   Calendar 
 } from "lucide-react";
 
+const getLocalDateTimeString = (dateInput?: Date | string | null): string => {
+  if (!dateInput) return "";
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return typeof dateInput === "string" ? dateInput : "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function RequestsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"customer" | "service" | "task">("customer");
@@ -82,7 +90,7 @@ export default function RequestsPage() {
     category: "",
     priority: "Medium",
     contract_no: "",
-    incident_start_time: new Date().toISOString().substring(0, 16),
+    incident_start_time: getLocalDateTimeString(),
     affected_service: "",
     assigned: "",
     receive_time: "",
@@ -133,13 +141,11 @@ export default function RequestsPage() {
       category: ticket.category || "",
       priority: ticket.priority || "Medium",
       contract_no: contractNo,
-      incident_start_time: ticket.start_time 
-        ? new Date(ticket.start_time).toISOString().substring(0, 16) 
-        : new Date().toISOString().substring(0, 16),
+      incident_start_time: getLocalDateTimeString(ticket.start_time),
       affected_service: ticket.hold_reason || "",
       assigned: ticket.assigned || "",
-      receive_time: ticket.start_time ? new Date(ticket.start_time).toISOString().substring(0, 16) : "",
-      end_time: ticket.end_time ? new Date(ticket.end_time).toISOString().substring(0, 16) : "",
+      receive_time: getLocalDateTimeString(ticket.start_time),
+      end_time: getLocalDateTimeString(ticket.end_time),
       tt_status: ticket.tt_status || "New"
     });
     setError("");
@@ -156,7 +162,7 @@ export default function RequestsPage() {
       category: "",
       priority: "Medium",
       contract_no: "",
-      incident_start_time: new Date().toISOString().substring(0, 16),
+      incident_start_time: getLocalDateTimeString(),
       affected_service: "",
       assigned: "",
       receive_time: "",

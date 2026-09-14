@@ -112,10 +112,74 @@ const getHeaderStepIcon = (step: StepKey) => {
   }
 };
 
+export const parseServerDate = (dateStr?: string | Date | null): Date | null => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
+  try {
+    let s = String(dateStr).trim();
+    if (!s || s === "—" || s === "null" || s === "undefined") return null;
+
+    // Handle format DD-MM-YYYY or DD/MM/YYYY
+    if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(s)) {
+      const parts = s.split(/[-/ :]/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const min = parts[4] ? parseInt(parts[4], 10) : 0;
+        const sec = parts[5] ? parseInt(parts[5], 10) : 0;
+        return new Date(year, month, day, hour, min, sec);
+      }
+    }
+
+    // If it has timezone offset or 'Z' (e.g. Supabase created_at ISO strings)
+    if (s.endsWith("Z") || /[+-]\d{2}(:?\d{2})?$/.test(s)) {
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Format YYYY-MM-DD or YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm without timezone -> local time
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
+      const parts = s.split(/[-/ T:]/);
+      if (parts.length >= 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const min = parts[4] ? parseInt(parts[4], 10) : 0;
+        const sec = parts[5] ? parseInt(parts[5], 10) : 0;
+        return new Date(year, month, day, hour, min, sec);
+      }
+    }
+
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+};
+
+export const toDatetimeLocalValue = (dateStr?: string | Date | null): string => {
+  if (!dateStr) return "";
+  const d = parseServerDate(dateStr);
+  if (!d) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+export const formatDisplayDateTime = (dateStr?: string | Date | null): string => {
+  if (!dateStr) return "—";
+  const d = parseServerDate(dateStr);
+  if (!d) return typeof dateStr === "string" ? dateStr : "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+
 const splitDateTime = (dateStr: string) => {
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return { datePart: dateStr, timePart: "" };
+    const d = parseServerDate(dateStr);
+    if (!d) return { datePart: dateStr, timePart: "" };
     const pad = (num: number) => String(num).padStart(2, "0");
     const datePart = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
     const timePart = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -336,10 +400,20 @@ function TealField({ value, placeholder, editing, onChange, type = "text", rows,
         className={`${base} py-2 resize-none`} />
     );
   }
+  
+  const displayValue = (!editing && type === "datetime-local")
+    ? formatDisplayDateTime(value)
+    : (editing && type === "datetime-local" ? toDatetimeLocalValue(value) : (value || ""));
+
   return (
-    <input type={editing ? type : "text"} value={value} readOnly={!editing}
-      placeholder={placeholder} onChange={(e) => onChange?.(e.target.value)}
-      className={`${base} h-10`} />
+    <input 
+      type={editing ? type : "text"} 
+      value={displayValue} 
+      readOnly={!editing}
+      placeholder={placeholder} 
+      onChange={(e) => onChange?.(e.target.value)}
+      className={`${base} h-10`} 
+    />
   );
 }
 
@@ -825,7 +899,7 @@ function CreateTicketForm({ editing, data, onChange }: {
             <Clock size={16} className="text-slate-400 mr-2.5 shrink-0" />
             <input
               type={editing ? "datetime-local" : "text"}
-              value={data.requestTime || ""}
+              value={editing ? toDatetimeLocalValue(data.requestTime) : formatDisplayDateTime(data.requestTime)}
               readOnly={!editing}
               onChange={(e) => onChange({ requestTime: e.target.value })}
               placeholder="—"
@@ -844,7 +918,7 @@ function CreateTicketForm({ editing, data, onChange }: {
             <Calendar size={16} className="text-slate-400 mr-2.5 shrink-0" />
             <input
               type={editing ? "datetime-local" : "text"}
-              value={data.startTime}
+              value={editing ? toDatetimeLocalValue(data.startTime) : formatDisplayDateTime(data.startTime)}
               readOnly={!editing}
               onChange={(e) => onChange({ startTime: e.target.value })}
               placeholder="—"
@@ -3826,10 +3900,8 @@ export default function TicketFormModal({
       let initialDescription = ticket?.description || "";
       let initialTtType = ticket?.tt_type || "";
       let initialCategory = ticket?.category || "";
-      let initialRequestTime = ticket?.request_time 
-        ? new Date(ticket.request_time).toISOString().slice(0, 16) 
-        : (ticket?.created_at ? new Date(ticket.created_at).toISOString().slice(0, 16) : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-      let initialStartTime = ticket?.start_time || new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      let initialRequestTime = toDatetimeLocalValue(ticket?.request_time || (ticket as any)?.requestTime || ticket?.created_at || new Date());
+      let initialStartTime = toDatetimeLocalValue(ticket?.start_time || (ticket as any)?.startTime || new Date());
       let initialPriority = ticket?.priority || "";
       let initialCustomerId = ticket?.customer_id || "";
       let initialCustomerName = ticket?.customer_name || "";
@@ -3974,8 +4046,8 @@ export default function TicketFormModal({
         description: ticket.description  || "",
         ttType:      ticket.tt_type      || "",
         category:    ticket.category     || "",
-        requestTime: ticket.request_time ? (ticket.request_time.includes("T") ? ticket.request_time.slice(0, 16) : new Date(ticket.request_time).toISOString().slice(0, 16)) : (ticket.created_at ? new Date(ticket.created_at).toISOString().slice(0, 16) : ""),
-        startTime:   ticket.start_time   || "",
+        requestTime: toDatetimeLocalValue(ticket.request_time || (ticket as any).requestTime || ticket.created_at),
+        startTime:   toDatetimeLocalValue(ticket.start_time || (ticket as any).startTime),
         priority:    ticket.priority     || "",
       });
       /* Parse remark (JSON or legacy string) */
@@ -4394,7 +4466,7 @@ export default function TicketFormModal({
           category:     createData.category    || null,
           priority:     createData.priority    || null,
           tt_status:    ttStatus,
-          request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+          request_time: createData.requestTime || null,
           start_time:   createData.startTime   || null,
           progress:     progressStr,
           updated_at:   new Date().toISOString(),
@@ -4632,7 +4704,7 @@ export default function TicketFormModal({
             category:     createData.category    || null,
             priority:     createData.priority    || null,
             tt_status:    ttStatus,
-            request_time: createData.requestTime ? new Date(createData.requestTime).toISOString() : null,
+            request_time: createData.requestTime || null,
             start_time:   createData.startTime   || null,
             progress:     progressStr,
             updated_at:   new Date().toISOString(),
