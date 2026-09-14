@@ -276,15 +276,18 @@ export default function MaintenanceDetailPage() {
   };
 
   // Helper to calculate overall plan progress
+  // Chỉ tính % nếu lần/kỳ thực hiện hoàn thành (tức calculateCycleProgress(cycleTaskList) === 100) trên tổng số lần thực hiện
   const calculateOverallProgress = (tasksData: { [key: string]: Task[] }, total: number) => {
     if (total <= 0) return 0;
-    let totalPercent = 0;
+    let completedCycles = 0;
     for (let i = 1; i <= total; i++) {
       const cycleNum = String(i);
       const cycleTaskList = tasksData[cycleNum] || [];
-      totalPercent += calculateCycleProgress(cycleTaskList);
+      if (calculateCycleProgress(cycleTaskList) === 100) {
+        completedCycles++;
+      }
     }
-    return Math.min(100, Math.round(totalPercent / total));
+    return Math.min(100, Math.round((completedCycles / total) * 100));
   };
 
   // Helper to determine the current period based on completed cycles
@@ -342,19 +345,29 @@ export default function MaintenanceDetailPage() {
       const overallProgress = calculateOverallProgress(updatedTasks, totalCycles);
       const currentPeriodVal = determineCurrentPeriod(updatedTasks, totalCycles);
       
+      let newStatus = plan?.tt_status || "New";
+      if (overallProgress === 100 && totalCycles > 0 && plan?.tt_status !== "Closed") {
+        newStatus = "Completed";
+      } else if (plan?.tt_status !== "On Hold" && plan?.tt_status !== "Closed") {
+        let hasAnyActivity = overallProgress > 0;
+        if (!hasAnyActivity) {
+          for (let i = 1; i <= totalCycles; i++) {
+            const list = updatedTasks[String(i)] || [];
+            if (list.some(t => t.status === "Đang thực hiện" || t.status === "Hoàn thành")) {
+              hasAnyActivity = true;
+              break;
+            }
+          }
+        }
+        newStatus = hasAnyActivity ? "Processing" : (plan?.tt_status || "New");
+      }
+      
       const updateData: any = {
         remark: remarkJSON,
         progress: `${overallProgress}%`,
-        sla_time: String(currentPeriodVal)
+        sla_time: String(currentPeriodVal),
+        tt_status: newStatus
       };
-      
-      if (plan) {
-        if (overallProgress === 100 && plan.tt_status !== "Closed") {
-          updateData.tt_status = "Resolved";
-        } else if (overallProgress > 0 && overallProgress < 100 && plan.tt_status === "New") {
-          updateData.tt_status = "In Progress";
-        }
-      }
       
       const { error } = await supabase
         .from("tickets")

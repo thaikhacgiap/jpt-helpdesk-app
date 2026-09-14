@@ -89,6 +89,100 @@ const calculateCycleProgress = (tasks: Task[]) => {
   return Math.round((completed / leafTasks.length) * 100);
 };
 
+// Helper: tính % tiến độ tổng thể (chỉ tính % nếu lần thực hiện hoàn thành 100%, trên tổng số lần thực hiện)
+const calculatePlanProgress = (t: any): number => {
+  const total = parseInt(t.hold_time) || 0;
+  if (total <= 0) return 0;
+  
+  if (t.remark) {
+    try {
+      const parsed = JSON.parse(t.remark);
+      const tasksData = parsed?.tasks || (parsed && !parsed.config ? parsed : null);
+      if (tasksData && typeof tasksData === "object") {
+        let completedCycles = 0;
+        for (let i = 1; i <= total; i++) {
+          const cycleTaskList = tasksData[String(i)] || [];
+          if (calculateCycleProgress(cycleTaskList) === 100) {
+            completedCycles++;
+          }
+        }
+        return Math.min(100, Math.round((completedCycles / total) * 100));
+      }
+    } catch (e) {}
+  }
+  
+  return parseInt(t.progress) || 0;
+};
+
+// Helper: xác định tình trạng (Completed nếu tất cả các kỳ hoàn thành, Processing nếu có kỳ đang làm hoặc chưa hoàn thành, New nếu mới tạo)
+const getPlanStatus = (t: any, progressPercent: number): { label: string; statusKey: string; badgeClass: string; barClass: string } => {
+  const total = parseInt(t.hold_time) || 0;
+  
+  if (t.tt_status === "On Hold") {
+    return {
+      label: "Tạm ngưng",
+      statusKey: "On Hold",
+      badgeClass: "bg-red-100 text-red-600",
+      barClass: "from-rose-400 to-red-500",
+    };
+  }
+  
+  if (t.tt_status === "Closed") {
+    return {
+      label: "Đã đóng",
+      statusKey: "Closed",
+      badgeClass: "bg-slate-100 text-slate-700",
+      barClass: "from-slate-400 to-slate-500",
+    };
+  }
+  
+  if (total > 0 && progressPercent === 100) {
+    return {
+      label: "Completed",
+      statusKey: "Completed",
+      badgeClass: "bg-green-100 text-green-700",
+      barClass: "from-emerald-400 to-teal-500",
+    };
+  }
+  
+  if (progressPercent > 0 || t.tt_status === "In Progress" || t.tt_status === "Processing") {
+    return {
+      label: "Processing",
+      statusKey: "Processing",
+      badgeClass: "bg-yellow-100 text-yellow-700",
+      barClass: "from-amber-400 to-orange-500",
+    };
+  }
+
+  // Check if any tasks exist in remark and have started or completed
+  if (t.remark) {
+    try {
+      const parsed = JSON.parse(t.remark);
+      const tasksData = parsed?.tasks || (parsed && !parsed.config ? parsed : null);
+      if (tasksData && typeof tasksData === "object") {
+        for (const k in tasksData) {
+          const list = tasksData[k] || [];
+          if (list.some((task: Task) => task.status === "Đang thực hiện" || task.status === "Hoàn thành")) {
+            return {
+              label: "Processing",
+              statusKey: "Processing",
+              badgeClass: "bg-yellow-100 text-yellow-700",
+              barClass: "from-amber-400 to-orange-500",
+            };
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  return {
+    label: "Mới tạo",
+    statusKey: "New",
+    badgeClass: "bg-blue-100 text-blue-700",
+    barClass: "from-blue-400 to-indigo-500",
+  };
+};
+
 export default function MaintenancePage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -108,7 +202,6 @@ export default function MaintenancePage() {
   const [form, setForm] = useState({
     customerId: "",
     contractId: "",
-    currentPeriod: 1,
     totalPeriods: 12,
     status: "New",
     description: "",
@@ -203,7 +296,6 @@ export default function MaintenancePage() {
     setForm({
       customerId: "",
       contractId: "",
-      currentPeriod: 1,
       totalPeriods: 12,
       status: "New",
       description: "",
@@ -217,7 +309,6 @@ export default function MaintenancePage() {
     setForm({
       customerId: plan.customer_id || "",
       contractId: plan.contract_id || "",
-      currentPeriod: parseInt(plan.sla_time) || 1,
       totalPeriods: parseInt(plan.hold_time) || 12,
       status: plan.tt_status || "New",
       description: plan.description || "",
@@ -251,24 +342,17 @@ export default function MaintenancePage() {
     if (!form.customerId) return;
     setSubmitting(true);
     try {
-      const current = parseInt(String(form.currentPeriod)) || 0;
-      const total = parseInt(String(form.totalPeriods)) || 0;
-      const progressPercent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
-      const progressStr = `${progressPercent}%`;
-
       const custObj = customers.find(c => c.id === form.customerId);
       const contrObj = filteredContracts.find(c => c.id === form.contractId) || allContracts.find(c => c.id === form.contractId);
 
-      const payload = {
+      const payload: any = {
         title: `Kế hoạch bảo trì - ${custObj?.name || "Khách hàng"}`,
         description: form.description,
         customer_id: form.customerId,
         customer_name: custObj?.name || null,
         contract_id: form.contractId || null,
         contract_no: contrObj?.contract_no || contrObj?.code || contrObj?.name || null,
-        sla_time: String(form.currentPeriod),
         hold_time: String(form.totalPeriods),
-        progress: progressStr,
         tt_status: form.status,
       };
 
@@ -286,6 +370,8 @@ export default function MaintenancePage() {
             ticket_id: ticketId,
             tt_type: "Maintenance",
             start_time: new Date().toISOString(),
+            sla_time: "1",
+            progress: "0%",
           }]);
       }
 
@@ -294,7 +380,6 @@ export default function MaintenancePage() {
       setForm({
         customerId: "",
         contractId: "",
-        currentPeriod: 1,
         totalPeriods: 12,
         status: "New",
         description: "",
@@ -316,8 +401,27 @@ export default function MaintenancePage() {
     const contrMatch = !term || (t.contract_no || t.contract?.contract_no || t.contract?.service || t.contract?.name || "")?.toLowerCase().includes(term);
     
     const matchesSearch = !term || idMatch || custMatch || contrMatch;
-    const matchesStatus = !statusFilter || statusFilter === "All" || t.tt_status === statusFilter;
+    
+    const progressVal = calculatePlanProgress(t);
+    const planStatus = getPlanStatus(t, progressVal);
+    
+    let matchesStatus = true;
+    if (statusFilter && statusFilter !== "All") {
+      if (statusFilter === "Completed") {
+        matchesStatus = planStatus.statusKey === "Completed" || t.tt_status === "Resolved" || t.tt_status === "Completed";
+      } else if (statusFilter === "Processing") {
+        matchesStatus = planStatus.statusKey === "Processing" || t.tt_status === "In Progress" || t.tt_status === "Processing";
+      } else if (statusFilter === "New") {
+        matchesStatus = planStatus.statusKey === "New" || t.tt_status === "New";
+      } else {
+        matchesStatus = planStatus.statusKey === statusFilter || t.tt_status === statusFilter;
+      }
+    }
+
     const matchesCustomer = !customerFilter || customerFilter === "All" || customerFilter === "" || t.customer_id === customerFilter || (t.customer?.name === customerFilter) || (t.customer_name === customerFilter);
+
+    return matchesSearch && matchesStatus && matchesCustomer;
+  });
 
     return matchesSearch && matchesStatus && matchesCustomer;
   });
@@ -571,9 +675,12 @@ export default function MaintenancePage() {
   };
 
   const total = tickets.length;
-  const pending = tickets.filter(t => t.tt_status === "New").length;
-  const inProgress = tickets.filter(t => t.tt_status === "In Progress").length;
-  const completed = tickets.filter(t => ["Resolved", "Closed"].includes(t.tt_status)).length;
+  const pending = tickets.filter(t => getPlanStatus(t, calculatePlanProgress(t)).statusKey === "New").length;
+  const inProgress = tickets.filter(t => getPlanStatus(t, calculatePlanProgress(t)).statusKey === "Processing").length;
+  const completed = tickets.filter(t => {
+    const s = getPlanStatus(t, calculatePlanProgress(t)).statusKey;
+    return s === "Completed" || s === "Closed";
+  }).length;
 
   return (
     <MainLayout>
@@ -616,9 +723,9 @@ export default function MaintenancePage() {
           >
             <option value="All">Tất cả tình trạng</option>
             <option value="New">Mới tạo</option>
-            <option value="In Progress">Đang chạy</option>
+            <option value="Processing">Processing</option>
+            <option value="Completed">Completed</option>
             <option value="On Hold">Tạm ngưng</option>
-            <option value="Resolved">Hoàn thành</option>
             <option value="Closed">Đã đóng</option>
           </select>
 
@@ -646,7 +753,6 @@ export default function MaintenancePage() {
               <th className="px-6 py-3">ID</th>
               <th className="px-4 py-3">Tên khách hàng</th>
               <th className="px-4 py-3">Tên hợp đồng</th>
-              <th className="px-4 py-3 text-center">Kỳ thực hiện</th>
               <th className="px-4 py-3 text-center">Tổng kỳ</th>
               <th className="px-4 py-3">Tình trạng</th>
               <th className="px-4 py-3">Tiến độ</th>
@@ -656,14 +762,14 @@ export default function MaintenancePage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="py-12 text-center text-slate-400">
+                <td colSpan={7} className="py-12 text-center text-slate-400">
                   <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   Đang tải...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-14 text-center text-slate-400">
+                <td colSpan={7} className="py-14 text-center text-slate-400">
                   <Wrench size={36} className="mx-auto mb-2 opacity-20" />
                   <p className="text-sm">{search ? "Không tìm thấy kết quả" : "Chưa có kế hoạch bảo trì nào"}</p>
                   <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
@@ -673,7 +779,8 @@ export default function MaintenancePage() {
               </tr>
             ) : (
               filtered.map((t: any, i: number) => {
-                const progressVal = parseInt(t.progress) || 0;
+                const progressVal = calculatePlanProgress(t);
+                const statusInfo = getPlanStatus(t, progressVal);
                 return (
                   <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition">
                     <td className="px-6 py-3.5 font-medium text-blue-600">
@@ -687,36 +794,17 @@ export default function MaintenancePage() {
                     <td className="px-4 py-3.5 text-slate-500 max-w-[200px] truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
                       {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
                     </td>
-                    <td className="px-4 py-3.5 text-center font-medium text-slate-700">{t.sla_time || 0}</td>
                     <td className="px-4 py-3.5 text-center font-medium text-slate-500">{t.hold_time || 0}</td>
                     <td className="px-4 py-3.5">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                        t.tt_status === "Resolved" || t.tt_status === "Closed" ? "bg-green-100 text-green-700" :
-                        t.tt_status === "In Progress" ? "bg-yellow-100 text-yellow-700" :
-                        t.tt_status === "On Hold" ? "bg-red-100 text-red-600" :
-                        "bg-blue-100 text-blue-700"
-                      }`}>{
-                        t.tt_status === "New" ? "Mới tạo" :
-                        t.tt_status === "In Progress" ? "Đang chạy" :
-                        t.tt_status === "On Hold" ? "Tạm ngưng" :
-                        t.tt_status === "Resolved" ? "Hoàn thành" :
-                        t.tt_status === "Closed" ? "Đã đóng" :
-                        t.tt_status || "Mới tạo"
-                      }</span>
+                      <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
+                        {statusInfo.label}
+                      </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2 min-w-[130px]">
                         <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
                           <div 
-                            className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${
-                              t.tt_status === "Resolved" || t.tt_status === "Closed"
-                                ? "from-emerald-400 to-teal-500"
-                                : t.tt_status === "On Hold"
-                                ? "from-rose-400 to-red-500"
-                                : t.tt_status === "In Progress"
-                                ? "from-amber-400 to-orange-500"
-                                : "from-blue-400 to-indigo-500"
-                            }`}
+                            className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
                             style={{ width: `${progressVal}%` }}
                           />
                         </div>
@@ -947,34 +1035,19 @@ export default function MaintenancePage() {
                 </select>
               </div>
 
-              {/* Periods Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Kỳ đang thực hiện <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.currentPeriod}
-                    onChange={e => setForm(f => ({ ...f, currentPeriod: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Tổng số kỳ <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.totalPeriods}
-                    onChange={e => setForm(f => ({ ...f, totalPeriods: parseInt(e.target.value) || 1 }))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+              {/* Total Periods */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Tổng số kỳ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.totalPeriods}
+                  onChange={e => setForm(f => ({ ...f, totalPeriods: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
               </div>
 
               {/* Status Select */}
@@ -989,9 +1062,9 @@ export default function MaintenancePage() {
                   required
                 >
                   <option value="New">Mới tạo</option>
-                  <option value="In Progress">Đang chạy</option>
+                  <option value="Processing">Processing</option>
+                  <option value="Completed">Completed</option>
                   <option value="On Hold">Tạm ngưng</option>
-                  <option value="Resolved">Hoàn thành</option>
                   <option value="Closed">Đã đóng</option>
                 </select>
               </div>
@@ -1007,24 +1080,6 @@ export default function MaintenancePage() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
-
-              {/* Progress Live Preview */}
-              {form.totalPeriods > 0 && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-xs font-semibold text-slate-600">Tiến độ tính toán:</span>
-                    <span className="text-xs font-bold text-blue-600">
-                      {Math.min(100, Math.round(((parseInt(String(form.currentPeriod)) || 0) / (parseInt(String(form.totalPeriods)) || 1)) * 100))}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className="bg-blue-600 h-full transition-all duration-300"
-                      style={{ width: `${Math.min(100, Math.round(((parseInt(String(form.currentPeriod)) || 0) / (parseInt(String(form.totalPeriods)) || 1)) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button 
