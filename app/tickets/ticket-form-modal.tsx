@@ -112,7 +112,7 @@ const getHeaderStepIcon = (step: StepKey) => {
   }
 };
 
-export const parseServerDate = (dateStr?: string | Date | null): Date | null => {
+export const parseServerDate = (dateStr?: string | Date | null, isServerUtc: boolean = false): Date | null => {
   if (!dateStr) return null;
   if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
   try {
@@ -139,6 +139,12 @@ export const parseServerDate = (dateStr?: string | Date | null): Date | null => 
       return isNaN(d.getTime()) ? null : d;
     }
 
+    // If it's a server UTC timestamp (e.g. created_at, or contains microseconds like .123456)
+    if (isServerUtc || /\.\d{3,6}/.test(s)) {
+      const d = new Date(s.replace(" ", "T") + "Z");
+      return isNaN(d.getTime()) ? null : d;
+    }
+
     // Format YYYY-MM-DD or YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm without timezone -> local time
     if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
       const parts = s.split(/[-/ T:]/);
@@ -160,17 +166,17 @@ export const parseServerDate = (dateStr?: string | Date | null): Date | null => 
   }
 };
 
-export const toDatetimeLocalValue = (dateStr?: string | Date | null): string => {
+export const toDatetimeLocalValue = (dateStr?: string | Date | null, isServerUtc: boolean = false): string => {
   if (!dateStr) return "";
-  const d = parseServerDate(dateStr);
+  const d = parseServerDate(dateStr, isServerUtc);
   if (!d) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-export const formatDisplayDateTime = (dateStr?: string | Date | null): string => {
+export const formatDisplayDateTime = (dateStr?: string | Date | null, isServerUtc: boolean = false): string => {
   if (!dateStr) return "—";
-  const d = parseServerDate(dateStr);
+  const d = parseServerDate(dateStr, isServerUtc);
   if (!d) return typeof dateStr === "string" ? dateStr : "—";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;

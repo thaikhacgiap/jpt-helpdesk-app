@@ -143,7 +143,7 @@ function FilterDropdown({
 }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
-const parseServerDate = (dateStr?: string | Date | null): Date | null => {
+const parseServerDate = (dateStr?: string | Date | null, isServerUtc: boolean = false): Date | null => {
   if (!dateStr) return null;
   if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
   try {
@@ -170,6 +170,12 @@ const parseServerDate = (dateStr?: string | Date | null): Date | null => {
       return isNaN(d.getTime()) ? null : d;
     }
 
+    // If it's a server UTC timestamp (e.g. created_at, or contains microseconds like .123456)
+    if (isServerUtc || /\.\d{3,6}/.test(s)) {
+      const d = new Date(s.replace(" ", "T") + "Z");
+      return isNaN(d.getTime()) ? null : d;
+    }
+
     // Format YYYY-MM-DD or YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm without timezone -> local time
     if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
       const parts = s.split(/[-/ T:]/);
@@ -192,7 +198,7 @@ const parseServerDate = (dateStr?: string | Date | null): Date | null => {
 };
 
 const timeAgo = (dateStr?: string) => {
-  const date = parseServerDate(dateStr);
+  const date = parseServerDate(dateStr, true);
   if (!date) return dateStr || "—";
   try {
     const now = new Date();
@@ -222,8 +228,8 @@ const timeAgo = (dateStr?: string) => {
   }
 };
 
-const formatDateTime = (dateStr?: string) => {
-  const d = parseServerDate(dateStr);
+const formatDateTime = (dateStr?: string, isServerUtc: boolean = false) => {
+  const d = parseServerDate(dateStr, isServerUtc);
   if (!d) return dateStr || "—";
   const pad = (num: number) => String(num).padStart(2, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -1258,7 +1264,7 @@ export default function TicketsPage() {
                     {/* Created At (Thời gian tạo) */}
                     {visibleColumns.created_at && (
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={ticket.created_at || ticket.created_time || ""}>
-                        {formatDateTime(ticket.created_at || ticket.created_time)}
+                        {formatDateTime(ticket.created_at || ticket.created_time, true)}
                       </td>
                     )}
 
