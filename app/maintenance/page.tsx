@@ -423,22 +423,54 @@ export default function MaintenancePage() {
     return matchesSearch && matchesStatus && matchesCustomer;
   });
 
+  const getTimelineYears = () => {
+    const curYear = new Date().getFullYear();
+    const yearSet = new Set<number>([curYear - 1, curYear, curYear + 1]);
+    tickets.forEach((t: any) => {
+      if (t.start_time) {
+        const y = new Date(t.start_time).getFullYear();
+        if (!isNaN(y) && y >= 2020 && y <= 2040) yearSet.add(y);
+      }
+    });
+    return Array.from(yearSet).sort((a, b) => a - b);
+  };
+  const yearsList = getTimelineYears();
+
+  const isLeapYear = (year: number): boolean => {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  };
+
+  const getDaysInMonth = (year: number, month: number): number => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
   const getTodayLinePercent = () => {
     const today = new Date();
-    const year = today.getFullYear();
-    const start = new Date(year, 0, 1);
-    const diff = today.getTime() - start.getTime();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const currentDayOfYear = Math.floor(diff / oneDay);
+    const currentYear = today.getFullYear();
+    const yearIdx = yearsList.indexOf(currentYear);
+    if (yearIdx === -1) return -1;
     
     if (timeScale === "month") {
       const currentMonth = today.getMonth();
       const currentDate = today.getDate();
-      const daysInMonth = new Date(year, currentMonth + 1, 0).getDate();
-      return (currentMonth + currentDate / daysInMonth) / 12;
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const globalMonthOffset = yearIdx * 12 + currentMonth + (currentDate / daysInMonth);
+      return globalMonthOffset / (yearsList.length * 12);
+    } else if (timeScale === "week") {
+      const currentWeek = getWeekOfYear(today.toISOString());
+      const globalWeekOffset = yearIdx * 52 + currentWeek;
+      return globalWeekOffset / (yearsList.length * 52);
     } else {
-      // Both Week and Day scales show the entire year 2026!
-      return currentDayOfYear / 365;
+      let daysBefore = 0;
+      for (let i = 0; i < yearIdx; i++) {
+        daysBefore += isLeapYear(yearsList[i]) ? 366 : 365;
+      }
+      const dayOfYear = getDayOfYear(today);
+      let totalDays = 0;
+      for (let i = 0; i < yearsList.length; i++) {
+        totalDays += isLeapYear(yearsList[i]) ? 366 : 365;
+      }
+      return (daysBefore + dayOfYear) / totalDays;
     }
   };
   const todayLineFraction = getTodayLinePercent();
@@ -465,12 +497,14 @@ export default function MaintenancePage() {
           return;
         }
 
-        const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
-        const targetScrollLeft = lineLeft - containerWidth / 2;
-        container.scrollTo({
-          left: Math.max(0, targetScrollLeft),
-          behavior: "smooth"
-        });
+        if (todayLineFraction >= 0) {
+          const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
+          const targetScrollLeft = lineLeft - containerWidth / 2;
+          container.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: "smooth"
+          });
+        }
       };
 
       const timer = setTimeout(scroll, 150);
@@ -479,12 +513,15 @@ export default function MaintenancePage() {
   }, [activeTab, timeScale, tickets, todayLineFraction]);
 
   const renderTimelineRows = () => {
-    const year = 2026;
-    const limit = timeScale === "month" ? 12 : timeScale === "week" ? 52 : 365;
+    let limit = yearsList.length * 12;
+    if (timeScale === "week") limit = yearsList.length * 52;
+    if (timeScale === "day") {
+      limit = yearsList.reduce((acc, y) => acc + (isLeapYear(y) ? 366 : 365), 0);
+    }
 
     return filtered.map((t: any, idx: number) => {
       const segments: { type: "empty" | "cycle"; startMonth: number; span: number; cycleNum?: string; cycle?: any }[] = [];
-      let currentMonthIdx = 0;
+      let currentIdx = 0;
 
       const totalCycles = parseInt(t.hold_time) || 1;
       let parsedConfig = { 
@@ -511,18 +548,22 @@ export default function MaintenancePage() {
           const cycleNum = String(i);
           const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
           const date = new Date(plannedDate);
-          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
-            const startMn = date.getMonth();
-            const span = parsedConfig.interval === "yearly" ? 12 : parsedConfig.interval === "quarterly" ? 3 : 1;
-            cycleRanges.push({
-              cycleNum,
-              startMonth: startMn,
-              endMonth: Math.min(11, startMn + span - 1),
-              span: Math.min(12 - startMn, span),
-              plannedDate,
-              tasks: parsedTasks[cycleNum] || [],
-              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
-            });
+          if (!isNaN(date.getTime())) {
+            const cycleYear = date.getFullYear();
+            const yIdx = yearsList.indexOf(cycleYear);
+            if (yIdx !== -1) {
+              const startMn = yIdx * 12 + date.getMonth();
+              const span = parsedConfig.interval === "yearly" ? 12 : parsedConfig.interval === "quarterly" ? 3 : 1;
+              cycleRanges.push({
+                cycleNum,
+                startMonth: startMn,
+                endMonth: Math.min(yearsList.length * 12 - 1, startMn + span - 1),
+                span: Math.min(yearsList.length * 12 - startMn, span),
+                plannedDate,
+                tasks: parsedTasks[cycleNum] || [],
+                progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+              });
+            }
           }
         }
       } else if (timeScale === "week") {
@@ -530,58 +571,70 @@ export default function MaintenancePage() {
           const cycleNum = String(i);
           const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
           const date = new Date(plannedDate);
-          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
-            const startWk = getWeekOfYear(plannedDate);
-            const spanWeeks = parsedConfig.interval === "yearly" ? 52 : parsedConfig.interval === "quarterly" ? 13 : 4;
-            cycleRanges.push({
-              cycleNum,
-              startMonth: startWk,
-              endMonth: Math.min(51, startWk + spanWeeks - 1),
-              span: Math.min(52 - startWk, spanWeeks),
-              plannedDate,
-              tasks: parsedTasks[cycleNum] || [],
-              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
-            });
+          if (!isNaN(date.getTime())) {
+            const cycleYear = date.getFullYear();
+            const yIdx = yearsList.indexOf(cycleYear);
+            if (yIdx !== -1) {
+              const startWk = yIdx * 52 + getWeekOfYear(plannedDate);
+              const spanWeeks = parsedConfig.interval === "yearly" ? 52 : parsedConfig.interval === "quarterly" ? 13 : 4;
+              cycleRanges.push({
+                cycleNum,
+                startMonth: startWk,
+                endMonth: Math.min(yearsList.length * 52 - 1, startWk + spanWeeks - 1),
+                span: Math.min(yearsList.length * 52 - startWk, spanWeeks),
+                plannedDate,
+                tasks: parsedTasks[cycleNum] || [],
+                progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+              });
+            }
           }
         }
       } else {
-        // Day scale across the entire year 2026
+        // Day scale across years
         for (let i = 1; i <= totalCycles; i++) {
           const cycleNum = String(i);
           const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
           const date = new Date(plannedDate);
-          if (!isNaN(date.getTime()) && date.getFullYear() === year) {
-            const startDay = getDayOfYear(date);
-            const spanDays = parsedConfig.interval === "yearly" ? 365 : parsedConfig.interval === "quarterly" ? 90 : 30;
-            cycleRanges.push({
-              cycleNum,
-              startMonth: startDay,
-              endMonth: Math.min(364, startDay + spanDays - 1),
-              span: Math.min(365 - startDay, spanDays),
-              plannedDate,
-              tasks: parsedTasks[cycleNum] || [],
-              progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
-            });
+          if (!isNaN(date.getTime())) {
+            const cycleYear = date.getFullYear();
+            const yIdx = yearsList.indexOf(cycleYear);
+            if (yIdx !== -1) {
+              let daysBefore = 0;
+              for (let yi = 0; yi < yIdx; yi++) {
+                daysBefore += isLeapYear(yearsList[yi]) ? 366 : 365;
+              }
+              const startDay = daysBefore + getDayOfYear(date);
+              const spanDays = parsedConfig.interval === "yearly" ? 365 : parsedConfig.interval === "quarterly" ? 90 : 30;
+              cycleRanges.push({
+                cycleNum,
+                startMonth: startDay,
+                endMonth: Math.min(limit - 1, startDay + spanDays - 1),
+                span: Math.min(limit - startDay, spanDays),
+                plannedDate,
+                tasks: parsedTasks[cycleNum] || [],
+                progress: calculateCycleProgress(parsedTasks[cycleNum] || [])
+              });
+            }
           }
         }
       }
 
       cycleRanges.sort((a, b) => a.startMonth - b.startMonth);
 
-      while (currentMonthIdx < limit) {
-        const coveringCycle = cycleRanges.find(r => currentMonthIdx >= r.startMonth && currentMonthIdx <= r.endMonth);
+      while (currentIdx < limit) {
+        const coveringCycle = cycleRanges.find(r => currentIdx >= r.startMonth && currentIdx <= r.endMonth);
         if (coveringCycle) {
-          const actualSpan = coveringCycle.endMonth - currentMonthIdx + 1;
+          const actualSpan = coveringCycle.endMonth - currentIdx + 1;
           let status = "Planned";
           if (coveringCycle.progress === 100) {
             status = "Completed";
-          } else if (coveringCycle.progress > 0 || (coveringCycle.cycleNum === t.sla_time && t.tt_status === "In Progress")) {
+          } else if (coveringCycle.progress > 0 || (coveringCycle.cycleNum === t.sla_time && t.tt_status === "In Progress") || t.tt_status === "In Progress") {
             status = "In Progress";
           }
 
           segments.push({
             type: "cycle",
-            startMonth: currentMonthIdx,
+            startMonth: currentIdx,
             span: actualSpan,
             cycleNum: coveringCycle.cycleNum,
             cycle: {
@@ -589,19 +642,35 @@ export default function MaintenancePage() {
               status
             }
           });
-          currentMonthIdx += actualSpan;
+          currentIdx += actualSpan;
         } else {
-          const nextCycle = cycleRanges.find(r => r.startMonth > currentMonthIdx);
+          const nextCycle = cycleRanges.find(r => r.startMonth > currentIdx);
           const nextStart = nextCycle ? nextCycle.startMonth : limit;
-          const emptySpan = nextStart - currentMonthIdx;
+          const emptySpan = nextStart - currentIdx;
           segments.push({
             type: "empty",
-            startMonth: currentMonthIdx,
+            startMonth: currentIdx,
             span: emptySpan
           });
-          currentMonthIdx += emptySpan;
+          currentIdx += emptySpan;
         }
       }
+
+      // Check if a segment end position reaches a year boundary to apply thick border
+      const isYearBoundary = (endIndex: number) => {
+        if (timeScale === "month") {
+          return endIndex % 12 === 0;
+        } else if (timeScale === "week") {
+          return endIndex % 52 === 0;
+        } else {
+          let accumulated = 0;
+          for (const y of yearsList) {
+            accumulated += isLeapYear(y) ? 366 : 365;
+            if (endIndex === accumulated) return true;
+          }
+          return false;
+        }
+      };
 
       return (
         <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition group">
@@ -619,22 +688,25 @@ export default function MaintenancePage() {
             {t.customer?.name || t.customer_name || "—"}
           </td>
           <td 
-            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 text-slate-700 text-sm font-normal max-w-[180px] truncate" 
+            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r-2 border-slate-300 text-slate-700 text-sm font-normal max-w-[180px] truncate" 
             style={{ left: "198px", minWidth: "180px", width: "180px" }} 
             title={t.contract_no || t.contract?.contract_no || t.contract?.name}
           >
-            <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline">
+            <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline font-medium">
               {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
             </Link>
           </td>
           
           {segments.map((seg, sIdx) => {
+            const atYearBoundary = isYearBoundary(seg.startMonth + seg.span);
+            const borderClass = atYearBoundary ? "border-r-2 border-slate-300" : "border-r border-slate-200";
+
             if (seg.type === "empty") {
               return (
                 <td 
                   key={sIdx} 
                   colSpan={seg.span} 
-                  className="border-r border-slate-200 last:border-r-0 bg-slate-50/30" 
+                  className={`${borderClass} last:border-r-0 bg-slate-50/30`} 
                 />
               );
             }
@@ -642,24 +714,28 @@ export default function MaintenancePage() {
             const c = seg.cycle;
             const isHold = t.tt_status === "On Hold";
             
-            // Choose background color based on status
-            let bgClass = "bg-slate-100 text-slate-600 border-slate-200 font-normal"; // Planning
+            // Choose background color based on status:
+            // - Đang thực hiện: Cam nhạt
+            // - Done rồi: Xanh lá nhạt
+            // - Chưa thực hiện: Xám nhạt
+            // - Tạm ngưng: Tím nhạt
+            let bgClass = "bg-slate-100 text-slate-600 border-slate-300 font-medium"; // Planning (Chưa thực hiện)
             if (isHold && c.status !== "Completed") {
-              bgClass = "bg-purple-100 text-purple-800 border-purple-200 font-normal"; // Hold
+              bgClass = "bg-purple-100 text-purple-800 border-purple-300 font-medium"; // Hold (Tạm ngưng)
             } else if (c.status === "Completed") {
-              bgClass = "bg-emerald-100 text-emerald-800 border-emerald-200 font-normal"; // Done
+              bgClass = "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium"; // Done (Hoàn thành)
             } else if (c.status === "In Progress") {
-              bgClass = "bg-orange-100 text-orange-800 border-orange-200 font-normal"; // On-going
+              bgClass = "bg-orange-100 text-orange-800 border-orange-300 font-medium"; // On-going (Đang thực hiện)
             }
 
             return (
               <td 
                 key={sIdx} 
                 colSpan={seg.span} 
-                className="p-1 border-r border-slate-200 last:border-r-0"
+                className={`p-1 ${borderClass} last:border-r-0`}
               >
                 <Link href={`/maintenance/${t.id}`}>
-                  <div className={`h-8 w-full rounded flex items-center justify-center text-sm font-normal shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
+                  <div className={`h-8 w-full rounded flex items-center justify-center text-sm font-medium shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
                     Lần {seg.cycleNum}
                   </div>
                 </Link>
@@ -869,19 +945,19 @@ export default function MaintenancePage() {
             <div className="flex flex-wrap items-center gap-4 text-xs">
               <span className="font-semibold text-slate-500">Chú thích:</span>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-emerald-100 border border-emerald-200" />
+                <span className="w-3.5 h-3.5 rounded bg-emerald-100 border border-emerald-300" />
                 <span className="text-slate-600">Done (Hoàn thành)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-orange-100 border border-orange-200" />
-                <span className="text-slate-600">On-going (Đang chạy)</span>
+                <span className="w-3.5 h-3.5 rounded bg-orange-100 border border-orange-300" />
+                <span className="text-slate-600">On-going (Đang thực hiện)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-200" />
-                <span className="text-slate-600">Planing (Kế hoạch)</span>
+                <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300" />
+                <span className="text-slate-600">Planing (Chưa thực hiện)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-purple-100 border border-purple-200" />
+                <span className="w-3.5 h-3.5 rounded bg-purple-100 border border-purple-300" />
                 <span className="text-slate-600">Hold (Tạm ngưng)</span>
               </div>
             </div>
@@ -889,60 +965,80 @@ export default function MaintenancePage() {
 
           <div ref={scrollContainerRef} className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
             <div className={`relative ${
-              timeScale === "month" ? "min-w-[1200px]" : 
-              timeScale === "week" ? "min-w-[2400px]" : 
-              "min-w-[11500px]"
+              timeScale === "month" ? "min-w-[1800px]" : 
+              timeScale === "week" ? "min-w-[4500px]" : 
+              "min-w-[28000px]"
             } w-full`}>
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  {/* Year/Scale header */}
+                  {/* Year header row with year dividers */}
                   <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200">
-                    <th colSpan={3} className="px-4 py-2 border-r border-slate-200 text-left sticky left-0 bg-slate-100 z-30" style={{ left: 0 }}>
-                      Năm 2026
+                    <th colSpan={3} className="px-4 py-2 border-r-2 border-slate-300 text-left sticky left-0 bg-slate-100 z-30" style={{ left: 0 }}>
+                      Giai đoạn
                     </th>
-                    {timeScale === "month" && (
-                      <th colSpan={12} className="px-4 py-2 text-center text-sm font-semibold">
-                        Lịch trình bảo trì định kỳ (Theo Tháng)
-                      </th>
-                    )}
-                    {timeScale === "week" && (
-                      <th colSpan={52} className="px-4 py-2 text-center text-sm font-semibold">
-                        Lịch trình bảo trì định kỳ (Theo Tuần)
-                      </th>
-                    )}
-                    {timeScale === "day" && [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].map((days, idx) => (
-                      <th 
-                        key={idx} 
-                        colSpan={days} 
-                        className="px-2 py-2 border-r border-slate-200 text-center text-xs font-semibold"
-                      >
-                        {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][idx]}
-                      </th>
-                    ))}
+                    {yearsList.map((year) => {
+                      let span = 12;
+                      if (timeScale === "week") span = 52;
+                      if (timeScale === "day") span = isLeapYear(year) ? 366 : 365;
+
+                      return (
+                        <th 
+                          key={year} 
+                          colSpan={span} 
+                          className="px-4 py-2 text-center text-sm font-bold border-r-2 border-slate-300 bg-slate-100 text-slate-800"
+                        >
+                          Năm {year}
+                        </th>
+                      );
+                    })}
                   </tr>
-                  {/* Column names */}
+                  
+                  {/* Column sub-headers */}
                   <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
-                    <th className="px-2 py-3 border-r border-slate-200 text-center sticky left-0 bg-slate-50 z-30" style={{ left: 0, minWidth: "48px", width: "48px" }}>No</th>
-                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30" style={{ left: "48px", minWidth: "150px", width: "150px" }}>Khách hàng</th>
-                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30" style={{ left: "198px", minWidth: "180px", width: "180px" }}>Dự án / Hợp đồng</th>
+                    <th className="px-2 py-3 border-r border-slate-200 text-center sticky left-0 bg-slate-50 z-30 font-semibold" style={{ left: 0, minWidth: "48px", width: "48px" }}>No</th>
+                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30 font-semibold" style={{ left: "48px", minWidth: "150px", width: "150px" }}>Khách hàng</th>
+                    <th className="px-4 py-3 border-r-2 border-slate-300 sticky bg-slate-50 z-30 font-semibold" style={{ left: "198px", minWidth: "180px", width: "180px" }}>Dự án / Hợp đồng</th>
                     
-                    {timeScale === "month" && ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
-                      <th key={idx} className="px-2 py-3 text-center border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 12}%` }}>
-                        {m}
-                      </th>
-                    ))}
+                    {timeScale === "month" && yearsList.flatMap((year) => 
+                      ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                        <th 
+                          key={`${year}-${m}`} 
+                          className={`px-2 py-3 text-center text-xs font-semibold ${idx === 11 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                          style={{ minWidth: "45px" }}
+                        >
+                          {m}
+                        </th>
+                      ))
+                    )}
                     
-                    {timeScale === "week" && Array.from({ length: 52 }, (_, i) => `W${i + 1}`).map((w, idx) => (
-                      <th key={idx} className="px-1 py-3 text-center text-[9px] border-r border-slate-200 last:border-r-0" style={{ width: `${65 / 52}%` }}>
-                        {w}
-                      </th>
-                    ))}
+                    {timeScale === "week" && yearsList.flatMap((year) => 
+                      Array.from({ length: 52 }, (_, i) => `W${i + 1}`).map((w, idx) => (
+                        <th 
+                          key={`${year}-${w}`} 
+                          className={`px-1 py-3 text-center text-[9px] font-medium ${idx === 51 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                          style={{ minWidth: "26px" }}
+                        >
+                          {w}
+                        </th>
+                      ))
+                    )}
                     
-                    {timeScale === "day" && [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].flatMap((days) => 
-                      Array.from({ length: days }, (_, dIdx) => `${dIdx + 1}`)
-                    ).map((d, idx) => (
-                      <th key={idx} className="px-1 py-3 text-center text-[9px] border-r border-slate-200 last:border-r-0" style={{ minWidth: "30px" }}>
-                        {d}
+                    {timeScale === "day" && yearsList.flatMap((year) => 
+                      Array.from({ length: 12 }, (_, mIdx) => {
+                        const daysInM = getDaysInMonth(year, mIdx);
+                        return Array.from({ length: daysInM }, (_, dIdx) => ({
+                          day: dIdx + 1,
+                          isYearEnd: mIdx === 11 && dIdx === daysInM - 1,
+                          key: `${year}-M${mIdx + 1}-D${dIdx + 1}`
+                        }));
+                      }).flat()
+                    ).map((d) => (
+                      <th 
+                        key={d.key} 
+                        className={`px-1 py-3 text-center text-[9px] ${d.isYearEnd ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                        style={{ minWidth: "26px" }}
+                      >
+                        {d.day}
                       </th>
                     ))}
                   </tr>
@@ -951,7 +1047,7 @@ export default function MaintenancePage() {
                   {filtered.length === 0 ? (
                     <tr>
                       <td 
-                        colSpan={timeScale === "month" ? 15 : timeScale === "week" ? 55 : 368} 
+                        colSpan={3 + (timeScale === "month" ? yearsList.length * 12 : timeScale === "week" ? yearsList.length * 52 : yearsList.reduce((acc, y) => acc + (isLeapYear(y) ? 366 : 365), 0))} 
                         className="py-14 text-center text-slate-400"
                       >
                         Chưa có kế hoạch bảo trì nào phù hợp bộ lọc
@@ -963,10 +1059,10 @@ export default function MaintenancePage() {
                 </tbody>
               </table>
 
-              {/* Blue line for current point in time */}
-              {filtered.length > 0 && (
+              {/* Blue line for current point in time running vertically across the table */}
+              {filtered.length > 0 && todayLineFraction >= 0 && (
                 <div 
-                  className="absolute top-0 bottom-0 w-[3px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
+                  className="absolute top-0 bottom-0 w-[2.5px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
                   style={{ left: `calc(378px + (100% - 378px) * ${todayLineFraction})` }}
                 >
                   <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
