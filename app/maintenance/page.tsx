@@ -423,9 +423,6 @@ export default function MaintenancePage() {
     return matchesSearch && matchesStatus && matchesCustomer;
   });
 
-    return matchesSearch && matchesStatus && matchesCustomer;
-  });
-
   const getTodayLinePercent = () => {
     const today = new Date();
     const year = today.getFullYear();
