@@ -8,7 +8,9 @@ import MainLayout from "@/components/layout/main-layout";
 import { 
   ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X, Check,
   CheckCircle2, Clock, RotateCcw, AlertTriangle, Play, HelpCircle,
-  Menu, Bell, Calculator, Settings, ClipboardList
+  Menu, Bell, Calculator, Settings, ClipboardList, Calendar,
+  ChevronDown, ChevronRight, ArrowUpDown, Info, Lightbulb, ListOrdered,
+  CircleDot, AlertCircle, PauseCircle
 } from "lucide-react";
 
 interface Task {
@@ -35,6 +37,30 @@ interface Recommendation {
   status: string;         // Chưa xử lý, Đang xử lý, Đã xử lý, Bỏ qua
 }
 
+const formatVNStart = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${d.getDate()} thg ${d.getMonth() + 1}`;
+};
+
+const formatVNEnd = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${d.getDate()} thg ${d.getMonth() + 1}, ${d.getFullYear()}`;
+};
+
+const formatCycleDateInputDisplay = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${month}/${day}/${year}`;
+};
+
 export default function MaintenanceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -46,6 +72,8 @@ export default function MaintenanceDetailPage() {
   const [activeCycle, setActiveCycle] = useState<string>("1");
   const [cycleTasks, setCycleTasks] = useState<{ [key: string]: Task[] }>({});
   const [cycleRecs, setCycleRecs] = useState<{ [key: string]: Recommendation[] }>({});
+  const [collapsedParents, setCollapsedParents] = useState<{ [key: string]: boolean }>({});
+  const [isDataMenuOpen, setIsDataMenuOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState<"tasks" | "recommendations">("tasks");
   
@@ -771,6 +799,41 @@ export default function MaintenanceDetailPage() {
     document.body.removeChild(link);
   };
 
+  // Status badges colors helper matching screenshot
+  const renderTaskStatusBadge = (status: string) => {
+    const norm = (status || "Chưa bắt đầu").trim();
+    if (norm === "Hoàn thành") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-3xs whitespace-nowrap">
+          <CheckCircle2 size={13} className="text-emerald-500 fill-emerald-100 shrink-0" />
+          <span>HOÀN THÀNH</span>
+        </span>
+      );
+    }
+    if (norm === "Đang thực hiện") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200 shadow-3xs whitespace-nowrap">
+          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex items-center justify-center text-[7px] text-white shrink-0">●</span>
+          <span>ĐANG THỰC HIỆN</span>
+        </span>
+      );
+    }
+    if (norm === "Tạm dừng") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 shadow-3xs whitespace-nowrap">
+          <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[8px] font-bold shrink-0">⏸</span>
+          <span>TẠM DỪNG</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 shadow-3xs whitespace-nowrap">
+        <span className="w-3.5 h-3.5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[9px] font-black shrink-0">!</span>
+        <span>CHƯA BẮT ĐẦU</span>
+      </span>
+    );
+  };
+
   // Status badges colors helper
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -933,84 +996,143 @@ export default function MaintenanceDetailPage() {
         </section>
 
         {/* Column 2: CHI TIẾT CÔNG VIỆC/KHUYẾN NGHỊ — LẦN X */}
-        <section className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden p-6 space-y-4">
-          <div className="pb-3 border-b border-slate-100 flex justify-between items-center shrink-0">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 uppercase">
-                {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle}` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
-              </h2>
+        <section className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden p-6 space-y-4">
+          {/* Header & Controls Toolbar matching screenshot */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">
+                  {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle}` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Theo dõi tiến độ &nbsp;·&nbsp; Quản lý hiệu quả &nbsp;·&nbsp; Hoàn thành đúng hạn
+                </p>
+              </div>
             </div>
             
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2.5">
               {activeTab === "tasks" ? (
-                <div className="flex items-center border border-slate-200 rounded-lg p-1.5 bg-slate-50/50 gap-2">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1 mr-1">Thao tác dữ liệu</span>
+                <>
+                  {/* Thao tác dữ liệu dropdown */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => setIsDataMenuOpen(!isDataMenuOpen)}
+                      className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 shadow-xs transition cursor-pointer"
+                    >
+                      <Calendar size={14} className="text-blue-600" />
+                      <span className="uppercase text-[11px] tracking-wider">THAO TÁC DỮ LIỆU</span>
+                      <ChevronDown size={14} className="text-slate-400" />
+                    </button>
+
+                    {isDataMenuOpen && (
+                      <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 text-xs">
+                        <button
+                          onClick={() => { setIsDataMenuOpen(false); handleAddTaskOpen(); }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
+                        >
+                          <Plus size={14} className="text-blue-600" />
+                          <span>Thêm công việc</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsDataMenuOpen(false); handleExportCSV(); }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
+                        >
+                          <Download size={14} className="text-slate-500" />
+                          <span>Xuất file CSV</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsDataMenuOpen(false); triggerImportCSV(); }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
+                        >
+                          <Upload size={14} className="text-slate-500" />
+                          <span>Nhập từ CSV</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Thêm công việc button */}
                   <button 
                     onClick={handleAddTaskOpen}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                   >
-                    <Plus size={10} />
+                    <Plus size={15} />
                     <span>Thêm công việc</span>
                   </button>
+
+                  {/* Export button */}
                   <button 
                     onClick={handleExportCSV}
-                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                   >
-                    <Download size={10} />
+                    <Download size={14} className="text-slate-500" />
                     <span>Export</span>
                   </button>
+
+                  {/* Import button */}
                   <button 
                     onClick={triggerImportCSV}
-                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                   >
-                    <Upload size={10} />
+                    <Upload size={14} className="text-slate-500" />
                     <span>Import</span>
                   </button>
-                </div>
+                </>
               ) : (
                 <button 
                   onClick={handleRecCreateOpen}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                 >
-                  <Plus size={10} />
+                  <Plus size={15} />
                   <span>Tạo khuyến nghị</span>
                 </button>
               )}
 
-              {/* Ngày bắt đầu của kỳ */}
-              <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 bg-slate-50/50">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ngày bắt đầu:</span>
+              {/* NGÀY BẮT ĐẦU */}
+              <div className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 shadow-xs relative">
+                <Calendar size={14} className="text-slate-600" />
+                <span className="uppercase text-[11px] text-slate-500 font-bold">NGÀY BẮT ĐẦU:</span>
+                <span className="text-xs font-bold text-slate-800">
+                  {formatCycleDateInputDisplay(getCycleStartDate(activeCycle))}
+                </span>
                 <input 
                   type="date" 
                   value={getCycleStartDate(activeCycle)}
                   onChange={(e) => handleCycleDateChange(e.target.value)}
-                  className="px-2 py-0.5 border border-slate-200 rounded-md text-xs outline-none focus:ring-1 focus:ring-blue-500 bg-white cursor-pointer"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  title="Nhấp để thay đổi ngày bắt đầu"
                 />
+                <Calendar size={14} className="text-slate-400 ml-0.5" />
               </div>
             </div>
           </div>
 
-          {/* Tabs switcher */}
-          <div className="flex border-b border-slate-100 shrink-0 gap-1">
+          {/* Tabs switcher matching screenshot */}
+          <div className="flex border-b border-slate-200 shrink-0 gap-8">
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`pb-2.5 px-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
+              className={`pb-3 text-xs font-bold uppercase flex items-center gap-2 transition-all cursor-pointer border-b-2 ${
                 activeTab === "tasks"
                   ? "border-blue-600 text-blue-600 font-extrabold"
-                  : "border-transparent text-slate-400 hover:text-slate-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
-              Danh sách công việc ({currentTasks.length})
+              <ListOrdered size={16} />
+              <span>DANH SÁCH CÔNG VIỆC ({currentTasks.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("recommendations")}
-              className={`pb-2.5 px-4 text-xs font-bold uppercase border-b-2 transition-all cursor-pointer ${
+              className={`pb-3 text-xs font-bold uppercase flex items-center gap-2 transition-all cursor-pointer border-b-2 ${
                 activeTab === "recommendations"
                   ? "border-blue-600 text-blue-600 font-extrabold"
-                  : "border-transparent text-slate-400 hover:text-slate-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
-              Khuyến nghị kỹ thuật ({(cycleRecs[activeCycle] || []).length})
+              <Lightbulb size={16} />
+              <span>KHUYẾN NGHỊ KỸ THUẬT ({(cycleRecs[activeCycle] || []).length})</span>
             </button>
           </div>
 
@@ -1043,141 +1165,242 @@ export default function MaintenanceDetailPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex-1 overflow-auto border border-slate-100 rounded-lg shadow-2xs custom-scrollbar">
-                <table className="w-full text-sm border-collapse text-left">
-                  <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200/60 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-4 py-3 w-16 text-center">STT</th>
-                      <th className="px-4 py-3">Công việc</th>
-                      <th className="px-4 py-3">Người thực hiện</th>
-                      <th className="px-4 py-3">Bộ phận</th>
-                      <th className="px-4 py-3">Bắt đầu</th>
-                      <th className="px-4 py-3">Hoàn thành</th>
-                      <th className="px-4 py-3 w-48">Tình trạng</th>
-                      <th className="px-4 py-3">Ghi chú</th>
-                      <th className="px-4 py-3 w-24 text-center">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {sortedTasks.map((t) => {
-                      if (t.isParent) {
-                        const progress = getParentProgress(t.id, currentTasks);
-                        return (
-                          <tr key={t.id} className="bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100">
-                            <td className="px-4 py-3.5 text-center font-bold text-slate-700">{t.stt}</td>
-                            <td className="px-4 py-3.5 font-bold text-slate-800 text-base">{t.name}</td>
-                            <td className="px-4 py-3.5 text-slate-600 font-medium">
-                              {!progress.hasSubtasks && t.assignees && t.assignees.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {t.assignees.map((a, aIdx) => (
-                                    <span key={aIdx} className="text-blue-600 hover:underline cursor-pointer">
-                                      {a}{aIdx < t.assignees.length - 1 ? "," : ""}
+              <div className="flex-1 flex flex-col border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                  <table className="w-full text-sm border-collapse text-left">
+                    <thead className="bg-[#1e293b] text-xs text-white font-semibold sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-3.5 w-16 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <span>STT</span>
+                            <ArrowUpDown size={11} className="opacity-60" />
+                          </div>
+                        </th>
+                        <th className="px-4 py-3.5">
+                          <div className="flex items-center gap-1">
+                            <span>Công việc</span>
+                            <ArrowUpDown size={11} className="opacity-60" />
+                          </div>
+                        </th>
+                        <th className="px-4 py-3.5 w-48">
+                          <div className="flex items-center gap-1">
+                            <span>Người thực hiện</span>
+                            <ArrowUpDown size={11} className="opacity-60" />
+                          </div>
+                        </th>
+                        <th className="px-4 py-3.5 w-24">Bộ phận</th>
+                        <th className="px-4 py-3.5 w-28">Bắt đầu</th>
+                        <th className="px-4 py-3.5 w-32">Hoàn thành</th>
+                        <th className="px-4 py-3.5 w-44">Tình trạng</th>
+                        <th className="px-4 py-3.5 w-28">
+                          <div className="flex items-center gap-1">
+                            <span>Ghi chú</span>
+                            <ArrowUpDown size={11} className="opacity-60" />
+                          </div>
+                        </th>
+                        <th className="px-4 py-3.5 w-20 text-center">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {sortedTasks.map((t) => {
+                        if (t.isParent) {
+                          const progress = getParentProgress(t.id, currentTasks);
+                          const isCollapsed = collapsedParents[t.id];
+
+                          if (progress.hasSubtasks) {
+                            return (
+                              <tr key={t.id} className="bg-slate-50/70 hover:bg-slate-100/70 transition border-b border-slate-200/80">
+                                <td className="px-3 py-3.5 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button 
+                                      onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                      className="p-0.5 hover:bg-slate-200 rounded text-slate-600 transition cursor-pointer"
+                                      title={isCollapsed ? "Mở rộng" : "Thu gọn"}
+                                    >
+                                      {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                                    </button>
+                                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-3xs">
+                                      {t.stt}
                                     </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5 text-slate-500 text-xs">
-                              {(!progress.hasSubtasks && t.department) || "—"}
-                            </td>
-                            <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
-                              {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
-                            </td>
-                            <td className="px-4 py-3.5 text-slate-500 font-medium text-xs">
-                              {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              {progress.hasSubtasks ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300/30">
-                                    <div 
-                                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                                      style={{ width: `${progress.percent}%` }}
-                                    />
                                   </div>
-                                  <span className="text-xs font-bold text-blue-600 min-w-[32px]">{progress.percent}%</span>
-                                  <span className="text-[10px] text-slate-400">({progress.completed}/{progress.total})</span>
+                                </td>
+                                <td className="px-4 py-3.5 font-bold text-slate-900 text-[13px] tracking-tight">
+                                  {t.name}
+                                </td>
+                                <td colSpan={7} className="px-4 py-3.5 text-right">
+                                  <div className="flex items-center justify-end gap-2.5 pr-4">
+                                    <div className="w-32 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                      <div 
+                                        className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                                        style={{ width: `${progress.percent}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-600 min-w-[32px]">{progress.percent}%</span>
+                                    <span className="text-[11px] font-medium text-slate-400">({progress.completed}/{progress.total})</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          } else {
+                            // Single task parent with no subtasks (e.g. Row 3 in screenshot)
+                            return (
+                              <tr key={t.id} className="bg-white hover:bg-slate-50/50 transition border-b border-slate-100">
+                                <td className="px-3 py-3.5 text-center font-medium text-slate-700 text-xs">
+                                  {t.stt}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-800 text-xs font-normal">
+                                  {t.name}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-800 font-medium text-xs">
+                                  {t.assignees && t.assignees.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {t.assignees.map((a, aIdx) => (
+                                        <span key={aIdx} className="text-slate-800">
+                                          {a}{aIdx < t.assignees.length - 1 ? "," : ""}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-400 text-xs">
+                                  {t.department || "—"}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">
+                                  {formatVNStart(t.startDate)}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">
+                                  {formatVNEnd(t.endDate)}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  {renderTaskStatusBadge(t.status)}
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-400 text-xs">{t.notes || "—"}</td>
+                                <td className="px-4 py-3.5 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button 
+                                      onClick={() => handleEditTaskOpen(t)}
+                                      className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                                      title="Sửa công việc"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteTask(t.id)}
+                                      className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
+                                      title="Xóa công việc"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        } else {
+                          // Child subtask row
+                          if (collapsedParents[t.parentId!]) {
+                            return null;
+                          }
+                          return (
+                            <tr key={t.id} className="hover:bg-slate-50/60 transition border-b border-slate-100">
+                              <td className="px-3 py-3 text-center text-slate-500 font-medium text-xs">
+                                {t.stt}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700 text-xs font-normal pl-4">
+                                {t.name}
+                              </td>
+                              <td className="px-4 py-3 text-blue-600 font-medium text-xs">
+                                {t.assignees && t.assignees.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {t.assignees.map((a, aIdx) => (
+                                      <span key={aIdx} className="hover:underline cursor-pointer">
+                                        {a}{aIdx < t.assignees.length - 1 ? "," : ""}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-slate-400 text-xs">{t.department || "—"}</td>
+                              <td className="px-4 py-3 text-slate-600 font-medium text-xs">
+                                {formatVNStart(t.startDate)}
+                              </td>
+                              <td className="px-4 py-3 text-slate-600 font-medium text-xs">
+                                {formatVNEnd(t.endDate)}
+                              </td>
+                              <td className="px-4 py-3">
+                                {renderTaskStatusBadge(t.status)}
+                              </td>
+                              <td className="px-4 py-3 text-slate-400 text-xs">{t.notes || "—"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button 
+                                    onClick={() => handleEditTaskOpen(t)}
+                                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                                    title="Sửa công việc con"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteTask(t.id)}
+                                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
+                                    title="Xóa công việc con"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
                                 </div>
-                              ) : (
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadge(t.status || "Chưa bắt đầu")}`}>
-                                  {(t.status || "Chưa bắt đầu").toUpperCase()}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5 text-slate-500 text-xs italic">{t.notes || "—"}</td>
-                            <td className="px-4 py-3.5 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button 
-                                  onClick={() => handleEditTaskOpen(t)}
-                                  className="p-1 hover:bg-white text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteTask(t.id)}
-                                  className="p-1 hover:bg-white text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      } else {
-                        return (
-                          <tr key={t.id} className="hover:bg-slate-50/40 transition">
-                            <td className="px-4 py-3 text-center text-slate-400 pl-6">{t.stt}</td>
-                            <td className="px-4 py-3 text-slate-700 pl-6">{t.name}</td>
-                            <td className="px-4 py-3 text-slate-600 font-medium">
-                              {t.assignees && t.assignees.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {t.assignees.map((a, aIdx) => (
-                                    <span key={aIdx} className="text-blue-600 hover:underline cursor-pointer">
-                                      {a}{aIdx < t.assignees.length - 1 ? "," : ""}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">{t.department || "—"}</td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">
-                              {t.startDate ? new Date(t.startDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short'}) : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">
-                              {t.endDate ? new Date(t.endDate).toLocaleDateString("vi-VN", {day: 'numeric', month: 'short', year: 'numeric'}) : "—"}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusBadge(t.status)}`}>
-                                {t.status.toUpperCase()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-xs">{t.notes || "—"}</td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button 
-                                  onClick={() => handleEditTaskOpen(t)}
-                                  className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteTask(t.id)}
-                                  className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-                    })}
-                  </tbody>
-                </table>
+                              </td>
+                            </tr>
+                          );
+                        }
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer summary bar matching screenshot */}
+                {(() => {
+                  const currentParentIdsWithChildren = new Set(
+                    currentTasks.map(t => t.parentId).filter(Boolean) as string[]
+                  );
+                  const currentLeafTasks = currentTasks.filter(t => !currentParentIdsWithChildren.has(t.id));
+                  const totalTasksCount = currentTasks.length;
+                  const completedTasksCount = currentLeafTasks.filter(t => t.status === "Hoàn thành").length;
+                  const inProgressTasksCount = currentLeafTasks.filter(t => t.status === "Đang thực hiện").length;
+                  const notStartedTasksCount = currentLeafTasks.filter(t => t.status === "Chưa bắt đầu" || !t.status).length;
+
+                  return (
+                    <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 font-medium">
+                      <div className="flex items-center gap-2">
+                        <Info size={14} className="text-blue-500 shrink-0" />
+                        <span>
+                          Tổng cộng: <strong className="text-slate-700">{totalTasksCount} công việc</strong>
+                          &nbsp;|&nbsp; Đã hoàn thành: <strong className="text-slate-700">{completedTasksCount}</strong>
+                          &nbsp;|&nbsp; Đang thực hiện: <strong className="text-slate-700">{inProgressTasksCount}</strong>
+                          &nbsp;|&nbsp; Chưa bắt đầu: <strong className="text-slate-700">{notStartedTasksCount}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-xs font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                          <span className="text-slate-600">Hoàn thành</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                          <span className="text-slate-600">Đang thực hiện</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                          <span className="text-slate-600">Chưa bắt đầu</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )
           ) : (
@@ -1204,19 +1427,19 @@ export default function MaintenanceDetailPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex-1 overflow-auto border border-slate-100 rounded-lg shadow-2xs custom-scrollbar">
+              <div className="flex-1 overflow-auto border border-slate-200 rounded-xl shadow-xs custom-scrollbar">
                 <table className="w-full text-sm border-collapse text-left">
-                  <thead className="bg-slate-50 text-xs text-slate-500 font-semibold border-b border-slate-200/60 sticky top-0 z-10">
+                  <thead className="bg-[#1e293b] text-xs text-white font-semibold sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-3 w-16 text-center">STT</th>
-                      <th className="px-4 py-3 w-28">Danh mục</th>
-                      <th className="px-4 py-3">Hệ thống</th>
-                      <th className="px-4 py-3">Node</th>
-                      <th className="px-4 py-3">Vấn đề</th>
-                      <th className="px-4 py-3">Khuyến nghị</th>
-                      <th className="px-4 py-3">Ý kiến khách hàng</th>
-                      <th className="px-4 py-3 w-32">Tình trạng</th>
-                      <th className="px-4 py-3 w-24 text-center">Thao tác</th>
+                      <th className="px-4 py-3.5 w-16 text-center">STT</th>
+                      <th className="px-4 py-3.5 w-28">Danh mục</th>
+                      <th className="px-4 py-3.5">Hệ thống</th>
+                      <th className="px-4 py-3.5">Node</th>
+                      <th className="px-4 py-3.5">Vấn đề</th>
+                      <th className="px-4 py-3.5">Khuyến nghị</th>
+                      <th className="px-4 py-3.5">Ý kiến khách hàng</th>
+                      <th className="px-4 py-3.5 w-32">Tình trạng</th>
+                      <th className="px-4 py-3.5 w-24 text-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
