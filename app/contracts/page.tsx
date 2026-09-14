@@ -47,7 +47,12 @@ export default function ContractsPage() {
     setStats({ total: data.length, active, customers: uniqueCustomers, lastSync: lastSyncTime });
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   // Background Auto-Sync Timer Effect
   useEffect(() => {

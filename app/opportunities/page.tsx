@@ -38,7 +38,12 @@ export default function OpportunitiesPage() {
     setStats({ total: data.length, activeStages, withPhuTrach, lastSync: lastSyncTime });
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   // Background Auto-Sync
   useEffect(() => {

@@ -38,7 +38,12 @@ export default function CustomersPage() {
     setStats({ total: data.length, withTtkd, withPhuTrach, lastSync: lastSyncTime });
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   // Background Auto-Sync Timer Effect
   useEffect(() => {

@@ -423,7 +423,12 @@ export default function SlaPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   const handleDelete = async (id: string, slaId: string) => {
     if (!confirm(`Xóa cấu hình ${slaId}?`)) return;

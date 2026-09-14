@@ -39,7 +39,12 @@ export default function ContactsPage() {
     setStats({ total: data.length, customers: uniqueCustomers, withPhone, withEmail, lastSync: lastSyncTime });
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   // Background Auto-Sync Timer Effect
   useEffect(() => {

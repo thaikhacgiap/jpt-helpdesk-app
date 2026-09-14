@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
 import { fetchTickets, deleteTicket } from "@/lib/ticket-operations";
@@ -408,6 +408,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 /* ─── Page ─────────────────────────────────────────────────── */
 export default function TicketsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [modalMode, setModalMode] = useState<"create" | "view" | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | undefined>();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -534,9 +535,13 @@ export default function TicketsPage() {
 
       if (searchQuery) {
         setSearch(searchQuery);
-        // Clean URL parameters
+        // Clean URL parameters immediately
         window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (action === "create" && requestTicketId) {
+      } else {
+        setSearch("");
+      }
+
+      if (action === "create" && requestTicketId) {
         const customerId = params.get("customerId") || "";
         const title = params.get("title") || "";
         const description = params.get("description") || "";
@@ -579,7 +584,11 @@ export default function TicketsPage() {
         });
       }
     }
-  }, []);
+
+    return () => {
+      setSearch("");
+    };
+  }, [pathname]);
 
   const loadTickets = async () => {
     try {

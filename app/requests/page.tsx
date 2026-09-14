@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import { 
   fetchRequests, 
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 
 export default function RequestsPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"customer" | "service" | "task">("customer");
   
   // Data States
@@ -296,6 +298,10 @@ export default function RequestsPage() {
     // Customer tickets and customers
     loadCustomerTicketsList();
     fetchCustomers().then(setDbCustomers).catch(err => console.error("Error loading customers:", err));
+
+    return () => {
+      setSearchQuery("");
+    };
   }, []);
 
   // Realtime subscription for customer portal tickets
@@ -919,7 +925,7 @@ export default function RequestsPage() {
                       <td className="px-4 py-1 whitespace-nowrap font-mono text-sm font-normal">
                         {hasLinkedTicket ? (
                           <span
-                            onClick={() => { window.location.href = `/tickets?search=${t.document_link}`; }}
+                            onClick={() => { router.push(`/tickets?search=${t.document_link}`); }}
                             className="px-2.5 py-0.5 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-xs font-normal cursor-pointer hover:bg-green-100 transition"
                             title="Bấm để xem chi tiết ticket"
                           >
@@ -2014,7 +2020,7 @@ export default function RequestsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          window.location.href = `/tickets?search=${editingCustomerTicket.document_link}`;
+                          router.push(`/tickets?search=${editingCustomerTicket.document_link}`);
                         }}
                         className="px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl font-medium text-xs transition cursor-pointer flex items-center gap-1.5"
                         title="Xem chi tiết ticket liên kết"

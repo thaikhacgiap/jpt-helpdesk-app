@@ -37,7 +37,12 @@ export default function NhanSuPage() {
     setStats({ total: data.length, withPhone, withEmail, departments: uniqueDepts.size });
   };
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => {
+    loadStats();
+    return () => {
+      setSearch("");
+    };
+  }, []);
 
   const handleModalSuccess = () => {
     tableRef.current?.loadNhanSu?.();
