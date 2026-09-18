@@ -95,7 +95,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
   return options;
 }
 
-export default function RequestSearchSelect({
+export function RequestSearchSelect({
   value = "",
   onChange,
   placeholder = "-- Tìm và chọn mã yêu cầu (CR / SR / TR) --",
@@ -477,3 +477,5 @@ export default function RequestSearchSelect({
     </div>
   );
 }
+
+export default RequestSearchSelect;
