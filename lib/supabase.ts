@@ -96,9 +96,13 @@ export interface Ticket {
   close_time?: string
   hold_time?: string
   hold_reason?: string
+  unhold_time?: string
+  paused_time?: string
+  resumed_time?: string
+  pause_duration?: string
+  work_duration?: string
   remark?: string
   document_link?: string
-  unhold_time?: string
   onsite?: string
   runbook?: string
   created_at: string

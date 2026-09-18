@@ -52,6 +52,10 @@ interface Ticket {
   hold_time?: string;
   holdTime?: string;
   unhold_time?: string;
+  paused_time?: string;
+  resumed_time?: string;
+  pause_duration?: string;
+  work_duration?: string;
   hold_reason?: string;
   sla_time?: string;
   sla_status?: string;
@@ -235,19 +239,102 @@ const formatDateTime = (dateStr?: string, isServerUtc: boolean = false) => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
-const formatDuration = (ticket: Ticket) => {
-  if (ticket.duration && ticket.duration !== "—") return ticket.duration;
+const getTicketHolds = (ticket: Ticket): Array<{ startTime?: string; stopTime?: string; reason?: string }> => {
+  if (ticket.hold_reason) {
+    try {
+      const parsed = JSON.parse(ticket.hold_reason);
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.holds) && parsed.holds.length > 0) {
+        return parsed.holds;
+      }
+    } catch {}
+  }
+
+  const startTime = ticket.paused_time || ticket.hold_time || ticket.holdTime;
+  const stopTime = ticket.resumed_time || ticket.unhold_time;
+  if (startTime || stopTime) {
+    return [{
+      startTime: startTime || undefined,
+      stopTime: stopTime || undefined,
+      reason: ticket.hold_reason || undefined,
+    }];
+  }
+
+  return [];
+};
+
+const getTicketPausedTime = (ticket: Ticket): string | undefined => {
+  if (ticket.paused_time) return ticket.paused_time;
+  const holds = getTicketHolds(ticket);
+  if (holds.length > 0) {
+    const last = holds[holds.length - 1];
+    if (last?.startTime) return last.startTime;
+  }
+  return ticket.hold_time || ticket.holdTime || undefined;
+};
+
+const getTicketResumedTime = (ticket: Ticket): string | undefined => {
+  if (ticket.resumed_time) return ticket.resumed_time;
+  const holds = getTicketHolds(ticket);
+  if (holds.length > 0) {
+    const last = holds[holds.length - 1];
+    if (last?.stopTime) return last.stopTime;
+  }
+  return ticket.unhold_time || undefined;
+};
+
+const getTicketPauseMinutes = (ticket: Ticket): number => {
+  if (ticket.pause_duration) {
+    const customMatch = String(ticket.pause_duration).match(/^(\d+)/);
+    if (customMatch) {
+      const parsedVal = parseInt(customMatch[1], 10);
+      if (!isNaN(parsedVal) && parsedVal > 0) return parsedVal;
+    }
+  }
+
+  const holds = getTicketHolds(ticket);
+  let totalMinutes = 0;
+
+  if (holds.length > 0) {
+    holds.forEach((h) => {
+      const start = parseServerDate(h.startTime);
+      if (start) {
+        const stop = parseServerDate(h.stopTime);
+        if (stop) {
+          const diff = stop.getTime() - start.getTime();
+          if (diff > 0) totalMinutes += Math.floor(diff / 60000);
+        } else if (ticket.tt_status === "On Hold" || ticket.tt_status === "on-hold" || ticket.tt_status === "Hold") {
+          const diff = new Date().getTime() - start.getTime();
+          if (diff > 0) totalMinutes += Math.floor(diff / 60000);
+        }
+      }
+    });
+  }
+
+  // If hold_time is a numeric string (e.g. integer hours in older seed data)
+  if (totalMinutes === 0 && ticket.hold_time && !isNaN(Number(ticket.hold_time)) && !ticket.hold_time.includes("-") && !ticket.hold_time.includes("T")) {
+    const num = Number(ticket.hold_time);
+    if (num > 0) {
+      totalMinutes = num * 60;
+    }
+  }
+
+  return totalMinutes;
+};
+
+const getTicketTotalDurationMinutes = (ticket: Ticket): number | null => {
   const start = parseServerDate(ticket.start_time || ticket.startTime || ticket.created_at || ticket.created_time);
-  if (!start) return "—";
+  if (!start) return null;
 
   const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel";
   const endStr = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
   const end = (isCompleted && endStr) ? (parseServerDate(endStr) || new Date()) : new Date();
 
   const diffMs = end.getTime() - start.getTime();
-  if (diffMs < 0) return "0 phút";
+  return diffMs > 0 ? Math.floor(diffMs / 60000) : 0;
+};
 
-  const totalMinutes = Math.floor(diffMs / 60000);
+const formatMinutesToReadable = (totalMinutes: number): string => {
+  if (totalMinutes <= 0) return "0 phút";
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
@@ -259,6 +346,31 @@ const formatDuration = (ticket: Ticket) => {
     return `${hours} giờ ${minutes}p`;
   }
   return `${minutes} phút`;
+};
+
+const formatDuration = (ticket: Ticket) => {
+  if (ticket.duration && ticket.duration !== "—") return ticket.duration;
+  const totalMins = getTicketTotalDurationMinutes(ticket);
+  if (totalMins === null) return "—";
+  return formatMinutesToReadable(totalMins);
+};
+
+const formatPauseDuration = (ticket: Ticket) => {
+  const pauseMins = getTicketPauseMinutes(ticket);
+  if (pauseMins <= 0) {
+    const pausedTime = getTicketPausedTime(ticket);
+    if (!pausedTime) return "—";
+    return "0 phút";
+  }
+  return formatMinutesToReadable(pauseMins);
+};
+
+const formatWorkDuration = (ticket: Ticket) => {
+  const totalMins = getTicketTotalDurationMinutes(ticket);
+  if (totalMins === null) return "—";
+  const pauseMins = getTicketPauseMinutes(ticket);
+  const workMins = Math.max(0, totalMins - pauseMins);
+  return formatMinutesToReadable(workMins);
 };
 
 const getTicketSlaInfo = (ticket: Ticket) => {
@@ -412,6 +524,10 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   created_at: 145,
   start_time: 145,
   duration: 100,
+  paused_time: 145,
+  resumed_time: 145,
+  pause_duration: 125,
+  work_duration: 130,
   sla_time: 110,
   contract_no: 130,
   tt_type: 140,
@@ -514,6 +630,10 @@ export default function TicketsPage() {
     created_at: true,
     start_time: true,
     duration: true,
+    paused_time: true,
+    resumed_time: true,
+    pause_duration: true,
+    work_duration: true,
     sla_time: true,
     contract_no: true,
     tt_type: true,
@@ -719,6 +839,78 @@ export default function TicketsPage() {
     setCurrentPage(1);
   };
 
+  // Export CSV/Excel
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      alert("Không có ticket nào để xuất dữ liệu.");
+      return;
+    }
+
+    const headers = [
+      "Ticket ID",
+      "Tiêu đề",
+      "Khách hàng",
+      "Người tạo",
+      "Thời gian tạo",
+      "Start time",
+      "Duration",
+      "Paused time",
+      "Resumed time",
+      "Pause duration",
+      "Work duration",
+      "SLA time",
+      "Contract No",
+      "TT Type",
+      "Contract Scope",
+      "Category",
+      "Priority",
+      "TT Status",
+      "SLA Status",
+      "Người xử lý",
+      "Cập nhật",
+    ];
+
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filtered.map((t) => [
+      escapeCsv(t.ticket_id),
+      escapeCsv(t.title),
+      escapeCsv(t.customer_name || ""),
+      escapeCsv(t.creator_name || ""),
+      escapeCsv(formatDateTime(t.created_at || t.created_time, true)),
+      escapeCsv(formatDateTime(t.start_time || t.startTime)),
+      escapeCsv(formatDuration(t)),
+      escapeCsv(formatDateTime(getTicketPausedTime(t))),
+      escapeCsv(formatDateTime(getTicketResumedTime(t))),
+      escapeCsv(formatPauseDuration(t)),
+      escapeCsv(formatWorkDuration(t)),
+      escapeCsv(getTicketSlaInfo(t).durationLabel),
+      escapeCsv(t.contract_no || ""),
+      escapeCsv(t.tt_type || ""),
+      escapeCsv(t.contract_scope || ""),
+      escapeCsv(t.category || ""),
+      escapeCsv(t.priority || ""),
+      escapeCsv(t.tt_status || ""),
+      escapeCsv(t.sla_status || getTicketSlaInfo(t).status),
+      escapeCsv(t.assigned || ""),
+      escapeCsv(timeAgo(t.created_time || t.start_time || t.created_at)),
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `tickets_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Pagination calculations
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginatedTickets = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -770,7 +962,10 @@ export default function TicketsPage() {
             </div>
           </div>
 
-          <button className="h-9 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-normal flex items-center gap-1.5 transition cursor-pointer">
+          <button
+            onClick={handleExport}
+            className="h-9 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-normal flex items-center gap-1.5 transition cursor-pointer"
+          >
             <Download size={14} className="text-white" />
             Xuất Excel
           </button>
@@ -996,6 +1191,63 @@ export default function TicketsPage() {
                   </th>
                 )}
 
+                {/* Paused Time */}
+                {visibleColumns.paused_time && (
+                  <th 
+                    style={{ width: `${colWidths.paused_time}px`, minWidth: `${colWidths.paused_time}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                  >
+                    <span className="truncate">Paused time</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("paused_time", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
+                {/* Resumed Time */}
+                {visibleColumns.resumed_time && (
+                  <th 
+                    style={{ width: `${colWidths.resumed_time}px`, minWidth: `${colWidths.resumed_time}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                  >
+                    <span className="truncate">Resumed time</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("resumed_time", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
+                {/* Pause Duration */}
+                {visibleColumns.pause_duration && (
+                  <th 
+                    style={{ width: `${colWidths.pause_duration}px`, minWidth: `${colWidths.pause_duration}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                  >
+                    <span className="truncate">Pause duration</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("pause_duration", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
+                {/* Work Duration */}
+                {visibleColumns.work_duration && (
+                  <th 
+                    style={{ width: `${colWidths.work_duration}px`, minWidth: `${colWidths.work_duration}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                    title="Work duration = Duration - Pause duration"
+                  >
+                    <span className="truncate">Work duration</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("work_duration", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
                 {/* SLA Time */}
                 {visibleColumns.sla_time && (
                   <th 
@@ -1162,6 +1414,10 @@ export default function TicketsPage() {
                           created_at: "Thời gian tạo",
                           start_time: "Start time",
                           duration: "Duration",
+                          paused_time: "Paused time",
+                          resumed_time: "Resumed time",
+                          pause_duration: "Pause duration",
+                          work_duration: "Work duration",
                           sla_time: "SLA time",
                           contract_no: "Contract No",
                           tt_type: "TT Type",
@@ -1279,6 +1535,34 @@ export default function TicketsPage() {
                     {visibleColumns.duration && (
                       <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
                         {formatDuration(ticket)}
+                      </td>
+                    )}
+
+                    {/* Paused Time */}
+                    {visibleColumns.paused_time && (
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketPausedTime(ticket) || ""}>
+                        {formatDateTime(getTicketPausedTime(ticket))}
+                      </td>
+                    )}
+
+                    {/* Resumed Time */}
+                    {visibleColumns.resumed_time && (
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketResumedTime(ticket) || ""}>
+                        {formatDateTime(getTicketResumedTime(ticket))}
+                      </td>
+                    )}
+
+                    {/* Pause Duration */}
+                    {visibleColumns.pause_duration && (
+                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
+                        {formatPauseDuration(ticket)}
+                      </td>
+                    )}
+
+                    {/* Work Duration */}
+                    {visibleColumns.work_duration && (
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium border-b border-slate-200" title="Thời gian làm việc = Duration - Pause duration">
+                        <span className="text-teal-700 font-semibold">{formatWorkDuration(ticket)}</span>
                       </td>
                     )}
 
