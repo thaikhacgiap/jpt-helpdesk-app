@@ -18,8 +18,10 @@ import { Contact, fetchContactsByCustomerCode } from "@/lib/contact-operations";
 import { supabase } from "@/lib/supabase";
 import AttachmentUploader from "@/components/common/attachment-uploader";
 import DateTimePicker from "@/components/common/datetime-picker";
+import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
 import { AttachedFile } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
+import { getTicketRequestCode } from "@/lib/ticket-operations";
 
 /* ═══════════════════════════════════════════════════════════ */
 /* Types                                                       */
@@ -33,6 +35,8 @@ export interface TicketData {
   customer_name?: string;
   contract_no?: string;
   contract_id?: string;
+  request_code?: string;
+  request_id?: string;
   tt_type?: string;
   contract_scope?: string;
   category?: string;
@@ -799,12 +803,14 @@ function FooterBar({
 /* FORM 1: Create Ticket (all state from parent)               */
 /* ═══════════════════════════════════════════════════════════ */
 interface CreateFormData {
+  requestCode?: string;
   title: string; description: string;
   ttType: string; category: string; requestTime?: string; startTime: string; priority: string;
 }
-function CreateTicketForm({ editing, data, onChange }: {
+function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
   editing: boolean; data: CreateFormData;
   onChange: (patch: Partial<CreateFormData>) => void;
+  onRequestSelect?: (req: RequestOption | null) => void;
 }) {
   const req = <span className="text-red-500 ml-0.5">*</span>;
 
@@ -816,6 +822,52 @@ function CreateTicketForm({ editing, data, onChange }: {
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+      {/* Mã Yêu Cầu (Request Code) */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center">
+          <label className={labelStyle}>
+            Mã yêu cầu {req}
+            <span title="Gắn ticket với Mã yêu cầu dịch vụ / sự cố (CR-, SR-, TR-)"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
+          </label>
+          {data.requestCode && (
+            <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
+              Liên kết: {data.requestCode}
+            </span>
+          )}
+        </div>
+        {editing ? (
+          <RequestSearchSelect
+            value={data.requestCode}
+            onChange={(code, req) => {
+              const patch: Partial<CreateFormData> = { requestCode: code };
+              if (req) {
+                if (!data.title || data.title.trim() === "") patch.title = req.title;
+                if (!data.description || data.description.trim() === "") patch.description = req.description || "";
+                if (req.priority) {
+                  const p = req.priority;
+                  patch.priority = p.includes("L1") || p.includes("Critical") ? "L1(Critical)"
+                    : p.includes("L2") || p.includes("Major") ? "L2(Major)"
+                    : p.includes("L3") || p.includes("Minor") ? "L3(Minor)" : "L4(Warning)";
+                }
+                if (req.category) patch.category = req.category;
+                if (req.ttType) patch.ttType = req.ttType;
+              }
+              onChange(patch);
+              if (onRequestSelect) {
+                onRequestSelect(req || null);
+              }
+            }}
+            placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-, TR-) --"
+          />
+        ) : (
+          <div className={inputWrapperStyle(!!data.requestCode)}>
+            <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 mr-2">
+              {data.requestCode || "— Chưa gắn mã yêu cầu —"}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* TK Title */}
       <div className="space-y-1">
         <div className="flex justify-between items-center">
@@ -3930,10 +3982,16 @@ export default function TicketFormModal({
       let initialContractScope = ticket?.contract_scope || "In scope";
       let initialRemark = ticket?.remark || "";
 
+      let initialRequestCode = (ticket as any)?.request_code || (ticket as any)?.requestCode || "";
+      if (!initialRequestCode && ticket) {
+        initialRequestCode = getTicketRequestCode(ticket as any);
+      }
+
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const requestTicketId = params.get("requestTicketId");
         if (requestTicketId) {
+          initialRequestCode = requestTicketId.replace(/^TH-/, "CR-");
           initialTitle = params.get("title") || initialTitle;
           initialDescription = params.get("description") || initialDescription;
           initialCustomerId = params.get("customerId") || initialCustomerId;
@@ -3945,7 +4003,7 @@ export default function TicketFormModal({
           
           const category = params.get("category") || "";
           initialCategory = category === "Technical" ? "Software" : "Other";
-          initialRemark = `Tạo từ yêu cầu: ${requestTicketId}`;
+          initialRemark = `Tạo từ yêu cầu: ${initialRequestCode}`;
 
           const requestDbId = params.get("requestDbId");
           if (requestDbId) {
@@ -3973,6 +4031,7 @@ export default function TicketFormModal({
       }
 
       setCreateData({
+        requestCode: initialRequestCode,
         title: initialTitle,
         description: initialDescription,
         ttType: initialTtType,
@@ -4062,6 +4121,7 @@ export default function TicketFormModal({
 
       /* Pre-populate Create Ticket form */
       setCreateData({
+        requestCode: (ticket as any).request_code || (ticket as any).requestCode || getTicketRequestCode(ticket as any),
         title:       ticket.title        || "",
         description: ticket.description  || "",
         ttType:      ticket.tt_type      || "",
@@ -4480,6 +4540,7 @@ export default function TicketFormModal({
 
       if (currentStep === "create") {
         const updatePayload: any = {
+          request_code: createData.requestCode || null,
           title:        createData.title       || null,
           description:  createData.description || null,
           tt_type:      createData.ttType      || null,
@@ -4495,8 +4556,9 @@ export default function TicketFormModal({
           .from("tickets")
           .update(updatePayload)
           .eq("id", dbId);
-        if (error && error.message?.includes("request_time")) {
-          delete updatePayload.request_time;
+        if (error && (error.message?.includes("request_time") || error.message?.includes("request_code"))) {
+          if (error.message?.includes("request_time")) delete updatePayload.request_time;
+          if (error.message?.includes("request_code")) delete updatePayload.request_code;
           const retry = await supabase
             .from("tickets")
             .update(updatePayload)
@@ -4661,6 +4723,7 @@ export default function TicketFormModal({
 
       if (currentStep === "create") {
         /* Validate */
+        if (!createData.requestCode || !createData.requestCode.trim()) { alert("Vui lòng chọn hoặc nhập Mã yêu cầu"); return; }
         if (!createData.title.trim())  { alert("Vui lòng nhập TK Title");  return; }
         if (!createData.ttType)        { alert("Vui lòng chọn TT Type");   return; }
         if (!createData.category)      { alert("Vui lòng chọn Category");  return; }
@@ -4682,6 +4745,7 @@ export default function TicketFormModal({
           /* Create new ticket */
           const currentUser = getCurrentUser();
           const res = await createTicket({
+            requestCode:  createData.requestCode,
             title:        createData.title,
             description:  createData.description,
             ttType:       createData.ttType,
@@ -5248,6 +5312,15 @@ export default function TicketFormModal({
             editing={editing}
             data={createData}
             onChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
+            onRequestSelect={(req) => {
+              if (req?.customerId || req?.customerName) {
+                setCheckData((prev) => ({
+                  ...prev,
+                  customerId: req.customerId || prev.customerId,
+                  customerName: req.customerName || prev.customerName,
+                }));
+              }
+            }}
           />
         )}
         {currentStep === "check" && (

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
-import { fetchTickets, deleteTicket } from "@/lib/ticket-operations";
+import { fetchTickets, deleteTicket, getTicketRequestCode } from "@/lib/ticket-operations";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
@@ -28,6 +28,8 @@ interface Ticket {
   customer_id?: string;
   customer_name?: string;
   contract_no?: string;
+  request_code?: string;
+  request_id?: string;
   tt_type?: string;
   contract_scope?: string;
   category?: string;
@@ -531,6 +533,7 @@ const renderSlaStatusBadge = (slaStatus?: string) => {
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   select: 44,
   ticket_id: 155,
+  request_code: 160,
   title: 220,
   customer_name: 180,
   creator_name: 140,
@@ -638,6 +641,7 @@ export default function TicketsPage() {
   const columnRef = useRef<HTMLTableHeaderCellElement>(null);
   const [visibleColumns, setVisibleColumns] = useState({
     ticket_id: true,
+    request_code: true,
     title: true,
     customer_name: true,
     creator_name: true,
@@ -863,6 +867,7 @@ export default function TicketsPage() {
 
     const headers = [
       "Ticket ID",
+      "Mã yêu cầu",
       "Tiêu đề",
       "Khách hàng",
       "Người tạo",
@@ -894,6 +899,7 @@ export default function TicketsPage() {
 
     const rows = filtered.map((t) => [
       escapeCsv(t.ticket_id),
+      escapeCsv(getTicketRequestCode(t)),
       escapeCsv(t.title),
       escapeCsv(t.customer_name || ""),
       escapeCsv(t.creator_name || ""),
@@ -1119,6 +1125,20 @@ export default function TicketsPage() {
                     <span className="truncate">Ticket ID</span>
                     <div
                       onMouseDown={(e) => handleMouseDown("ticket_id", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
+                {/* Request Code (Mã yêu cầu) */}
+                {visibleColumns.request_code && (
+                  <th 
+                    style={{ width: `${colWidths.request_code}px`, minWidth: `${colWidths.request_code}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                  >
+                    <span className="truncate">Mã yêu cầu</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("request_code", e)}
                       className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
                     />
                   </th>
@@ -1439,6 +1459,7 @@ export default function TicketsPage() {
                       <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto custom-scrollbar">
                         {Object.entries({
                           ticket_id: "Ticket ID",
+                          request_code: "Mã yêu cầu",
                           title: "Tiêu đề",
                           customer_name: "Khách hàng",
                           creator_name: "Người tạo",
@@ -1525,6 +1546,29 @@ export default function TicketsPage() {
                         title={ticket.ticket_id}
                       >
                         {ticket.ticket_id}
+                      </td>
+                    )}
+
+                    {/* Request Code (Mã yêu cầu) */}
+                    {visibleColumns.request_code && (
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-normal border-b border-slate-200">
+                        {(() => {
+                          const reqCode = getTicketRequestCode(ticket as any);
+                          if (!reqCode) return <span className="text-slate-400">—</span>;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/requests?search=${reqCode}`);
+                              }}
+                              className="inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold hover:bg-blue-100 hover:text-blue-800 transition cursor-pointer"
+                              title={`Xem chi tiết yêu cầu: ${reqCode}`}
+                            >
+                              <span>{reqCode}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
                     )}
 

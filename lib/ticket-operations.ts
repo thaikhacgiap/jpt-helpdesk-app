@@ -97,6 +97,12 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
     const requestTime = formData.requestTime || formData.request_time || nowIso;
     const slaTime = formData.slaTime || formData.sla_time || getDefaultSlaDuration(formData.priority);
 
+    const requestCode = formData.requestCode || formData.request_code || formData.requestId || formData.request_id || null;
+    let finalRemark = formData.remark || null;
+    if (requestCode && (!finalRemark || !finalRemark.includes(requestCode))) {
+      finalRemark = finalRemark ? `${finalRemark} | [Mã yêu cầu: ${requestCode}]` : `[Mã yêu cầu: ${requestCode}]`;
+    }
+
     const insertPayload: any = {
       ticket_id:      ticketId,
       title:          formData.title,
@@ -105,6 +111,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       customer_name:  formData.customerName  || null,
       contract_id:    formData.contractId    || null,
       contract_no:    formData.contractNo    || null,
+      request_code:   requestCode,
       tt_type:        formData.ttType        || null,
       contract_scope: formData.contractScope || formData.contract_scope || 'In scope',
       category:       formData.category      || null,
@@ -121,7 +128,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       tt_close_time:  formData.closeTime     || null,
       hold_time:      formData.holdTime      || null,
       hold_reason:    formData.holdReason    || null,
-      remark:         formData.remark        || null,
+      remark:         finalRemark,
       document_link:  formData.documentLink  || null,
       progress:       formData.progress      || null,
       unhold_time:    formData.unholdTime    || null,
@@ -136,8 +143,9 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       .insert([insertPayload])
       .select();
 
-    if (error && error.message?.includes('request_time')) {
-      delete insertPayload.request_time;
+    if (error && (error.message?.includes('request_time') || error.message?.includes('request_code'))) {
+      if (error.message?.includes('request_time')) delete insertPayload.request_time;
+      if (error.message?.includes('request_code')) delete insertPayload.request_code;
       const retry = await supabase
         .from('tickets')
         .insert([insertPayload])
@@ -157,6 +165,26 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
     console.error('Error creating ticket:', error)
     return { success: false, error: String(error) }
   }
+}
+
+// Helper to extract request code from a ticket across various storage formats
+export function getTicketRequestCode(ticket: Ticket): string {
+  if (!ticket) return "";
+  if (ticket.request_code) return ticket.request_code;
+  if (ticket.request_id && /^(CR|TH|SR|TR|YC)-/i.test(ticket.request_id)) {
+    return ticket.request_id.replace(/^TH-/, "CR-");
+  }
+  if (ticket.remark) {
+    const match = ticket.remark.match(/(?:Tạo từ yêu cầu|Mã yêu cầu|Yêu cầu)[:\s]+([A-Z0-9-]+)/i)
+      || ticket.remark.match(/\[(?:Mã yêu cầu:\s*)?([A-Z0-9-]+)\]/i);
+    if (match && match[1] && !match[1].startsWith("TK-") && !match[1].startsWith("BTR-")) {
+      return match[1].replace(/^TH-/, "CR-");
+    }
+  }
+  if (ticket.document_link && /^(CR|TH|SR|TR|YC)-/i.test(ticket.document_link)) {
+    return ticket.document_link.replace(/^TH-/, "CR-");
+  }
+  return "";
 }
 
 // Fetch all tickets (excluding Requests)

@@ -77,6 +77,8 @@ export interface Ticket {
   customer_name?: string
   contract_no?: string
   contract_id?: string
+  request_code?: string
+  request_id?: string
   tt_type?: string
   contract_scope?: string
   category?: string

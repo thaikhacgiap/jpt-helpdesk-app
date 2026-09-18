@@ -8,6 +8,7 @@ import { fetchContractsByCustomer } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
 import { DateTimePicker } from "@/components/common/datetime-picker";
+import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
 
 interface NewTicketModalProps {
   isOpen: boolean;
@@ -326,6 +327,7 @@ function FormSelect({ label, name, value, onChange, options, required }: {
 
 /* ── Form initial state ───────────────────────────────────── */
 const EMPTY_FORM = {
+  requestCode: "",
   title: "", description: "",
   ttType: "", contractScope: "In scope", category: "", priority: "",
   creatorName: STAFF_LIST[0],
@@ -376,13 +378,15 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) { alert("Vui lòng nhập tiêu đề ticket"); return; }
-    if (!selectedCustomer)      { alert("Vui lòng chọn khách hàng");       return; }
+    if (!formData.requestCode.trim()) { alert("Vui lòng chọn hoặc nhập Mã yêu cầu"); return; }
+    if (!formData.title.trim())       { alert("Vui lòng nhập tiêu đề ticket"); return; }
+    if (!selectedCustomer)            { alert("Vui lòng chọn khách hàng");       return; }
 
     setSubmitting(true);
     try {
       const result = await createTicket({
         ...formData,
+        requestCode:   formData.requestCode,
         customerId:    selectedCustomer.id,
         customerName:  selectedCustomer.name,
         customerCode:  selectedCustomer.code,
@@ -431,6 +435,38 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* ─ Mã Yêu Cầu ─ */}
+          <div>
+            <label className={labelCls}>Mã yêu cầu <span className="text-red-500 normal-case">*</span></label>
+            <RequestSearchSelect
+              value={formData.requestCode}
+              onChange={(code, req) => {
+                setFormData((prev) => {
+                  const updated = { ...prev, requestCode: code };
+                  if (req) {
+                    if (!prev.title.trim()) updated.title = req.title;
+                    if (!prev.description.trim()) updated.description = req.description || "";
+                    if (req.priority) {
+                      const p = req.priority;
+                      updated.priority = p.includes("L1") || p.includes("Critical") ? "L1(Critical)"
+                        : p.includes("L2") || p.includes("Major") ? "L2(Major)"
+                        : p.includes("L3") || p.includes("Minor") ? "L3(Minor)" : "L4(Warning)";
+                    }
+                    if (req.category) updated.category = req.category;
+                    if (req.ttType) updated.ttType = req.ttType;
+                  }
+                  return updated;
+                });
+
+                if (req?.customerId) {
+                  const matchingCust = customers.find((c) => c.id === req.customerId);
+                  if (matchingCust) setSelectedCustomer(matchingCust);
+                }
+              }}
+              placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-, TR-) --"
+            />
+          </div>
 
           {/* ─ Tiêu đề ─ */}
           <div>
