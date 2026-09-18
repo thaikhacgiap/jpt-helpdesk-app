@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  X, ChevronDown, Save, Edit2, CheckCircle,
+  X, ChevronDown, Save, Edit2, CheckCircle, CheckCircle2,
   Search, Building2, FileText, Check, Maximize2,
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
-  Filter, AlertCircle, HardDrive, MessageSquare, Loader2
+  Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
@@ -50,8 +50,10 @@ export interface TicketData {
   progress?: string;
   request_time?: string;
   start_time?: string;
+  resolve_time?: string;
   end_time?: string;
   tt_close_time?: string;
+  close_time?: string;
   hold_time?: string;
   hold_reason?: string;
   remark?: string;
@@ -83,25 +85,23 @@ const SCOPE_OPTIONS     = ["In scope", "Out scope", "Presale"];
 /* ═══════════════════════════════════════════════════════════ */
 /* Process steps                                               */
 /* ═══════════════════════════════════════════════════════════ */
-type StepKey = "create" | "check" | "arrange" | "troubleshoot" | "finished" | "reporting" | "closed";
+type StepKey = "create" | "check" | "arrange" | "troubleshoot" | "completed";
 
 const STEPS: { key: StepKey; label: string }[] = [
   { key: "create",       label: "Create Ticket" },
   { key: "check",        label: "Check Contract" },
   { key: "arrange",      label: "Arrange resource" },
   { key: "troubleshoot", label: "Troubleshooting" },
-  { key: "finished",     label: "Finished" },
-  { key: "reporting",    label: "Reporting" },
-  { key: "closed",       label: "Closed" },
+  { key: "completed",    label: "Completed" },
 ];
 
 const STATUS_TO_STEP: Record<string, StepKey> = {
   "In progress": "troubleshoot",
   "On Hold":     "arrange",
-  "Reporting":   "reporting",
-  "Completed":   "finished",
-  "Cancel":      "closed",
-  "Closed":      "closed",
+  "Reporting":   "completed",
+  "Completed":   "completed",
+  "Cancel":      "completed",
+  "Closed":      "completed",
 };
 
 const getHeaderStepIcon = (step: StepKey) => {
@@ -110,9 +110,7 @@ const getHeaderStepIcon = (step: StepKey) => {
     case "check": return <Shield className="text-blue-500" size={18} />;
     case "arrange": return <Users className="text-blue-500" size={18} />;
     case "troubleshoot": return <Wrench className="text-blue-500" size={18} />;
-    case "finished": return <CheckCircle className="text-green-500" size={18} />;
-    case "reporting": return <FileText className="text-blue-500" size={18} />;
-    case "closed": return <Lock className="text-red-500" size={18} />;
+    case "completed": return <CheckCircle className="text-emerald-500" size={18} />;
     default: return <Wrench className="text-blue-500" size={18} />;
   }
 };
@@ -609,12 +607,10 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
 const getStepIcon = (key: StepKey) => {
   switch (key) {
     case "create": return FileText;
-    case "check": return FileText;
+    case "check": return Shield;
     case "arrange": return Users;
     case "troubleshoot": return Wrench;
-    case "finished": return CheckCircle;
-    case "reporting": return FileText;
-    case "closed": return Lock;
+    case "completed": return CheckCircle;
     default: return FileText;
   }
 };
@@ -625,9 +621,7 @@ const getStepSublabel = (key: StepKey) => {
     case "check": return "Kiểm tra hợp đồng";
     case "arrange": return "Sắp xếp tài nguyên";
     case "troubleshoot": return "Khắc phục sự cố";
-    case "finished": return "Hoàn thành";
-    case "reporting": return "Báo cáo";
-    case "closed": return "Đóng ticket";
+    case "completed": return "Hoàn thành & Báo cáo";
     default: return "";
   }
 };
@@ -2057,98 +2051,52 @@ function ArrangeResourceForm({
   );
 }
 
-interface FinishedFormData {
+export interface FinishedFormData {
   ticketStatus: string;
+  startTime: string;
   resolveTime: string;
-  briefSummary: string;
-  currentStatus: string;
   customerConfirm: string;
+  briefSummary: string;
+  rootcause: string;
+  currentStatus: string;
+  reportUrl?: string;
+  reportFileName?: string;
 }
 
-function FinishedForm({
-  editing, data, onChange,
-}: {
-  editing: boolean;
-  data: FinishedFormData;
-  onChange: (patch: Partial<FinishedFormData>) => void;
-}) {
-  return (
-    <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
-      <div className="grid grid-cols-2 gap-6">
-        {/* Ticket status */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-500 block">Ticket status</label>
-          <TealSelect
-            value={data.ticketStatus}
-            onChange={(v) => onChange({ ticketStatus: v })}
-            readOnly={!editing}
-            options={["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"]}
-          />
-        </div>
-
-        {/* Resolve time */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-500 block">Resolve time</label>
-          <TealField
-            value={data.resolveTime}
-            onChange={(v) => onChange({ resolveTime: v })}
-            editing={editing}
-            type="datetime-local"
-            placeholder="Chọn thời gian hoàn thành..."
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        {/* Customer confirm */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-500 block">Customer confirm</label>
-          <TealSelect
-            value={data.customerConfirm}
-            onChange={(v) => onChange({ customerConfirm: v })}
-            readOnly={!editing}
-            options={["Yes", "No"]}
-          />
-        </div>
-      </div>
-
-      {/* Brief summary */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-500 block">Brief summary</label>
-        <TealField
-          value={data.briefSummary}
-          onChange={(v) => onChange({ briefSummary: v })}
-          editing={editing}
-          rows={3}
-          placeholder="Nhập tóm tắt quá trình xử lý..."
-        />
-      </div>
-
-      {/* Current status */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-500 block">Current status (Descript status after issue resolve)</label>
-        <TealField
-          value={data.currentStatus}
-          onChange={(v) => onChange({ currentStatus: v })}
-          editing={editing}
-          rows={3}
-          placeholder="Miêu tả trạng thái hệ thống/dịch vụ sau khi xử lý sự cố..."
-        />
-      </div>
-    </div>
-  );
-}
-
-function ClosedForm({
-  editing, createData, finishedData, closeTime, onCloseTimeChange, holdsList
+function CompletedForm({
+  editing,
+  createData,
+  onCreateDataChange,
+  finishedData,
+  onFinishedDataChange,
+  reportingData,
+  onReportingDataChange,
+  closeTime,
+  onCloseTimeChange,
+  holdsList,
+  contacts,
+  nhanSuList,
+  ticket,
+  onPrintReport,
 }: {
   editing: boolean;
   createData: CreateFormData;
+  onCreateDataChange: (patch: Partial<CreateFormData>) => void;
   finishedData: FinishedFormData;
+  onFinishedDataChange: (patch: Partial<FinishedFormData>) => void;
+  reportingData: ReportingFormData;
+  onReportingDataChange: (patch: Partial<ReportingFormData>) => void;
   closeTime: string;
   onCloseTimeChange: (v: string) => void;
   holdsList: any[];
+  contacts: Contact[];
+  nhanSuList: NhanSu[];
+  ticket: TicketData | null;
+  onPrintReport: () => void;
 }) {
+  const [activeCompletedTab, setActiveCompletedTab] = useState<"finished" | "report" | "summary">("finished");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const getMinutesBetween = (startStr: string, stopStr: string) => {
     if (!startStr) return 0;
     const start = new Date(startStr);
@@ -2171,8 +2119,24 @@ function ClosedForm({
     return parts.join(" ");
   };
 
-  // Calculations
-  const totalLifecycleMins = getMinutesBetween(createData.startTime, closeTime);
+  const formatDateWithTime = (dateStr?: string | null) => {
+    if (!dateStr) return "—";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr || "—";
+      const pad = (num: number) => String(num).padStart(2, "0");
+      return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+    } catch {
+      return dateStr || "—";
+    }
+  };
+
+  // Time calculations
+  const effectiveStartTime = finishedData.startTime || createData.startTime;
+  const effectiveResolveTime = finishedData.resolveTime;
+  const effectiveCloseTime = closeTime || effectiveResolveTime;
+
+  const totalLifecycleMins = getMinutesBetween(effectiveStartTime, effectiveResolveTime || effectiveCloseTime);
   
   let totalHoldMins = 0;
   holdsList.forEach((h) => {
@@ -2189,151 +2153,829 @@ function ClosedForm({
   const workingMandaysTotal = (totalLifecycleMins / 480).toFixed(2);
   const workingMandaysNet = (netMins / 480).toFixed(2);
 
-  const formatDateWithTime = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr || "—";
-      const pad = (num: number) => String(num).padStart(2, "0");
-      return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
-    } catch {
-      return dateStr || "—";
+  // SLA Calculation
+  const priorityStr = createData.priority || ticket?.priority || "";
+  let slaTargetMins = 240; // Default 4 hours
+  if (priorityStr.includes("L1") || priorityStr.toLowerCase().includes("critical")) {
+    slaTargetMins = 120; // 2 hours
+  } else if (priorityStr.includes("L2") || priorityStr.toLowerCase().includes("major") || priorityStr.toLowerCase().includes("high")) {
+    slaTargetMins = 240; // 4 hours
+  } else if (priorityStr.includes("L3") || priorityStr.toLowerCase().includes("minor") || priorityStr.toLowerCase().includes("medium")) {
+    slaTargetMins = 480; // 8 hours
+  } else if (priorityStr.includes("L4") || priorityStr.toLowerCase().includes("warning") || priorityStr.toLowerCase().includes("low")) {
+    slaTargetMins = 1440; // 24 hours
+  }
+
+  // If SLA time is explicitly written on ticket (e.g. "4h", "240")
+  if (ticket?.sla_time) {
+    const parsedNum = parseFloat(ticket.sla_time);
+    if (!isNaN(parsedNum)) {
+      if (ticket.sla_time.toLowerCase().includes("h")) {
+        slaTargetMins = Math.round(parsedNum * 60);
+      } else if (ticket.sla_time.toLowerCase().includes("d")) {
+        slaTargetMins = Math.round(parsedNum * 1440);
+      } else if (parsedNum > 0) {
+        slaTargetMins = Math.round(parsedNum);
+      }
     }
+  }
+
+  const isInSla = netMins <= slaTargetMins;
+  const slaPercentage = slaTargetMins > 0 ? Math.min(200, Math.round((netMins / slaTargetMins) * 100)) : 100;
+  const slaOverdueMins = Math.max(0, netMins - slaTargetMins);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    onFinishedDataChange({
+      reportFileName: file.name,
+      reportUrl: finishedData.reportUrl || URL.createObjectURL(file),
+    });
   };
 
+  const handleDaiDienChange = (name: string) => {
+    const found = contacts.find(c => c.ho_ten === name);
+    onReportingDataChange({
+      daiDien: name,
+      chucVuA: found?.chuc_danh || ""
+    });
+  };
+
+  const handleNguoiTiepNhanChange = (name: string) => {
+    const found = nhanSuList.find(n => n.ten_nhan_su === name);
+    onReportingDataChange({
+      nguoiTiepNhan: name,
+      chucVuTiepNhan: found?.chuc_vu || ""
+    });
+  };
+
+  const handleNguoiThucHienChange = (name: string) => {
+    const found = nhanSuList.find(n => n.ten_nhan_su === name);
+    onReportingDataChange({
+      nguoiThucHien: name,
+      chucVuThucHien: found?.chuc_vu || ""
+    });
+  };
+
+  const labelCls = "text-xs font-semibold text-slate-500 block";
+
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
-      {/* 1. Mốc thời gian */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <span className="w-1.5 h-4 bg-[#0099cc] rounded"></span>
-          Thống kê các mốc thời gian
-        </h3>
-        <div className="grid grid-cols-3 gap-6">
-          <div className="bg-[#fafeff] border border-[#b2e5f5] rounded-xl p-4.5 space-y-1 shadow-sm">
-            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian bắt đầu</span>
-            <span className="text-sm font-bold text-slate-700">{formatDateWithTime(createData.startTime)}</span>
-          </div>
-          <div className="bg-[#fafeff] border border-[#b2e5f5] rounded-xl p-4.5 space-y-1 shadow-sm">
-            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian khắc phục</span>
-            <span className="text-sm font-bold text-slate-700">{formatDateWithTime(finishedData.resolveTime)}</span>
-          </div>
-          <div className="bg-[#fafeff] border border-[#b2e5f5] rounded-xl p-4.5 space-y-1 shadow-sm">
-            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian đóng ticket</span>
-            {editing ? (
-              <div className="mt-1">
-                <DateTimePicker
-                  value={closeTime}
-                  onChange={(v) => onCloseTimeChange(v)}
-                  placeholder="Chọn thời gian đóng..."
-                />
-              </div>
-            ) : (
-              <span className="text-sm font-bold text-slate-700 block mt-1">{formatDateWithTime(closeTime)}</span>
-            )}
-          </div>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50/30">
+      {/* Sub-Navigation Header */}
+      <div className="px-8 pt-4 pb-2 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+          <button
+            type="button"
+            onClick={() => setActiveCompletedTab("finished")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeCompletedTab === "finished"
+                ? "bg-white text-emerald-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <CheckCircle2 size={15} className={activeCompletedTab === "finished" ? "text-emerald-500" : "text-slate-400"} />
+            <span>1. Finished (Xử lý hoàn thành)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveCompletedTab("report")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeCompletedTab === "report"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <FileText size={15} className={activeCompletedTab === "report" ? "text-blue-500" : "text-slate-400"} />
+            <span>2. Report (Báo cáo & Biên bản)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveCompletedTab("summary")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeCompletedTab === "summary"
+                ? "bg-white text-indigo-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+            }`}
+          >
+            <BarChart3 size={15} className={activeCompletedTab === "summary" ? "text-indigo-500" : "text-slate-400"} />
+            <span>3. Summary (Thời gian, Manday & SLA)</span>
+          </button>
+        </div>
+
+        {/* Quick actions in top-right */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrintReport}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold transition cursor-pointer shadow-2xs"
+            title="In hoặc xuất biên bản nghiệm thu kỹ thuật"
+          >
+            <Printer size={13} className="text-purple-600" />
+            <span>In / Xuất biên bản</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. Thống kê Hold */}
-      {holdsList.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-orange-500 rounded"></span>
-            Thống kê thời gian tạm dừng (Hold)
-          </h3>
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                  <th className="p-3 text-left font-semibold">Lý do tạm dừng</th>
-                  <th className="p-3 text-center font-semibold w-40">Bắt đầu</th>
-                  <th className="p-3 text-center font-semibold w-40">Kết thúc</th>
-                  <th className="p-3 text-center font-semibold w-28 bg-orange-50/10">Thời lượng</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {holdsList.map((h, i) => {
-                  const holdDurationMins = getMinutesBetween(h.startTime, h.stopTime);
-                  return (
-                    <tr key={i} className="hover:bg-slate-50/50 transition bg-white">
-                      <td className="p-3 text-slate-700">{h.reason || "Không có lý do"}</td>
-                      <td className="p-3 text-center text-slate-500">{formatDateWithTime(h.startTime)}</td>
-                      <td className="p-3 text-center text-slate-500">{h.stopTime ? formatDateWithTime(h.stopTime) : <span className="text-orange-500 font-semibold italic">Đang tạm dừng</span>}</td>
-                      <td className="p-3 text-center text-slate-700 font-medium bg-orange-50/10">
-                        {formatMinsToReadable(holdDurationMins)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* TAB 1: FINISHED                                             */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {activeCompletedTab === "finished" && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* Box Header */}
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50/60 to-white p-4 rounded-xl border border-emerald-100/80 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                  <CheckCircle size={18} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Thông tin hoàn tất & Khắc phục sự cố</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">Ghi nhận mốc thời gian hoàn thành, tóm tắt và nguyên nhân gốc rễ</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-white border border-emerald-200 text-emerald-700 rounded-full text-xs font-bold shadow-2xs">
+                {finishedData.ticketStatus || "Completed"}
+              </span>
+            </div>
 
-      {/* 3. Tính toán thời gian & Manday */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <span className="w-1.5 h-4 bg-teal-500 rounded"></span>
-          Phân tích & Tính toán công lao động (Mandays)
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-6">
-          {/* Cột trái: Tổng thời lượng */}
-          <div className="bg-[#fafffe] border border-teal-100 rounded-xl p-5 space-y-4 shadow-sm">
-            <h4 className="text-xs font-bold text-teal-700 uppercase tracking-wider border-b border-teal-50 pb-2">Tổng thời lượng xử lý</h4>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Tổng thời gian chu kỳ (Lifecycle):</span>
-                <span className="font-semibold text-slate-800">{formatMinsToReadable(totalLifecycleMins)}</span>
+            {/* Row 1: Status & Confirm */}
+            <div className="grid grid-cols-2 gap-6 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 block">Trạng thái ticket (Ticket status)</label>
+                <TealSelect
+                  value={finishedData.ticketStatus || "Completed"}
+                  onChange={(v) => onFinishedDataChange({ ticketStatus: v })}
+                  readOnly={!editing}
+                  options={["Completed", "Closed", "In progress", "On Hold", "Reporting", "Cancel"]}
+                />
               </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Tổng thời gian tạm dừng (Hold):</span>
-                <span className="font-semibold text-orange-600">{formatMinsToReadable(totalHoldMins)}</span>
-              </div>
-              <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-sm font-bold">
-                <span className="text-slate-700">Thời gian làm việc thực tế (Net):</span>
-                <span className="text-teal-600">{formatMinsToReadable(netMins)}</span>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 block">Khách hàng xác nhận (Customer confirm)</label>
+                <TealSelect
+                  value={finishedData.customerConfirm || "Yes"}
+                  onChange={(v) => onFinishedDataChange({ customerConfirm: v })}
+                  readOnly={!editing}
+                  options={["Yes", "No"]}
+                />
               </div>
             </div>
-          </div>
 
-          {/* Cột phải: Quy đổi Manday */}
-          <div className="bg-[#fbfaff] border border-indigo-100 rounded-xl p-5 space-y-4 shadow-sm">
-            <h4 className="text-xs font-bold text-indigo-700 uppercase tracking-wider border-b border-indigo-50 pb-2">Quy đổi Manday (Công lao động)</h4>
-            <div className="grid grid-cols-2 gap-4">
-              {/* Manday 8h */}
-              <div className="bg-white border border-indigo-50/50 rounded-lg p-3 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Hành chính (8h/ngày)</span>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Tổng công:</span>
-                    <span className="font-semibold text-slate-700">{workingMandaysTotal}</span>
+            {/* Row 2: Time Milestones (Start time & Resolve time) */}
+            <div className="grid grid-cols-2 gap-6 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <Clock size={13} className="text-blue-500" />
+                  <span>Thời gian bắt đầu (Start time)</span>
+                </label>
+                <DateTimePicker
+                  value={effectiveStartTime}
+                  onChange={(v) => {
+                    onFinishedDataChange({ startTime: v });
+                    onCreateDataChange({ startTime: v });
+                    onReportingDataChange({ thoiGianTiepNhan: v });
+                  }}
+                  readOnly={!editing}
+                  placeholder="Chọn thời gian bắt đầu xử lý..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <CheckCircle size={13} className="text-emerald-500" />
+                  <span>Thời gian khắc phục (Resolve time)</span>
+                </label>
+                <DateTimePicker
+                  value={effectiveResolveTime}
+                  onChange={(v) => {
+                    onFinishedDataChange({ resolveTime: v });
+                    onReportingDataChange({ thoiGianKetThuc: v });
+                  }}
+                  readOnly={!editing}
+                  placeholder="Chọn thời gian khắc phục sự cố..."
+                />
+              </div>
+            </div>
+
+            {/* Row 3: Brief Summary */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                <FileText size={13} className="text-[#0099cc]" />
+                <span>Tóm tắt quá trình xử lý (Brief Summary)</span>
+              </label>
+              <TealField
+                value={finishedData.briefSummary}
+                onChange={(v) => onFinishedDataChange({ briefSummary: v })}
+                editing={editing}
+                rows={3}
+                placeholder="Nhập tóm tắt các bước và diễn biến xử lý sự cố..."
+              />
+            </div>
+
+            {/* Row 4: Rootcause */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                <AlertTriangle size={13} className="text-amber-500" />
+                <span>Nguyên nhân gốc rễ sự cố (Rootcause)</span>
+              </label>
+              <TealField
+                value={finishedData.rootcause || reportingData.chanDoan}
+                onChange={(v) => {
+                  onFinishedDataChange({ rootcause: v });
+                  onReportingDataChange({ chanDoan: v });
+                }}
+                editing={editing}
+                rows={3}
+                placeholder="Phân tích và mô tả chi tiết nguyên nhân gốc rễ gây ra sự cố (Rootcause)..."
+              />
+            </div>
+
+            {/* Row 5: Current Status */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                <TrendingUp size={13} className="text-teal-600" />
+                <span>Tình trạng hiện tại của hệ thống (Current status after resolve)</span>
+              </label>
+              <TealField
+                value={finishedData.currentStatus}
+                onChange={(v) => onFinishedDataChange({ currentStatus: v })}
+                editing={editing}
+                rows={3}
+                placeholder="Miêu tả trạng thái dịch vụ, tải hệ thống hoặc kết quả sau khi hoàn tất khắc phục..."
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* TAB 2: REPORT                                               */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {activeCompletedTab === "report" && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* Action Card: Attach report & Export template */}
+            <div className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white p-5 rounded-xl border border-blue-200/80 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <Sparkles size={16} className="text-blue-600" />
+                    Báo cáo & Biên bản bàn giao kỹ thuật
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">Đính kèm tài liệu báo cáo, xuất template hoặc in biên bản kỹ thuật chính thức</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onPrintReport}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>Xuất / In Biên bản A4</span>
+                </button>
+              </div>
+
+              {/* Attach Report Inputs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-blue-100">
+                {/* Online Link */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <Link2 size={13} className="text-blue-500" />
+                    <span>Link báo cáo trực tuyến (Google Drive / Sharepoint / Docs)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <TealField
+                      value={finishedData.reportUrl || ""}
+                      onChange={(v) => onFinishedDataChange({ reportUrl: v })}
+                      editing={editing}
+                      placeholder="https://drive.google.com/file/... hoặc link tài liệu"
+                    />
+                    {finishedData.reportUrl && (
+                      <a
+                        href={finishedData.reportUrl.startsWith("http") ? finishedData.reportUrl : `https://${finishedData.reportUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition shrink-0"
+                        title="Mở liên kết tài liệu"
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    )}
                   </div>
-                  <div className="flex justify-between border-t border-slate-50 pt-1 font-bold text-indigo-600">
-                    <span>Thực tế:</span>
-                    <span>{workingMandaysNet}</span>
+                </div>
+
+                {/* File Attachment */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <Paperclip size={13} className="text-indigo-500" />
+                    <span>Đính kèm file báo cáo (PDF, Word, Excel...)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                    />
+                    <button
+                      type="button"
+                      disabled={!editing}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`flex items-center gap-1.5 px-4 py-2 border rounded-lg text-xs font-medium transition ${
+                        editing
+                          ? "border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer shadow-2xs"
+                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <UploadCloud size={14} className={editing ? "text-indigo-600" : "text-slate-400"} />
+                      <span>{finishedData.reportFileName ? "Đổi file đính kèm" : "Chọn file đính kèm"}</span>
+                    </button>
+                    {finishedData.reportFileName && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-medium">
+                        <FileText size={13} className="text-emerald-600 shrink-0" />
+                        <span className="truncate max-w-[180px]">{finishedData.reportFileName}</span>
+                        {editing && (
+                          <button
+                            type="button"
+                            onClick={() => onFinishedDataChange({ reportFileName: "", reportUrl: "" })}
+                            className="text-slate-400 hover:text-red-500 transition ml-1"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Technical Report Details Form */}
+            <div className="space-y-6">
+              {/* THÔNG TIN CÁC BÊN */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  I. Thông tin các bên tham gia
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-8">
+                  {/* BÊN A */}
+                  <div className="space-y-3">
+                    <h5 className="text-xs font-bold text-blue-700">Bên A (Khách hàng)</h5>
+                    
+                    <div className="space-y-1">
+                      <label className={labelCls}>Khách hàng (Bên A)</label>
+                      <TealField
+                        value={reportingData.benA || ticket?.customer_name || ""}
+                        onChange={(v) => onReportingDataChange({ benA: v })}
+                        editing={editing}
+                        placeholder="Tên khách hàng..."
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className={labelCls}>Đại diện</label>
+                        <TealSelect
+                          value={reportingData.daiDien}
+                          onChange={handleDaiDienChange}
+                          readOnly={!editing}
+                          options={contacts.map(c => c.ho_ten)}
+                          placeholder="— Người đại diện —"
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className={labelCls}>Chức vụ</label>
+                        <TealField
+                          value={reportingData.chucVuA}
+                          onChange={(v) => onReportingDataChange({ chucVuA: v })}
+                          editing={editing}
+                          placeholder="Chức vụ..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BÊN B */}
+                  <div className="space-y-3">
+                    <h5 className="text-xs font-bold text-indigo-700">Bên B (Đơn vị hỗ trợ JPROTECH)</h5>
+                    
+                    <div className="space-y-1">
+                      <label className={labelCls}>Đơn vị hỗ trợ</label>
+                      <TealField
+                        value={reportingData.benB || "JPROTECH"}
+                        onChange={(v) => onReportingDataChange({ benB: v })}
+                        editing={editing}
+                        placeholder="Tên công ty / Đơn vị..."
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className={labelCls}>Người tiếp nhận</label>
+                        <TealSelect
+                          value={reportingData.nguoiTiepNhan}
+                          onChange={handleNguoiTiepNhanChange}
+                          readOnly={!editing}
+                          options={nhanSuList.map(n => n.ten_nhan_su)}
+                          placeholder="— Người tiếp nhận —"
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className={labelCls}>Chức vụ</label>
+                        <TealField
+                          value={reportingData.chucVuTiepNhan}
+                          onChange={(v) => onReportingDataChange({ chucVuTiepNhan: v })}
+                          editing={editing}
+                          placeholder="Chức vụ..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className={labelCls}>Người thực hiện</label>
+                        <TealSelect
+                          value={reportingData.nguoiThucHien}
+                          onChange={handleNguoiThucHienChange}
+                          readOnly={!editing}
+                          options={nhanSuList.map(n => n.ten_nhan_su)}
+                          placeholder="— Người thực hiện —"
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className={labelCls}>Chức vụ</label>
+                        <TealField
+                          value={reportingData.chucVuThucHien}
+                          onChange={(v) => onReportingDataChange({ chucVuThucHien: v })}
+                          editing={editing}
+                          placeholder="Chức vụ..."
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Manday 24h */}
-              <div className="bg-white border border-indigo-50/50 rounded-lg p-3 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Ngày lịch (24h/ngày)</span>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Tổng công:</span>
-                    <span className="font-semibold text-slate-700">{calendarMandaysTotal}</span>
+              {/* NỘI DUNG YÊU CẦU */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  II. Nội dung yêu cầu kỹ thuật
+                </h4>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Loại yêu cầu</label>
+                    <TealField
+                      value={reportingData.loaiYeuCau || createData.ttType || ""}
+                      onChange={(v) => onReportingDataChange({ loaiYeuCau: v })}
+                      editing={editing}
+                      placeholder="HTKT / Xử lý sự cố / Tư vấn..."
+                    />
                   </div>
-                  <div className="flex justify-between border-t border-slate-50 pt-1 font-bold text-indigo-600">
-                    <span>Thực tế:</span>
-                    <span>{calendarMandaysNet}</span>
+                  
+                  <div className="space-y-1">
+                    <label className={labelCls}>Hệ thống</label>
+                    <TealField
+                      value={reportingData.heThong || createData.category || ""}
+                      onChange={(v) => onReportingDataChange({ heThong: v })}
+                      editing={editing}
+                      placeholder="Máy chủ / Mạng / Ứng dụng..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={labelCls}>Hình thức hỗ trợ</label>
+                    <TealField
+                      value={reportingData.hinhThuc || ""}
+                      onChange={(v) => onReportingDataChange({ hinhThuc: v })}
+                      editing={editing}
+                      placeholder="Remote / Onsite..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Tần suất</label>
+                    <TealField
+                      value={reportingData.tanSuat}
+                      onChange={(v) => onReportingDataChange({ tanSuat: v })}
+                      editing={editing}
+                      placeholder="Định kỳ / Đột xuất / Một lần..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={labelCls}>Thời gian tiếp nhận</label>
+                    <DateTimePicker
+                      value={reportingData.thoiGianTiepNhan || effectiveStartTime}
+                      onChange={(v) => onReportingDataChange({ thoiGianTiepNhan: v })}
+                      readOnly={!editing}
+                      placeholder="Thời gian tiếp nhận..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={labelCls}>Thời gian kết thúc</label>
+                    <DateTimePicker
+                      value={reportingData.thoiGianKetThuc || effectiveResolveTime}
+                      onChange={(v) => onReportingDataChange({ thoiGianKetThuc: v })}
+                      readOnly={!editing}
+                      placeholder="Thời gian kết thúc..."
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className={labelCls}>Mô tả chi tiết sự cố / yêu cầu</label>
+                  <TealField
+                    value={reportingData.moTaSuCo || createData.description || ""}
+                    onChange={(v) => onReportingDataChange({ moTaSuCo: v })}
+                    editing={editing}
+                    rows={3}
+                    placeholder="Chi tiết mô tả sự cố hoặc yêu cầu từ phía khách hàng..."
+                  />
+                </div>
+              </div>
+
+              {/* KẾT QUẢ VÀ GIẢI PHÁP */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4 shadow-2xs">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  III. Kết quả kiểm tra & Phương án giải quyết
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Kết quả kiểm tra</label>
+                    <TealField
+                      value={reportingData.ketQuaKiemTra}
+                      onChange={(v) => onReportingDataChange({ ketQuaKiemTra: v })}
+                      editing={editing}
+                      rows={3}
+                      placeholder="Hiện trạng kiểm tra ban đầu..."
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className={labelCls}>Chẩn đoán nguyên nhân (Root cause)</label>
+                    <TealField
+                      value={reportingData.chanDoan || finishedData.rootcause}
+                      onChange={(v) => {
+                        onReportingDataChange({ chanDoan: v });
+                        onFinishedDataChange({ rootcause: v });
+                      }}
+                      editing={editing}
+                      rows={3}
+                      placeholder="Nguyên nhân gây ra sự cố..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className={labelCls}>Giải pháp thực hiện</label>
+                    <TealField
+                      value={reportingData.giaiPhap}
+                      onChange={(v) => onReportingDataChange({ giaiPhap: v })}
+                      editing={editing}
+                      rows={3}
+                      placeholder="Các bước giải quyết hoặc phương án xử lý..."
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className={labelCls}>Kết quả thực hiện</label>
+                    <TealField
+                      value={reportingData.ketQuaThucHien}
+                      onChange={(v) => onReportingDataChange({ ketQuaThucHien: v })}
+                      editing={editing}
+                      rows={3}
+                      placeholder="Trạng thái hệ thống sau khi áp dụng giải pháp..."
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* TAB 3: SUMMARY (Milestones, Manday & SLA)                    */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {activeCompletedTab === "summary" && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* 1. Mốc thời gian */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4 shadow-2xs">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Clock size={16} className="text-[#0099cc]" />
+                Thống kê các mốc thời gian chính (Key Milestones)
+              </h3>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian yêu cầu</span>
+                  <span className="text-xs font-bold text-slate-700 block">{formatDateWithTime(createData.requestTime)}</span>
+                </div>
+
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian bắt đầu</span>
+                  <span className="text-xs font-bold text-slate-700 block">{formatDateWithTime(effectiveStartTime)}</span>
+                </div>
+
+                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian khắc phục</span>
+                  <span className="text-xs font-bold text-emerald-700 block">{formatDateWithTime(effectiveResolveTime)}</span>
+                </div>
+
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian đóng ticket</span>
+                  {editing ? (
+                    <div className="mt-1">
+                      <DateTimePicker
+                        value={closeTime}
+                        onChange={(v) => onCloseTimeChange(v)}
+                        placeholder="Chọn giờ đóng..."
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-700 block mt-1">{formatDateWithTime(closeTime)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Thống kê Hold / Pause */}
+            {holdsList.length > 0 && (
+              <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-3 shadow-2xs">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Pause size={15} className="text-orange-500" />
+                    <span>Thống kê thời gian tạm dừng (Hold / Pause Duration)</span>
+                  </div>
+                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
+                    Tổng dừng: {formatMinsToReadable(totalHoldMins)}
+                  </span>
+                </h3>
+                
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                        <th className="p-3 text-left font-semibold">Lý do tạm dừng</th>
+                        <th className="p-3 text-center font-semibold w-36">Bắt đầu</th>
+                        <th className="p-3 text-center font-semibold w-36">Kết thúc</th>
+                        <th className="p-3 text-center font-semibold w-28 bg-orange-50/30">Thời lượng</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {holdsList.map((h, i) => {
+                        const holdDurationMins = getMinutesBetween(h.startTime, h.stopTime);
+                        return (
+                          <tr key={i} className="hover:bg-slate-50/50 transition bg-white">
+                            <td className="p-3 text-slate-700">{h.reason || "Không có lý do"}</td>
+                            <td className="p-3 text-center text-slate-500">{formatDateWithTime(h.startTime)}</td>
+                            <td className="p-3 text-center text-slate-500">
+                              {h.stopTime ? formatDateWithTime(h.stopTime) : <span className="text-orange-500 font-semibold italic">Đang tạm dừng</span>}
+                            </td>
+                            <td className="p-3 text-center text-slate-700 font-medium bg-orange-50/20">
+                              {formatMinsToReadable(holdDurationMins)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Phân tích Manday & SLA */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Box 1: Quy đổi Manday (Công lao động) */}
+              <div className="bg-white p-5 rounded-xl border border-teal-100 space-y-4 shadow-2xs">
+                <h4 className="text-xs font-bold text-teal-700 uppercase tracking-wider border-b border-teal-50 pb-2 flex items-center gap-1.5">
+                  <Timer size={14} />
+                  <span>Phân tích thời lượng & Quy đổi Mandays</span>
+                </h4>
+                
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Tổng thời gian chu kỳ (Lifecycle):</span>
+                    <span className="font-semibold text-slate-800">{formatMinsToReadable(totalLifecycleMins)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Tổng thời gian tạm dừng (Hold):</span>
+                    <span className="font-semibold text-orange-600">{formatMinsToReadable(totalHoldMins)}</span>
+                  </div>
+                  <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-bold">
+                    <span className="text-slate-700">Thời gian làm việc thực tế (Work duration):</span>
+                    <span className="text-teal-700">{formatMinsToReadable(netMins)}</span>
+                  </div>
+                </div>
+
+                {/* Manday Cards */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-teal-50/40 border border-teal-100 rounded-lg p-3 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Hành chính (8h/ngày)</span>
+                    <div className="space-y-0.5 text-xs">
+                      <div className="flex justify-between text-slate-500">
+                        <span>Tổng:</span>
+                        <span className="font-medium text-slate-700">{workingMandaysTotal}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-teal-700 border-t border-teal-100/60 pt-0.5">
+                        <span>Thực tế:</span>
+                        <span>{workingMandaysNet}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-50/40 border border-indigo-100 rounded-lg p-3 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Ngày lịch (24h/ngày)</span>
+                    <div className="space-y-0.5 text-xs">
+                      <div className="flex justify-between text-slate-500">
+                        <span>Tổng:</span>
+                        <span className="font-medium text-slate-700">{calendarMandaysTotal}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-indigo-700 border-t border-indigo-100/60 pt-0.5">
+                        <span>Thực tế:</span>
+                        <span>{calendarMandaysNet}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 2: Đánh giá & Tính toán SLA */}
+              <div className="bg-white p-5 rounded-xl border border-indigo-100 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-indigo-50 pb-2">
+                  <h4 className="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Award size={14} />
+                    <span>Đánh giá Cam kết SLA (SLA Status)</span>
+                  </h4>
+                  {isInSla ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <CheckCircle2 size={12} />
+                      Đạt SLA (In SLA)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                      <AlertTriangle size={12} />
+                      Vi phạm SLA
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Mức ưu tiên (Priority):</span>
+                    <span className="font-semibold text-slate-800">{priorityStr || "L2(Major)"}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Thời gian cam kết SLA:</span>
+                    <span className="font-semibold text-indigo-700">{formatMinsToReadable(slaTargetMins)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Thời gian thực tế xử lý (Work duration):</span>
+                    <span className="font-semibold text-slate-800">{formatMinsToReadable(netMins)}</span>
+                  </div>
+                  {!isInSla && (
+                    <div className="flex justify-between items-center py-1 text-rose-600 font-bold border-t border-rose-100 pt-1">
+                      <span>Thời gian vượt quá SLA:</span>
+                      <span>+{formatMinsToReadable(slaOverdueMins)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Visual SLA Gauge Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Tỷ lệ tiêu thụ SLA:</span>
+                    <span className={`font-bold ${slaPercentage <= 80 ? "text-emerald-600" : slaPercentage <= 100 ? "text-amber-600" : "text-rose-600"}`}>
+                      {slaPercentage}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        slaPercentage <= 80
+                          ? "bg-emerald-500"
+                          : slaPercentage <= 100
+                          ? "bg-amber-500"
+                          : "bg-rose-500"
+                      }`}
+                      style={{ width: `${Math.min(100, slaPercentage)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3909,7 +4551,15 @@ export default function TicketFormModal({
 
   /* Finished states */
   const [finishedData, setFinishedData] = useState<FinishedFormData>({
-    ticketStatus: "", resolveTime: "", briefSummary: "", currentStatus: "", customerConfirm: "",
+    ticketStatus: "Completed",
+    startTime: "",
+    resolveTime: "",
+    briefSummary: "",
+    rootcause: "",
+    currentStatus: "",
+    customerConfirm: "Yes",
+    reportUrl: "",
+    reportFileName: "",
   });
 
   /* Closed states */
@@ -4061,7 +4711,17 @@ export default function TicketFormModal({
       setUpdatesLog([]);
       setOnsite("");
       setHoldsList([]);
-      setFinishedData({ ticketStatus: "", resolveTime: "", briefSummary: "", currentStatus: "", customerConfirm: "" });
+      setFinishedData({
+        ticketStatus: "Completed",
+        startTime: initialStartTime,
+        resolveTime: "",
+        briefSummary: "",
+        rootcause: "",
+        currentStatus: "",
+        customerConfirm: "Yes",
+        reportUrl: "",
+        reportFileName: "",
+      });
       setCloseTime("");
       setReportingData({
         benA: "",
@@ -4078,7 +4738,7 @@ export default function TicketFormModal({
         moTaSuCo: "",
         tanSuat: "",
         phamVi: "",
-        thoiGianTiepNhan: "",
+        thoiGianTiepNhan: initialStartTime,
         thoiGianKetThuc: "",
         ketQuaKiemTra: "",
         chanDoan: "",
@@ -4134,8 +4794,10 @@ export default function TicketFormModal({
       let saleRemark = "";
       let healthCheckRound = "";
       let briefSummary = "";
+      let rootcause = "";
       let currentStatus = "";
       let customerConfirm = "";
+      let reportUrl = ticket.document_link || "";
       let reportObj: any = {};
 
       if (ticket.remark) {
@@ -4146,8 +4808,10 @@ export default function TicketFormModal({
             healthCheckRound = parsed.healthCheckRound || "";
             if (parsed.finished) {
               briefSummary = parsed.finished.briefSummary || "";
+              rootcause = parsed.finished.rootcause || "";
               currentStatus = parsed.finished.currentStatus || "";
               customerConfirm = parsed.finished.customerConfirm || "";
+              if (parsed.finished.reportUrl) reportUrl = parsed.finished.reportUrl;
             }
             if (parsed.report) {
               reportObj = parsed.report;
@@ -4166,17 +4830,22 @@ export default function TicketFormModal({
           const parsed = JSON.parse(ticket.document_link);
           if (parsed && typeof parsed === 'object') {
             briefSummary = parsed.briefSummary || "";
+            rootcause = parsed.rootcause || "";
             currentStatus = parsed.currentStatus || "";
             customerConfirm = parsed.customerConfirm || "";
             if (parsed.report) {
               reportObj = parsed.report;
             }
           } else {
-            briefSummary = ticket.document_link || "";
+            reportUrl = ticket.document_link || "";
           }
         } catch {
-          briefSummary = ticket.document_link || "";
+          reportUrl = ticket.document_link || "";
         }
+      }
+
+      if (!rootcause && reportObj?.chanDoan) {
+        rootcause = reportObj.chanDoan;
       }
 
       /* Pre-populate Check Contract form */
@@ -4391,10 +5060,14 @@ export default function TicketFormModal({
 
       setFinishedData({
         ticketStatus: ticket.tt_status || "Completed",
+        startTime: toDatetimeLocalValue(ticket.start_time || (ticket as any).startTime),
         resolveTime: resolveLocal,
         briefSummary,
+        rootcause,
         currentStatus,
-        customerConfirm,
+        customerConfirm: customerConfirm || "Yes",
+        reportUrl,
+        reportFileName: "",
       });
 
       let closeLocal = "";
@@ -4636,62 +5309,37 @@ export default function TicketFormModal({
           }
         }
 
-      } else if (currentStep === "finished") {
-        const { error } = await supabase
+      } else if (currentStep === "completed") {
+        const updatePayload: any = {
+          tt_status:     finishedData.ticketStatus || ttStatus,
+          start_time:    finishedData.startTime || createData.startTime || null,
+          end_time:      finishedData.resolveTime  || null,
+          resolve_time:  finishedData.resolveTime  || null,
+          close_time:    closeTime                 || null,
+          tt_close_time: closeTime || finishedData.resolveTime || null,
+          document_link: finishedData.reportUrl || ticket?.document_link || null,
+          remark: JSON.stringify({
+            saleRemark: checkData.saleRemark || "",
+            healthCheckRound: checkData.healthCheckRound || "",
+            finished: finishedData,
+            report: reportingData
+          }),
+          progress:      progressStr,
+          updated_at:    new Date().toISOString(),
+        };
+        let { error } = await supabase
           .from("tickets")
-          .update({
-            tt_status:   finishedData.ticketStatus || ttStatus,
-            end_time:    finishedData.resolveTime  || null,
-            tt_close_time: finishedData.resolveTime || null,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", dbId);
-        if (error) { alert("Lỗi lưu finished: " + error.message); return; }
-
-      } else if (currentStep === "reporting") {
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:   ttStatus,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu reporting: " + error.message); return; }
-
-      } else if (currentStep === "closed") {
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:   "Closed",
-            close_time:  closeTime || null,
-            tt_close_time: closeTime || null,
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu closed: " + error.message); return; }
+        if (error && (error.message?.includes("resolve_time") || error.message?.includes("start_time"))) {
+          if (error.message?.includes("resolve_time")) delete updatePayload.resolve_time;
+          const retry = await supabase
+            .from("tickets")
+            .update(updatePayload)
+            .eq("id", dbId);
+          error = retry.error;
+        }
+        if (error) { alert("Lỗi lưu completed: " + error.message); return; }
 
       } else {
         // Generic step save
@@ -4880,65 +5528,38 @@ export default function TicketFormModal({
           }
         }
 
-      } else if (currentStep === "finished") {
+      } else if (currentStep === "completed") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
+        const updatePayload: any = {
+          tt_status:     finishedData.ticketStatus || ttStatus,
+          start_time:    finishedData.startTime || createData.startTime || null,
+          end_time:      finishedData.resolveTime  || null,
+          resolve_time:  finishedData.resolveTime  || null,
+          close_time:    closeTime                 || null,
+          tt_close_time: closeTime || finishedData.resolveTime || null,
+          document_link: finishedData.reportUrl || ticket?.document_link || null,
+          remark: JSON.stringify({
+            saleRemark: checkData.saleRemark || "",
+            healthCheckRound: checkData.healthCheckRound || "",
+            finished: finishedData,
+            report: reportingData
+          }),
+          progress:      progressStr,
+          updated_at:    new Date().toISOString(),
+        };
+        let { error } = await supabase
           .from("tickets")
-          .update({
-            tt_status:   finishedData.ticketStatus || ttStatus,
-            end_time:    finishedData.resolveTime  || null,
-            tt_close_time: finishedData.resolveTime || null,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", dbId);
-        if (error) { alert("Lỗi lưu finished: " + error.message); return; }
-
-      } else if (currentStep === "reporting") {
-        if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:   ttStatus,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu reporting: " + error.message); return; }
-
-      } else if (currentStep === "closed") {
-        if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:   "Closed",
-            close_time:  closeTime || null,
-            tt_close_time: closeTime || null,
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu closed: " + error.message); return; }
+        if (error && (error.message?.includes("resolve_time") || error.message?.includes("start_time"))) {
+          if (error.message?.includes("resolve_time")) delete updatePayload.resolve_time;
+          const retry = await supabase
+            .from("tickets")
+            .update(updatePayload)
+            .eq("id", dbId);
+          error = retry.error;
+        }
+        if (error) { alert("Lỗi lưu completed: " + error.message); return; }
 
       } else {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
@@ -5366,33 +5987,25 @@ export default function TicketFormModal({
             setUpdatesLog={setUpdatesLog}
           />
         )}
-        {currentStep === "finished" && (
-          <FinishedForm
-            editing={editing}
-            data={finishedData}
-            onChange={(patch) => setFinishedData((p) => ({ ...p, ...patch }))}
-          />
-        )}
-        {currentStep === "reporting" && (
-          <ReportingForm
-            editing={editing}
-            data={reportingData}
-            onChange={(patch) => setReportingData((p) => ({ ...p, ...patch }))}
-            contacts={contacts}
-            nhanSuList={nhanSuList}
-          />
-        )}
-        {currentStep === "closed" && (
-          <ClosedForm
+        {currentStep === "completed" && (
+          <CompletedForm
             editing={editing}
             createData={createData}
+            onCreateDataChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
             finishedData={finishedData}
+            onFinishedDataChange={(patch) => setFinishedData((p) => ({ ...p, ...patch }))}
+            reportingData={reportingData}
+            onReportingDataChange={(patch) => setReportingData((p) => ({ ...p, ...patch }))}
             closeTime={closeTime}
             onCloseTimeChange={setCloseTime}
             holdsList={holdsList}
+            contacts={contacts}
+            nhanSuList={nhanSuList}
+            ticket={ticket || null}
+            onPrintReport={handlePrintReport}
           />
         )}
-        {currentStep !== "create" && currentStep !== "check" && currentStep !== "arrange" && currentStep !== "troubleshoot" && currentStep !== "finished" && currentStep !== "reporting" && currentStep !== "closed" && (
+        {currentStep !== "create" && currentStep !== "check" && currentStep !== "arrange" && currentStep !== "troubleshoot" && currentStep !== "completed" && (
           <PlaceholderForm title={stepLabel} />
         )}
 
@@ -5414,14 +6027,14 @@ export default function TicketFormModal({
           showFullScreen={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
           onFullScreen={() => setIsFullScreenUpdate(true)}
           extraLeftButtons={
-            currentStep === "reporting" ? (
+            currentStep === "completed" ? (
               <button
                 type="button"
                 onClick={handlePrintReport}
-                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition font-medium shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-semibold transition shadow-2xs cursor-pointer"
               >
-                <FileText size={15} />
-                In Biên bản
+                <FileText size={14} />
+                <span>In / Xuất biên bản</span>
               </button>
             ) : currentStep === "check" ? (
               <button

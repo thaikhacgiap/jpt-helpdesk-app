@@ -9,6 +9,7 @@ export interface DateTimePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   required?: boolean;
   id?: string;
   name?: string;
@@ -94,6 +95,7 @@ export function DateTimePicker({
   placeholder = "DD/MM/YYYY HH:mm",
   className = "",
   disabled = false,
+  readOnly = false,
   required = false,
   id,
   name,
@@ -101,6 +103,7 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isInteractive = !disabled && !readOnly;
 
   // Parsed current date
   const parsedDate = parseDateTimeInput(value);
@@ -283,11 +286,11 @@ export function DateTimePicker({
       {/* Input Display Field */}
       <div
         onClick={() => {
-          if (!disabled) setIsOpen((o) => !o);
+          if (isInteractive) setIsOpen((o) => !o);
         }}
         className={`w-full min-h-[40px] px-3 py-2 bg-white border rounded-xl flex items-center justify-between gap-2 transition cursor-pointer shadow-2xs ${
           isOpen ? "border-teal-500 ring-2 ring-teal-500/20" : "border-slate-200 hover:border-slate-300"
-        } ${disabled ? "opacity-50 pointer-events-none bg-slate-50" : ""} ${className}`}
+        } ${!isInteractive ? "opacity-70 bg-slate-50 cursor-default" : ""} ${className}`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Calendar size={15} className="text-teal-600 shrink-0" />
@@ -298,14 +301,15 @@ export function DateTimePicker({
             value={textInput}
             onChange={handleTextChange}
             placeholder={placeholder}
-            disabled={disabled}
+            disabled={!isInteractive}
+            readOnly={readOnly}
             required={required}
-            className="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none font-medium cursor-pointer"
+            className={`w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none font-medium ${!isInteractive ? "cursor-default" : "cursor-pointer"}`}
           />
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {value && (
+          {value && isInteractive && (
             <button
               type="button"
               onClick={handleClear}
