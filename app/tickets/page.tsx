@@ -302,12 +302,29 @@ const getTicketPauseMinutes = (ticket: Ticket): number => {
         if (stop) {
           const diff = stop.getTime() - start.getTime();
           if (diff > 0) totalMinutes += Math.floor(diff / 60000);
-        } else if (ticket.tt_status === "On Hold" || ticket.tt_status === "on-hold" || ticket.tt_status === "Hold") {
+        } else {
+          // Nếu Resumed time chưa có thì tính bằng thời gian hiện tại - pause time
           const diff = new Date().getTime() - start.getTime();
           if (diff > 0) totalMinutes += Math.floor(diff / 60000);
         }
       }
     });
+  } else {
+    // Fallback: tính trực tiếp từ Paused time và Resumed time của ticket
+    const pausedStr = getTicketPausedTime(ticket);
+    const start = parseServerDate(pausedStr);
+    if (start) {
+      const resumedStr = getTicketResumedTime(ticket);
+      const stop = parseServerDate(resumedStr);
+      if (stop) {
+        const diff = stop.getTime() - start.getTime();
+        if (diff > 0) totalMinutes += Math.floor(diff / 60000);
+      } else {
+        // Nếu Resumed time chưa có thì tính bằng thời gian hiện tại - pause time
+        const diff = new Date().getTime() - start.getTime();
+        if (diff > 0) totalMinutes += Math.floor(diff / 60000);
+      }
+    }
   }
 
   // If hold_time is a numeric string (e.g. integer hours in older seed data)
