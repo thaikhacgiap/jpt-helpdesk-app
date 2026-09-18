@@ -39,6 +39,8 @@ interface Ticket {
   request_time?: string;
   start_time?: string;
   startTime?: string;
+  resolve_time?: string;
+  resolveTime?: string;
   event_time?: string;
   end_time?: string;
   endTime?: string;
@@ -237,6 +239,10 @@ const formatDateTime = (dateStr?: string, isServerUtc: boolean = false) => {
   if (!d) return dateStr || "—";
   const pad = (num: number) => String(num).padStart(2, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+
+const getTicketResolveTime = (ticket: Ticket): string | undefined => {
+  return ticket.resolve_time || ticket.resolveTime || ticket.end_time || ticket.endTime || ticket.tt_close_time || ticket.close_time || undefined;
 };
 
 const getTicketHolds = (ticket: Ticket): Array<{ startTime?: string; stopTime?: string; reason?: string }> => {
@@ -541,6 +547,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   creator_name: 140,
   created_at: 145,
   start_time: 145,
+  resolve_time: 145,
   duration: 100,
   paused_time: 145,
   resumed_time: 145,
@@ -647,6 +654,7 @@ export default function TicketsPage() {
     creator_name: true,
     created_at: true,
     start_time: true,
+    resolve_time: true,
     duration: true,
     paused_time: true,
     resumed_time: true,
@@ -871,6 +879,7 @@ export default function TicketsPage() {
       "Người tạo",
       "Thời gian tạo",
       "Start time",
+      "Resolve time",
       "Duration",
       "Paused time",
       "Resumed time",
@@ -901,6 +910,7 @@ export default function TicketsPage() {
       escapeCsv(t.creator_name || ""),
       escapeCsv(formatDateTime(t.created_at || t.created_time, true)),
       escapeCsv(formatDateTime(t.start_time || t.startTime)),
+      escapeCsv(formatDateTime(getTicketResolveTime(t))),
       escapeCsv(formatDuration(t)),
       escapeCsv(formatDateTime(getTicketPausedTime(t))),
       escapeCsv(formatDateTime(getTicketResumedTime(t))),
@@ -1195,6 +1205,20 @@ export default function TicketsPage() {
                   </th>
                 )}
 
+                {/* Resolve Time */}
+                {visibleColumns.resolve_time && (
+                  <th 
+                    style={{ width: `${colWidths.resolve_time}px`, minWidth: `${colWidths.resolve_time}px` }}
+                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
+                  >
+                    <span className="truncate">Resolve time</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("resolve_time", e)}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                    />
+                  </th>
+                )}
+
                 {/* Duration */}
                 {visibleColumns.duration && (
                   <th 
@@ -1431,6 +1455,7 @@ export default function TicketsPage() {
                           creator_name: "Người tạo",
                           created_at: "Thời gian tạo",
                           start_time: "Start time",
+                          resolve_time: "Resolve time",
                           duration: "Duration",
                           paused_time: "Paused time",
                           resumed_time: "Resumed time",
@@ -1546,6 +1571,13 @@ export default function TicketsPage() {
                     {visibleColumns.start_time && (
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={ticket.start_time || ticket.startTime || ""}>
                         {formatDateTime(ticket.start_time || ticket.startTime)}
+                      </td>
+                    )}
+
+                    {/* Resolve Time */}
+                    {visibleColumns.resolve_time && (
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketResolveTime(ticket) || ""}>
+                        {formatDateTime(getTicketResolveTime(ticket))}
                       </td>
                     )}
 
