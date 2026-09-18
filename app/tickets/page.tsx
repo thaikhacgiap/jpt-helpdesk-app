@@ -64,6 +64,7 @@ interface Ticket {
   sla_time?: string;
   sla_status?: string;
   remark?: string;
+  updated_at?: string;
 }
 
 interface Filters {

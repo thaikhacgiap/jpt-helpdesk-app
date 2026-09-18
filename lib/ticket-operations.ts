@@ -168,7 +168,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
 }
 
 // Helper to extract request code from a ticket across various storage formats
-export function getTicketRequestCode(ticket: Ticket): string {
+export function getTicketRequestCode(ticket: any): string {
   if (!ticket) return "";
   if (ticket.request_code) return ticket.request_code;
   if (ticket.request_id && /^(CR|TH|SR|TR|YC)-/i.test(ticket.request_id)) {
