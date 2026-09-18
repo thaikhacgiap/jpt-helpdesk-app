@@ -15,6 +15,7 @@ import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServi
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+import { DateTimePicker } from "@/components/common/datetime-picker";
 import { getCurrentUser } from "@/lib/auth-operations";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -1605,12 +1606,10 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
                         </label>
-                        <input
-                          type="datetime-local"
-                          name="receiveTime"
+                        <DateTimePicker
                           value={formData.receiveTime}
-                          onChange={handleInputChange}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                          onChange={(v) => setFormData(prev => ({ ...prev, receiveTime: v }))}
+                          placeholder="Chọn thời gian tiếp nhận..."
                         />
                       </div>
 
@@ -1618,12 +1617,10 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian hoàn thành
                         </label>
-                        <input
-                          type="datetime-local"
-                          name="completeTime"
+                        <DateTimePicker
                           value={formData.completeTime}
-                          onChange={handleInputChange}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                          onChange={(v) => setFormData(prev => ({ ...prev, completeTime: v }))}
+                          placeholder="Chọn thời gian hoàn thành..."
                         />
                       </div>
                     </div>
@@ -1822,13 +1819,10 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian sự cố <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="datetime-local"
-                          name="incident_start_time"
+                        <DateTimePicker
                           value={customerFormData.incident_start_time}
-                          onChange={handleCustomerInputChange}
-                          required
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs transition"
+                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, incident_start_time: v }))}
+                          placeholder="Chọn thời gian sự cố..."
                         />
                       </div>
                       <div>
@@ -1939,12 +1933,10 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
                         </label>
-                        <input
-                          type="datetime-local"
-                          name="receive_time"
+                        <DateTimePicker
                           value={customerFormData.receive_time}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, receive_time: v }))}
+                          placeholder="Chọn thời gian tiếp nhận..."
                         />
                       </div>
 
@@ -1952,12 +1944,10 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian hoàn thành
                         </label>
-                        <input
-                          type="datetime-local"
-                          name="end_time"
+                        <DateTimePicker
                           value={customerFormData.end_time}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, end_time: v }))}
+                          placeholder="Chọn thời gian hoàn thành..."
                         />
                       </div>
                     </div>

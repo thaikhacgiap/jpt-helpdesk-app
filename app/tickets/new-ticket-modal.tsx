@@ -7,6 +7,7 @@ import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
+import { DateTimePicker } from "@/components/common/datetime-picker";
 
 interface NewTicketModalProps {
   isOpen: boolean;
@@ -557,19 +558,35 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Request Time</label>
-              <input type="datetime-local" name="requestTime" value={formData.requestTime} onChange={handleChange} className={inputCls} />
+              <DateTimePicker
+                value={formData.requestTime}
+                onChange={(v) => setFormData((p) => ({ ...p, requestTime: v }))}
+                placeholder="Chọn thời gian yêu cầu..."
+              />
             </div>
             <div>
               <label className={labelCls}>Start Time</label>
-              <input type="datetime-local" name="startTime" value={formData.startTime} onChange={handleChange} className={inputCls} />
+              <DateTimePicker
+                value={formData.startTime}
+                onChange={(v) => setFormData((p) => ({ ...p, startTime: v }))}
+                placeholder="Chọn thời gian bắt đầu..."
+              />
             </div>
             <div>
               <label className={labelCls}>End Time</label>
-              <input type="datetime-local" name="endTime" value={formData.endTime} onChange={handleChange} className={inputCls} />
+              <DateTimePicker
+                value={formData.endTime}
+                onChange={(v) => setFormData((p) => ({ ...p, endTime: v }))}
+                placeholder="Chọn thời gian kết thúc..."
+              />
             </div>
             <div>
               <label className={labelCls}>TT Close Time</label>
-              <input type="datetime-local" name="closeTime" value={formData.closeTime} onChange={handleChange} className={inputCls} />
+              <DateTimePicker
+                value={formData.closeTime}
+                onChange={(v) => setFormData((p) => ({ ...p, closeTime: v }))}
+                placeholder="Chọn thời gian đóng TT..."
+              />
             </div>
             <div>
               <label className={labelCls}>Hold Time</label>

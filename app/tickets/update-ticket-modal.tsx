@@ -4,6 +4,8 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { updateTicket } from "@/lib/ticket-operations";
 
+import { DateTimePicker } from "@/components/common/datetime-picker";
+
 interface UpdateTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -88,12 +90,10 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket }: UpdateTic
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Start Time
               </label>
-              <input
-                type="datetime-local"
-                name="startTime"
+              <DateTimePicker
                 value={formData.startTime}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(v) => setFormData(p => ({ ...p, startTime: v }))}
+                placeholder="Chọn Start Time..."
               />
             </div>
 
@@ -101,12 +101,10 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket }: UpdateTic
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 End Time
               </label>
-              <input
-                type="datetime-local"
-                name="endTime"
+              <DateTimePicker
                 value={formData.endTime}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(v) => setFormData(p => ({ ...p, endTime: v }))}
+                placeholder="Chọn End Time..."
               />
             </div>
           </div>

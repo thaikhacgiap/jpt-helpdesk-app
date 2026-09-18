@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Inbox, Loader2, Send } from "lucide-react";
 import { createServiceRequest } from "@/lib/portal-operations";
 import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
+import { DateTimePicker } from "@/components/common/datetime-picker";
 
 interface NewServiceRequestModalProps {
   isOpen: boolean;
@@ -216,13 +217,10 @@ export default function NewServiceRequestModal({
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
                   Thời gian bắt đầu sự cố <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="datetime-local"
-                  name="incident_start_time"
+                <DateTimePicker
                   value={formData.incident_start_time}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-xs transition"
+                  onChange={(v) => setFormData((prev) => ({ ...prev, incident_start_time: v }))}
+                  placeholder="Chọn thời gian bắt đầu sự cố..."
                 />
               </div>
               <div>

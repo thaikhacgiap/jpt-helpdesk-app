@@ -17,6 +17,7 @@ import { NhanSu, fetchNhanSu } from "@/lib/nhan-su-operations";
 import { Contact, fetchContactsByCustomerCode } from "@/lib/contact-operations";
 import { supabase } from "@/lib/supabase";
 import AttachmentUploader from "@/components/common/attachment-uploader";
+import DateTimePicker from "@/components/common/datetime-picker";
 import { AttachedFile } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
 
@@ -407,14 +408,28 @@ function TealField({ value, placeholder, editing, onChange, type = "text", rows,
     );
   }
   
-  const displayValue = (!editing && type === "datetime-local")
-    ? formatDisplayDateTime(value)
-    : (editing && type === "datetime-local" ? toDatetimeLocalValue(value) : (value || ""));
+  if (type === "datetime-local" || type === "datetime") {
+    if (!editing) {
+      return (
+        <div className={`${base} h-10 flex items-center font-medium`}>
+          {formatDisplayDateTime(value) || "—"}
+        </div>
+      );
+    }
+    return (
+      <DateTimePicker
+        value={value}
+        onChange={(v) => onChange?.(v)}
+        placeholder={placeholder || "DD/MM/YYYY HH:mm"}
+        className="h-10 border-[#0099cc] rounded"
+      />
+    );
+  }
 
   return (
     <input 
-      type={editing ? type : "text"} 
-      value={displayValue} 
+      type={type} 
+      value={value || ""} 
       readOnly={!editing}
       placeholder={placeholder} 
       onChange={(e) => onChange?.(e.target.value)}
@@ -2153,12 +2168,13 @@ function ClosedForm({
           <div className="bg-[#fafeff] border border-[#b2e5f5] rounded-xl p-4.5 space-y-1 shadow-sm">
             <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Thời gian đóng ticket</span>
             {editing ? (
-              <input
-                type="datetime-local"
-                value={closeTime}
-                onChange={(e) => onCloseTimeChange(e.target.value)}
-                className="border border-[#0099cc] rounded px-3 py-1 text-xs outline-none w-full bg-white text-slate-800 mt-1 focus:ring-1 focus:ring-[#0099cc]"
-              />
+              <div className="mt-1">
+                <DateTimePicker
+                  value={closeTime}
+                  onChange={(v) => onCloseTimeChange(v)}
+                  placeholder="Chọn thời gian đóng..."
+                />
+              </div>
             ) : (
               <span className="text-sm font-bold text-slate-700 block mt-1">{formatDateWithTime(closeTime)}</span>
             )}
@@ -2926,11 +2942,10 @@ function TroubleshootForm({
                           </td>
                           <td className="p-2.5 text-center border-r border-slate-200">
                             {editing ? (
-                              <input
-                                type="datetime-local"
+                              <DateTimePicker
                                 value={row.startTime}
-                                onChange={(e) => handleHoldRowChange(idx, "startTime", e.target.value)}
-                                className="w-full bg-transparent border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-orange-500 p-1.5 rounded focus:border-orange-500 focus:bg-white"
+                                onChange={(v) => handleHoldRowChange(idx, "startTime", v)}
+                                placeholder="Bắt đầu tạm dừng..."
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 font-mono">{row.startTime ? formatDateWithTime(row.startTime) : "—"}</span>
@@ -2938,11 +2953,10 @@ function TroubleshootForm({
                           </td>
                           <td className="p-2.5 text-center border-r border-slate-200">
                             {editing ? (
-                              <input
-                                type="datetime-local"
+                              <DateTimePicker
                                 value={row.stopTime}
-                                onChange={(e) => handleHoldRowChange(idx, "stopTime", e.target.value)}
-                                className="w-full bg-transparent border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-orange-500 p-1.5 rounded focus:border-orange-500 focus:bg-white"
+                                onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
+                                placeholder="Kết thúc tạm dừng..."
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 font-mono">
