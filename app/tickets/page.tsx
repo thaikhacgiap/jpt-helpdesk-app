@@ -297,6 +297,9 @@ const getTicketPauseMinutes = (ticket: Ticket): number => {
     }
   }
 
+  const resolveDate = parseServerDate(getTicketResolveTime(ticket));
+  const fallbackNow = resolveDate || new Date();
+
   const holds = getTicketHolds(ticket);
   let totalMinutes = 0;
 
@@ -304,15 +307,9 @@ const getTicketPauseMinutes = (ticket: Ticket): number => {
     holds.forEach((h) => {
       const start = parseServerDate(h.startTime);
       if (start) {
-        const stop = parseServerDate(h.stopTime);
-        if (stop) {
-          const diff = stop.getTime() - start.getTime();
-          if (diff > 0) totalMinutes += Math.floor(diff / 60000);
-        } else {
-          // Nếu Resumed time chưa có thì tính bằng thời gian hiện tại - pause time
-          const diff = new Date().getTime() - start.getTime();
-          if (diff > 0) totalMinutes += Math.floor(diff / 60000);
-        }
+        const stop = parseServerDate(h.stopTime) || fallbackNow;
+        const diff = stop.getTime() - start.getTime();
+        if (diff > 0) totalMinutes += Math.floor(diff / 60000);
       }
     });
   } else {
@@ -321,15 +318,9 @@ const getTicketPauseMinutes = (ticket: Ticket): number => {
     const start = parseServerDate(pausedStr);
     if (start) {
       const resumedStr = getTicketResumedTime(ticket);
-      const stop = parseServerDate(resumedStr);
-      if (stop) {
-        const diff = stop.getTime() - start.getTime();
-        if (diff > 0) totalMinutes += Math.floor(diff / 60000);
-      } else {
-        // Nếu Resumed time chưa có thì tính bằng thời gian hiện tại - pause time
-        const diff = new Date().getTime() - start.getTime();
-        if (diff > 0) totalMinutes += Math.floor(diff / 60000);
-      }
+      const stop = parseServerDate(resumedStr) || fallbackNow;
+      const diff = stop.getTime() - start.getTime();
+      if (diff > 0) totalMinutes += Math.floor(diff / 60000);
     }
   }
 
@@ -348,9 +339,8 @@ const getTicketTotalDurationMinutes = (ticket: Ticket): number | null => {
   const start = parseServerDate(ticket.start_time || ticket.startTime || ticket.created_at || ticket.created_time);
   if (!start) return null;
 
-  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel";
-  const endStr = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
-  const end = (isCompleted && endStr) ? (parseServerDate(endStr) || new Date()) : new Date();
+  const resolveDate = parseServerDate(getTicketResolveTime(ticket));
+  const end = resolveDate || new Date();
 
   const diffMs = end.getTime() - start.getTime();
   return diffMs > 0 ? Math.floor(diffMs / 60000) : 0;
@@ -363,28 +353,27 @@ const formatMinutesToReadable = (totalMinutes: number): string => {
   const minutes = totalMinutes % 60;
 
   if (days > 0) {
-    return `${days} ngày ${hours}h`;
+    if (hours > 0) return `${days} ngày ${hours}h`;
+    if (minutes > 0) return `${days} ngày ${minutes}p`;
+    return `${days} ngày`;
   }
   if (hours > 0) {
-    return `${hours} giờ ${minutes}p`;
+    return minutes > 0 ? `${hours} giờ ${minutes}p` : `${hours} giờ`;
   }
   return `${minutes} phút`;
 };
 
 const formatDuration = (ticket: Ticket) => {
-  if (ticket.duration && ticket.duration !== "—") return ticket.duration;
   const totalMins = getTicketTotalDurationMinutes(ticket);
   if (totalMins === null) return "—";
   return formatMinutesToReadable(totalMins);
 };
 
 const formatPauseDuration = (ticket: Ticket) => {
+  const pausedTime = getTicketPausedTime(ticket);
+  if (!pausedTime) return "—";
   const pauseMins = getTicketPauseMinutes(ticket);
-  if (pauseMins <= 0) {
-    const pausedTime = getTicketPausedTime(ticket);
-    if (!pausedTime) return "—";
-    return "0 phút";
-  }
+  if (pauseMins <= 0) return "0 phút";
   return formatMinutesToReadable(pauseMins);
 };
 
@@ -433,7 +422,7 @@ const getTicketSlaInfo = (ticket: Ticket) => {
   const pad = (num: number) => String(num).padStart(2, "0");
   const deadlineLabel = `${pad(deadline.getHours())}:${pad(deadline.getMinutes())} ${pad(deadline.getDate())}/${pad(deadline.getMonth() + 1)}`;
 
-  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel";
+  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel" || !!getTicketResolveTime(ticket);
 
   let status: "Under SLA" | "Going to breach SLA" | "Failure SLA" = "Under SLA";
   if (workMins >= slaMins) {
