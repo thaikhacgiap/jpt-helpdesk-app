@@ -413,31 +413,32 @@ const getTicketSlaInfo = (ticket: Ticket) => {
     return {
       durationLabel: `${slaHours}h`,
       deadlineLabel: "—",
-      status: ticket.sla_status || "Under SLA",
+      status: "Under SLA",
     };
   }
 
-  const deadline = new Date(start.getTime() + slaHours * 3600000);
+  const slaMins = slaHours * 60;
+  const totalMins = getTicketTotalDurationMinutes(ticket) ?? 0;
+  const pauseMins = getTicketPauseMinutes(ticket);
+  const workMins = Math.max(0, totalMins - pauseMins);
+
+  // Hạn deadline được cộng thêm thời gian tạm dừng (Pause duration)
+  const deadline = new Date(start.getTime() + (slaMins + pauseMins) * 60000);
   const pad = (num: number) => String(num).padStart(2, "0");
   const deadlineLabel = `${pad(deadline.getHours())}:${pad(deadline.getMinutes())} ${pad(deadline.getDate())}/${pad(deadline.getMonth() + 1)}`;
 
-  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed";
-  const endStr = ticket.end_time || ticket.endTime || ticket.close_time || ticket.tt_close_time;
-  const finishDate = (isCompleted && endStr) ? parseServerDate(endStr) : null;
+  const isCompleted = ticket.tt_status === "Completed" || ticket.tt_status === "Closed" || ticket.tt_status === "Cancel";
 
   let status: "Under SLA" | "Going to breach SLA" | "Failure SLA" = "Under SLA";
-  if (finishDate) {
-    if (finishDate.getTime() <= deadline.getTime()) {
-      status = "Under SLA";
-    } else {
-      status = "Failure SLA";
-    }
+  if (workMins >= slaMins) {
+    status = "Failure SLA";
+  } else if (isCompleted) {
+    status = "Under SLA";
   } else {
-    const now = new Date();
-    const remainingMs = deadline.getTime() - now.getTime();
-    if (remainingMs < 0) {
+    const remainingMins = slaMins - workMins;
+    if (remainingMins <= 0) {
       status = "Failure SLA";
-    } else if (remainingMs < slaHours * 3600000 * 0.25) {
+    } else if (remainingMins <= slaMins * 0.25) {
       status = "Going to breach SLA";
     } else {
       status = "Under SLA";
@@ -447,7 +448,7 @@ const getTicketSlaInfo = (ticket: Ticket) => {
   return {
     durationLabel: `${slaHours}h`,
     deadlineLabel,
-    status: ticket.sla_status || status,
+    status,
   };
 };
 
@@ -844,7 +845,7 @@ export default function TicketsPage() {
     if (filters.category && t.category !== filters.category) return false;
     if (filters.priority && t.priority !== filters.priority) return false;
     if (filters.tt_status && t.tt_status !== filters.tt_status) return false;
-    if (filters.sla_status && t.sla_status !== filters.sla_status) return false;
+    if (filters.sla_status && getTicketSlaInfo(t).status !== filters.sla_status) return false;
     return true;
   });
 
@@ -1644,7 +1645,7 @@ export default function TicketsPage() {
                     {/* SLA Status */}
                     {visibleColumns.sla_status && (
                       <td className="px-3 py-2 whitespace-nowrap border-b border-slate-200">
-                        {renderSlaStatusBadge(ticket.sla_status || slaInfo.status)}
+                        {renderSlaStatusBadge(slaInfo.status)}
                       </td>
                     )}
 
