@@ -8,7 +8,7 @@ import {
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
   Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
 } from "lucide-react";
-import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate } from "@/lib/ticket-operations";
+import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
@@ -5021,6 +5021,11 @@ export default function TicketFormModal({
       const progressStr = serializeProgress(nextCompleted, nextSaved);
 
       if (currentStep === "create") {
+        let finalRemark = checkData.saleRemark || "";
+        if (createData.requestCode && (!finalRemark || !finalRemark.includes(createData.requestCode))) {
+          finalRemark = finalRemark ? `${finalRemark} | [Mã yêu cầu: ${createData.requestCode}]` : `[Mã yêu cầu: ${createData.requestCode}]`;
+        }
+
         const updatePayload: any = {
           request_code: createData.requestCode || null,
           title:        createData.title       || null,
@@ -5031,78 +5036,59 @@ export default function TicketFormModal({
           tt_status:    ttStatus,
           request_time: createData.requestTime || null,
           start_time:   createData.startTime   || null,
+          remark:       finalRemark            || null,
           progress:     progressStr,
           updated_at:   new Date().toISOString(),
         };
-        let { error } = await supabase
-          .from("tickets")
-          .update(updatePayload)
-          .eq("id", dbId);
-        if (error && (error.message?.includes("request_time") || error.message?.includes("request_code"))) {
-          if (error.message?.includes("request_time")) delete updatePayload.request_time;
-          if (error.message?.includes("request_code")) delete updatePayload.request_code;
-          const retry = await supabase
-            .from("tickets")
-            .update(updatePayload)
-            .eq("id", dbId);
-          error = retry.error;
-        }
-        if (error) { alert("Lỗi lưu ticket: " + error.message); return; }
+
+        const { error } = await safeTicketUpdate(dbId, updatePayload);
+        if (error) { alert("Lỗi lưu ticket: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "check") {
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            customer_id:    checkData.customerId    || null,
-            customer_name:  checkData.customerName  || null,
-            contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
-            contract_no:    checkData.contractNo    || null,
-            contract_scope: checkData.scope         || null,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:       progressStr,
-            updated_at:     new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu contract: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          customer_id:    checkData.customerId    || null,
+          customer_name:  checkData.customerName  || null,
+          contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+          contract_no:    checkData.contractNo    || null,
+          contract_scope: checkData.scope         || null,
+          remark: JSON.stringify({
+            saleRemark: checkData.saleRemark || "",
+            healthCheckRound: checkData.healthCheckRound || "",
+            finished: {
+              briefSummary: finishedData.briefSummary,
+              currentStatus: finishedData.currentStatus,
+              customerConfirm: finishedData.customerConfirm
+            },
+            report: reportingData
+          }),
+          progress:       progressStr,
+          updated_at:     new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu contract: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "arrange") {
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            assigned:   arrangeData.assigned.join(", ")  || null,
-            following:  arrangeData.following.join(", ") || null,
-            progress:   progressStr,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu arrange resource: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          assigned:   arrangeData.assigned.join(", ")  || null,
+          following:  arrangeData.following.join(", ") || null,
+          progress:   progressStr,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu arrange resource: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "troubleshoot") {
         const runbookObj = getUpdatedRunbookObj(runbookSteps, runbooksList, activeRunbookName);
         const lastHold = holdsList[holdsList.length - 1];
         const holdReasonStr = JSON.stringify({ holds: holdsList });
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            hold_time:   lastHold?.startTime || null,
-            unhold_time: lastHold?.stopTime  || null,
-            hold_reason: holdReasonStr,
-            runbook:     JSON.stringify(runbookObj),
-            onsite:      onsite                       || null,
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu troubleshoot: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          hold_time:   lastHold?.startTime || null,
+          unhold_time: lastHold?.stopTime  || null,
+          hold_reason: holdReasonStr,
+          runbook:     JSON.stringify(runbookObj),
+          onsite:      onsite                       || null,
+          progress:    progressStr,
+          updated_at:  new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu troubleshoot: " + (error.message || String(error))); return; }
 
         if (troubleshootData.newUpdate.trim()) {
           const currentUser = getCurrentUser();
@@ -5136,31 +5122,17 @@ export default function TicketFormModal({
           progress:      progressStr,
           updated_at:    new Date().toISOString(),
         };
-        let { error } = await supabase
-          .from("tickets")
-          .update(updatePayload)
-          .eq("id", dbId);
-        if (error && (error.message?.includes("resolve_time") || error.message?.includes("start_time"))) {
-          if (error.message?.includes("resolve_time")) delete updatePayload.resolve_time;
-          const retry = await supabase
-            .from("tickets")
-            .update(updatePayload)
-            .eq("id", dbId);
-          error = retry.error;
-        }
-        if (error) { alert("Lỗi lưu completed: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, updatePayload);
+        if (error) { alert("Lỗi lưu completed: " + (error.message || String(error))); return; }
 
       } else {
         // Generic step save
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:  ttStatus,
-            progress:   progressStr,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu step: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          tt_status:  ttStatus,
+          progress:   progressStr,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
       }
 
       setSavedSteps(nextSaved);
@@ -5238,7 +5210,13 @@ export default function TicketFormModal({
         } else {
           /* Update existing ticket */
           if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
+          let finalRemark = checkData.saleRemark || "";
+          if (createData.requestCode && (!finalRemark || !finalRemark.includes(createData.requestCode))) {
+            finalRemark = finalRemark ? `${finalRemark} | [Mã yêu cầu: ${createData.requestCode}]` : `[Mã yêu cầu: ${createData.requestCode}]`;
+          }
+
           const updatePayload: any = {
+            request_code: createData.requestCode || null,
             title:        createData.title       || null,
             description:  createData.description || null,
             tt_type:      createData.ttType      || null,
@@ -5247,81 +5225,62 @@ export default function TicketFormModal({
             tt_status:    ttStatus,
             request_time: createData.requestTime || null,
             start_time:   createData.startTime   || null,
+            remark:       finalRemark            || null,
             progress:     progressStr,
             updated_at:   new Date().toISOString(),
           };
-          let { error } = await supabase
-            .from("tickets")
-            .update(updatePayload)
-            .eq("id", dbId);
-          if (error && error.message?.includes("request_time")) {
-            delete updatePayload.request_time;
-            const retry = await supabase
-              .from("tickets")
-              .update(updatePayload)
-              .eq("id", dbId);
-            error = retry.error;
-          }
-          if (error) { alert("Lỗi cập nhật ticket: " + error.message); return; }
+          const { error } = await safeTicketUpdate(dbId, updatePayload);
+          if (error) { alert("Lỗi cập nhật ticket: " + (error.message || String(error))); return; }
         }
 
       } else if (currentStep === "check") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            customer_id:    checkData.customerId    || null,
-            customer_name:  checkData.customerName  || null,
-            contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
-            contract_no:    checkData.contractNo    || null,
-            contract_scope: checkData.scope         || null,
-            remark: JSON.stringify({
-              saleRemark: checkData.saleRemark || "",
-              healthCheckRound: checkData.healthCheckRound || "",
-              finished: {
-                briefSummary: finishedData.briefSummary,
-                currentStatus: finishedData.currentStatus,
-                customerConfirm: finishedData.customerConfirm
-              },
-              report: reportingData
-            }),
-            progress:       progressStr,
-            updated_at:     new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu contract: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          customer_id:    checkData.customerId    || null,
+          customer_name:  checkData.customerName  || null,
+          contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+          contract_no:    checkData.contractNo    || null,
+          contract_scope: checkData.scope         || null,
+          remark: JSON.stringify({
+            saleRemark: checkData.saleRemark || "",
+            healthCheckRound: checkData.healthCheckRound || "",
+            finished: {
+              briefSummary: finishedData.briefSummary,
+              currentStatus: finishedData.currentStatus,
+              customerConfirm: finishedData.customerConfirm
+            },
+            report: reportingData
+          }),
+          progress:       progressStr,
+          updated_at:     new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu contract: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "arrange") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            assigned:   arrangeData.assigned.join(", ")  || null,
-            following:  arrangeData.following.join(", ") || null,
-            progress:   progressStr,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu arrange resource: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          assigned:   arrangeData.assigned.join(", ")  || null,
+          following:  arrangeData.following.join(", ") || null,
+          progress:   progressStr,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu arrange resource: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "troubleshoot") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const runbookObj = getUpdatedRunbookObj(runbookSteps, runbooksList, activeRunbookName);
         const lastHold = holdsList[holdsList.length - 1];
         const holdReasonStr = JSON.stringify({ holds: holdsList });
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            hold_time:   lastHold?.startTime || null,
-            unhold_time: lastHold?.stopTime  || null,
-            hold_reason: holdReasonStr,
-            runbook:     JSON.stringify(runbookObj),
-            onsite:      onsite                       || null,
-            progress:    progressStr,
-            updated_at:  new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu troubleshoot: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          hold_time:   lastHold?.startTime || null,
+          unhold_time: lastHold?.stopTime  || null,
+          hold_reason: holdReasonStr,
+          runbook:     JSON.stringify(runbookObj),
+          onsite:      onsite                       || null,
+          progress:    progressStr,
+          updated_at:  new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu troubleshoot: " + (error.message || String(error))); return; }
 
         if (troubleshootData.newUpdate.trim()) {
           const currentUser = getCurrentUser();
@@ -5356,31 +5315,17 @@ export default function TicketFormModal({
           progress:      progressStr,
           updated_at:    new Date().toISOString(),
         };
-        let { error } = await supabase
-          .from("tickets")
-          .update(updatePayload)
-          .eq("id", dbId);
-        if (error && (error.message?.includes("resolve_time") || error.message?.includes("start_time"))) {
-          if (error.message?.includes("resolve_time")) delete updatePayload.resolve_time;
-          const retry = await supabase
-            .from("tickets")
-            .update(updatePayload)
-            .eq("id", dbId);
-          error = retry.error;
-        }
-        if (error) { alert("Lỗi lưu completed: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, updatePayload);
+        if (error) { alert("Lỗi lưu completed: " + (error.message || String(error))); return; }
 
       } else {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
-        const { error } = await supabase
-          .from("tickets")
-          .update({
-            tt_status:  ttStatus,
-            progress:   progressStr,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", dbId);
-        if (error) { alert("Lỗi lưu step: " + error.message); return; }
+        const { error } = await safeTicketUpdate(dbId, {
+          tt_status:  ttStatus,
+          progress:   progressStr,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
       }
 
       setCompletedSteps(nextCompleted);

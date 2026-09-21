@@ -138,25 +138,11 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       updated_at:     nowIso,
     };
 
-    let { data, error } = await supabase
-      .from('tickets')
-      .insert([insertPayload])
-      .select();
-
-    if (error && (error.message?.includes('request_time') || error.message?.includes('request_code'))) {
-      if (error.message?.includes('request_time')) delete insertPayload.request_time;
-      if (error.message?.includes('request_code')) delete insertPayload.request_code;
-      const retry = await supabase
-        .from('tickets')
-        .insert([insertPayload])
-        .select();
-      data = retry.data;
-      error = retry.error;
-    }
+    const { data, error } = await safeTicketInsert(insertPayload);
 
     if (error) {
       console.error('Error creating ticket:', error)
-      return { success: false, error: error.message }
+      return { success: false, error: error.message || String(error) }
     }
 
     const dbId = data?.[0]?.id || ''
@@ -165,6 +151,65 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
     console.error('Error creating ticket:', error)
     return { success: false, error: String(error) }
   }
+}
+
+/**
+ * Safely inserts a ticket into Supabase, automatically retrying and removing any columns
+ * that do not exist in the database schema cache.
+ */
+export async function safeTicketInsert(payload: any): Promise<{ data: any; error: any }> {
+  let insertPayload = { ...payload };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data, error } = await supabase
+      .from('tickets')
+      .insert([insertPayload])
+      .select();
+
+    if (!error) return { data, error: null };
+
+    const match = error.message?.match(/Could not find the '([^']+)' column/) ||
+                  error.message?.match(/column "([^"]+)" of relation/) ||
+                  error.message?.match(/column '([^']+)' does not exist/);
+
+    if (match && match[1] && insertPayload.hasOwnProperty(match[1])) {
+      console.warn(`[Supabase Schema] Column '${match[1]}' not in tickets schema cache. Removing and retrying...`);
+      delete insertPayload[match[1]];
+      continue;
+    }
+
+    return { data, error };
+  }
+  return { data: null, error: { message: 'Quá số lần thử insert ticket' } };
+}
+
+/**
+ * Safely updates a ticket in Supabase, automatically retrying and removing any columns
+ * that do not exist in the database schema cache.
+ */
+export async function safeTicketUpdate(dbId: string, payload: any): Promise<{ data: any; error: any }> {
+  let updatePayload = { ...payload };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data, error } = await supabase
+      .from('tickets')
+      .update(updatePayload)
+      .eq('id', dbId)
+      .select();
+
+    if (!error) return { data, error: null };
+
+    const match = error.message?.match(/Could not find the '([^']+)' column/) ||
+                  error.message?.match(/column "([^"]+)" of relation/) ||
+                  error.message?.match(/column '([^']+)' does not exist/);
+
+    if (match && match[1] && updatePayload.hasOwnProperty(match[1])) {
+      console.warn(`[Supabase Schema] Column '${match[1]}' not in tickets schema cache. Removing and retrying...`);
+      delete updatePayload[match[1]];
+      continue;
+    }
+
+    return { data, error };
+  }
+  return { data: null, error: { message: 'Quá số lần thử update ticket' } };
 }
 
 // Helper to extract request code from a ticket across various storage formats
