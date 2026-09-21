@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, fetchUsers, SystemUser } from "@/lib/auth-operations";
+import { login } from "@/lib/auth-operations";
 import {
   Shield,
   Headphones,
@@ -13,8 +13,7 @@ import {
   EyeOff,
   User,
   ArrowRight,
-  Loader2,
-  Sparkles
+  Loader2
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -25,14 +24,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [quickAccounts, setQuickAccounts] = useState<SystemUser[]>([]);
-  const [showQuickModal, setShowQuickModal] = useState(false);
-
-  useEffect(() => {
-    fetchUsers()
-      .then((data) => setQuickAccounts(data || []))
-      .catch((err) => console.error("Error loading quick accounts:", err));
-  }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,32 +54,6 @@ export default function LoginPage() {
     } catch (err: any) {
       setLoading(false);
       setError("Đăng nhập thất bại. Lỗi kết nối máy chủ.");
-    }
-  };
-
-  const handleQuickLogin = async (selectedUser: SystemUser) => {
-    setError("");
-    setLoading(true);
-    setEmail(selectedUser.email);
-    const pwd = selectedUser.password || "123";
-    setPassword(pwd);
-    setShowQuickModal(false);
-
-    try {
-      const result = await login(selectedUser.email, pwd);
-      setLoading(false);
-      if (result.success && result.user) {
-        if (result.user.role === "Customer") {
-          router.push("/portal");
-        } else {
-          router.push("/dashboard");
-        }
-      } else {
-        setError(result.error || "Đăng nhập thất bại.");
-      }
-    } catch (err) {
-      setLoading(false);
-      setError("Đăng nhập thất bại. Lỗi kết nối hệ thống.");
     }
   };
 
@@ -685,79 +650,6 @@ export default function LoginPage() {
                 )}
               </button>
             </form>
-
-            {/* Quick Account Test Selector (Demo) */}
-            {quickAccounts.length > 0 && (
-              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowQuickModal(!showQuickModal)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--ink-faint)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <Sparkles size={14} style={{ color: '#FBBF24' }} />
-                  <span>{showQuickModal ? "Ẩn danh sách tài khoản mẫu" : "Chọn nhanh tài khoản mẫu (Demo)"}</span>
-                </button>
-              </div>
-            )}
-
-            {showQuickModal && (
-              <div style={{
-                marginTop: '12px',
-                padding: '12px',
-                background: 'rgba(10, 15, 44, 0.85)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '16px',
-                maxHeight: '190px',
-                overflowY: 'auto'
-              }}>
-                <p style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ink-soft)', marginBottom: '8px', letterSpacing: '0.5px' }}>
-                  Tài khoản có sẵn (Pass: 123)
-                </p>
-                <div style={{ display: 'grid', gap: '6px' }}>
-                  {quickAccounts.slice(0, 6).map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleQuickLogin(u)}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '8px 10px',
-                        borderRadius: '10px',
-                        background: 'rgba(255, 255, 255, 0.04)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        color: 'var(--ink)'
-                      }}
-                    >
-                      <div>
-                        <p style={{ fontSize: '12px', fontWeight: 700, margin: 0 }}>{u.name}</p>
-                        <p style={{ fontSize: '11px', color: 'var(--ink-faint)', margin: 0 }}>{u.email}</p>
-                      </div>
-                      <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '2px 8px', borderRadius: '12px', background: 'rgba(62, 123, 255, 0.2)', color: '#8FB2FF' }}>
-                        {u.role}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="login-card-footer">
               Cần hỗ trợ? Liên hệ <strong style={{ color: '#8FB2FF' }}>techsupport@jprotech.vn</strong>
