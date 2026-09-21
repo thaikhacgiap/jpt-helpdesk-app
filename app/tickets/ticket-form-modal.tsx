@@ -21,7 +21,6 @@ import DateTimePicker from "@/components/common/datetime-picker";
 import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
 import { AttachedFile } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
-import { getTicketRequestCode } from "@/lib/ticket-operations";
 
 /* ═══════════════════════════════════════════════════════════ */
 /* Types                                                       */
