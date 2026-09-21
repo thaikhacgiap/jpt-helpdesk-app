@@ -6,7 +6,7 @@ import {
   X, ChevronDown, Save, Edit2, CheckCircle, CheckCircle2,
   Search, Building2, FileText, Check, Maximize2, Download,
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
-  Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
+  Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, Upload, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
@@ -2060,6 +2060,7 @@ export interface FinishedFormData {
   currentStatus?: string;
   reportUrl?: string;
   reportFileName?: string;
+  templateFileName?: string;
   approver?: string;
   approvalStatus?: string;
   rejectReason?: string;
@@ -2109,10 +2110,17 @@ function CompletedForm({
   onEdit?: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const templateInputRef = useRef<HTMLInputElement>(null);
+  const [customTemplateName, setCustomTemplateName] = useState<string>(
+    finishedData.templateFileName || "Mau_bao_cao_su_co_v2.docx"
+  );
+  const [templateUploadSuccess, setTemplateUploadSuccess] = useState(false);
 
-  // Time calculations
-  const effectiveStartTime = finishedData.startTime || createData.startTime || "";
-  const effectiveResolveTime = finishedData.resolveTime || closeTime || "";
+  // Time calculations & formatters
+  const effectiveStartTime = finishedData.startTime || createData.startTime || ticket?.start_time || "";
+  const effectiveResolveTime = finishedData.resolveTime || closeTime || ticket?.close_time || ticket?.resolve_time || "";
+  const ticketCreatedAt = createData.requestTime || ticket?.request_time || ticket?.created_at || "";
+  const ticketReceivedAt = ticket?.created_at || createData.requestTime || "";
 
   const getMinutesBetween = (startStr: string, stopStr: string) => {
     if (!startStr) return 0;
@@ -2126,8 +2134,13 @@ function CompletedForm({
 
   const formatMinsToShortReadable = (mins: number) => {
     if (mins <= 0) return "0 phút";
-    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(mins / 1440);
+    const hrs = Math.floor((mins % 1440) / 60);
     const m = mins % 60;
+    if (days > 0) {
+      if (hrs > 0) return `${days}d ${hrs}h ${m > 0 ? `${m}m` : ''}`.trim();
+      return `${days}d ${m > 0 ? `${m}m` : ''}`.trim();
+    }
     if (hrs > 0 && m > 0) return `${hrs}h ${m < 10 ? '0' : ''}${m}m`;
     if (hrs > 0) return `${hrs}h 00m`;
     return `${m} phút`;
@@ -2135,14 +2148,21 @@ function CompletedForm({
 
   const formatMinsToReadableVietnamese = (mins: number) => {
     if (mins <= 0) return "0 phút";
-    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(mins / 1440);
+    const hrs = Math.floor((mins % 1440) / 60);
     const m = mins % 60;
+    if (days > 0) {
+      let res = `${days} ngày`;
+      if (hrs > 0) res += ` ${hrs} giờ`;
+      if (m > 0) res += ` ${m} phút`;
+      return res;
+    }
     if (hrs > 0 && m > 0) return `${hrs} giờ ${m} phút`;
     if (hrs > 0) return `${hrs} giờ`;
     return `${m} phút`;
   };
 
-  const formatTimeOnly = (dateStr?: string | null, fallback: string = "08:30") => {
+  const formatTimeOnly = (dateStr?: string | null, fallback: string = "—") => {
     if (!dateStr) return fallback;
     try {
       const d = new Date(dateStr);
@@ -2151,6 +2171,18 @@ function CompletedForm({
       return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     } catch {
       return fallback;
+    }
+  };
+
+  const formatDateShort = (dateStr?: string | null) => {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "";
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+    } catch {
+      return "";
     }
   };
 
@@ -2165,24 +2197,49 @@ function CompletedForm({
     }
   };
 
-  // Hold calculations
-  let calculatedHoldMins = 0;
-  if (holdsList && holdsList.length > 0) {
-    holdsList.forEach((h) => {
-      calculatedHoldMins += getMinutesBetween(h.startTime, h.stopTime);
+  // Hold calculations strictly from troubleshoot holdsList
+  const realHoldsList = Array.isArray(holdsList) ? holdsList.filter((h) => h && (h.reason || h.startTime)) : [];
+  
+  const calculateHoldMinutes = (list: any[]) => {
+    if (!list || list.length === 0) return 0;
+    const intervals: { start: number; end: number }[] = [];
+    list.forEach((h) => {
+      if (!h || !h.startTime) return;
+      const s = new Date(h.startTime).getTime();
+      if (isNaN(s)) return;
+      const e = h.stopTime ? new Date(h.stopTime).getTime() : Date.now();
+      if (isNaN(e) || e <= s) return;
+      intervals.push({ start: s, end: e });
     });
-  } else {
-    // If empty, provide standard hold values (75 mins total)
-    calculatedHoldMins = 75;
-  }
+    if (intervals.length === 0) return 0;
+    intervals.sort((a, b) => a.start - b.start);
+    const merged: { start: number; end: number }[] = [];
+    intervals.forEach((interval) => {
+      if (merged.length === 0) {
+        merged.push({ ...interval });
+      } else {
+        const last = merged[merged.length - 1];
+        if (interval.start <= last.end) {
+          last.end = Math.max(last.end, interval.end);
+        } else {
+          merged.push({ ...interval });
+        }
+      }
+    });
+    let totalMs = 0;
+    merged.forEach((i) => (totalMs += i.end - i.start));
+    return Math.floor(totalMs / 60000);
+  };
+
+  const calculatedHoldMins = calculateHoldMinutes(realHoldsList);
 
   // Lifecycle & Work time calculations
-  const totalLifecycleMins = getMinutesBetween(createData.requestTime || effectiveStartTime, effectiveResolveTime) || 470; // default 7h 50m
-  const totalProcessingMins = getMinutesBetween(effectiveStartTime, effectiveResolveTime) || 440; // default 7h 20m
-  const netMins = Math.max(0, totalProcessingMins - calculatedHoldMins) || 365; // default 6h 05m
-  const responseTimeMins = getMinutesBetween(createData.requestTime || "", effectiveStartTime) || 30; // default 30m
+  const totalLifecycleMins = getMinutesBetween(ticketCreatedAt || effectiveStartTime, effectiveResolveTime) || 470;
+  const totalProcessingMins = getMinutesBetween(effectiveStartTime, effectiveResolveTime) || 440;
+  const netMins = Math.max(0, totalProcessingMins - calculatedHoldMins);
+  const responseTimeMins = getMinutesBetween(ticketCreatedAt, effectiveStartTime) || 30;
 
-  // SLA Calculation (Default P2 = 8h = 480 mins)
+  // SLA Calculation
   const priorityStr = createData.priority || ticket?.priority || "P2 – Cao";
   let slaTargetMins = 480;
   let slaLabel = "SLA P2: xử lý trong 8h";
@@ -2203,7 +2260,7 @@ function CompletedForm({
   const isInSla = netMins <= slaTargetMins;
   const slaRemainingMins = Math.max(0, slaTargetMins - netMins);
   const slaOverdueMins = Math.max(0, netMins - slaTargetMins);
-  const slaPercentage = Math.min(100, Math.round((netMins / slaTargetMins) * 100)) || 76;
+  const slaPercentage = Math.min(100, Math.round((netMins / slaTargetMins) * 100)) || 100;
 
   // Form completion validations
   const isTimeFilled = Boolean(effectiveStartTime && effectiveResolveTime);
@@ -2211,8 +2268,6 @@ function CompletedForm({
   const isRootcauseFilled = Boolean((finishedData.rootcause && finishedData.rootcause.trim().length > 0) || reportingData.chanDoan);
   const isReportFilled = Boolean(finishedData.reportFileName || finishedData.reportUrl || ticket?.document_link);
   const isApproverFilled = Boolean(finishedData.approver);
-
-  const isAllRequiredDone = isTimeFilled && isSummaryFilled && isRootcauseFilled && isReportFilled && isApproverFilled;
 
   // Handlers
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2224,37 +2279,39 @@ function CompletedForm({
     });
   };
 
+  const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCustomTemplateName(file.name);
+    onFinishedDataChange({ templateFileName: file.name });
+    setTemplateUploadSuccess(true);
+    setTimeout(() => setTemplateUploadSuccess(false), 3500);
+  };
+
   const handleDownloadTemplate = () => {
     onPrintReport();
   };
 
-  const displayHoldRows = (holdsList && holdsList.length > 0) ? holdsList : [
-    {
-      timeRange: "10:15 - 11:00",
-      reason: "Chờ khách hàng cấp quyền truy cập",
-      duration: "45 phút",
-    },
-    {
-      timeRange: "14:00 - 14:30",
-      reason: "Chờ phê duyệt thay đổi (CAB)",
-      duration: "30 phút",
-    },
-  ];
-
   const currentApprovalStatus = finishedData.approvalStatus || "Chưa gửi duyệt";
 
+  // Segmented progress calculations
+  const totalTrackedMins = Math.max(1, responseTimeMins + netMins + calculatedHoldMins);
+  const pResponse = Math.max(5, Math.min(60, Math.round((responseTimeMins / totalTrackedMins) * 100)));
+  const pHold = calculatedHoldMins > 0 ? Math.max(8, Math.min(40, Math.round((calculatedHoldMins / totalTrackedMins) * 100))) : 0;
+  const pWork = Math.max(10, 100 - pResponse - pHold);
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#eef4f2] text-slate-800 font-sans p-6 sm:p-7 space-y-6">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#eef4f2] text-slate-800 font-sans p-5 sm:p-6 space-y-4 sm:space-y-5">
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* HEADER: TICKET CODE, TITLE, STATUS & METADATA               */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="space-y-1.5 shrink-0">
+      <div className="space-y-1.5 shrink-0 bg-white/60 p-3.5 rounded-xl border border-slate-200/60 shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="text-xl sm:text-2xl font-extrabold text-[#0f3d39] tracking-tight font-mono">
               {ticket?.ticket_id || ticket?.request_code || "INC-20458"}
             </span>
-            <span className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
+            <span className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
               {ticket?.title || createData.title || "Lỗi VPN không kết nối được từ chi nhánh Hải Phòng"}
             </span>
           </div>
@@ -2286,19 +2343,19 @@ function CompletedForm({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* MAIN 3-COLUMN DASHBOARD                                     */}
+      {/* BALANCED 3-COLUMN DASHBOARD (EQUAL HEIGHT, TIGHTER GAP)      */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-4 items-stretch">
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 1: HOÀN THÀNH                                        */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4 flex flex-col justify-between min-h-[580px]">
-          <div className="space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col justify-between h-full space-y-4">
+          <div className="space-y-3.5">
             <h3 className="text-base font-bold text-slate-900 tracking-tight">Hoàn thành</h3>
 
             {/* Row: Start & Resolve Times */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 block">
                   Thời gian bắt đầu <span className="text-red-500">*</span>
                 </label>
@@ -2314,7 +2371,7 @@ function CompletedForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 block">
                   Thời gian hoàn thành <span className="text-red-500">*</span>
                 </label>
@@ -2332,7 +2389,7 @@ function CompletedForm({
             </div>
 
             {/* Field: Tóm tắt xử lý */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-600 block">
                 Tóm tắt xử lý <span className="text-red-500">*</span>
               </label>
@@ -2341,7 +2398,7 @@ function CompletedForm({
                   value={finishedData.briefSummary}
                   onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 500) })}
                   disabled={!editing}
-                  rows={5}
+                  rows={4}
                   placeholder="Kiểm tra log FortiGate, phát hiện tunnel IPsec của chi nhánh Hải Phòng bị ngắt do lệch pre-shared key sau đợt đổi chứng chỉ. Đã cấu hình lại key hai đầu và kiểm tra kết nối ổn định trong 30 phút."
                   className="w-full text-xs leading-relaxed p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
@@ -2352,7 +2409,7 @@ function CompletedForm({
             </div>
 
             {/* Field: Kết luận / Nguyên nhân gốc */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-600 block">
                 Kết luận / Nguyên nhân gốc <span className="text-red-500">*</span>
               </label>
@@ -2365,7 +2422,7 @@ function CompletedForm({
                     onReportingDataChange({ chanDoan: val });
                   }}
                   disabled={!editing}
-                  rows={5}
+                  rows={4}
                   placeholder="Nguyên nhân gốc: quy trình đổi chứng chỉ định kỳ không cập nhật pre-shared key của hệ thống VPN trung tâm. Đề xuất bổ sung bước kiểm tra VPN vào checklist đổi chứng chỉ và cảnh báo trước khi hết hạn."
                   className="w-full text-xs leading-relaxed p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
@@ -2377,7 +2434,7 @@ function CompletedForm({
           </div>
 
           {/* Footer Status inside Column 1 */}
-          <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-xs">
+          <div className="pt-2.5 border-t border-slate-100 flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${isTimeFilled && isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
             <span className={isTimeFilled && isSummaryFilled && isRootcauseFilled ? "text-slate-600 font-medium" : "text-slate-400"}>
               {isTimeFilled && isSummaryFilled && isRootcauseFilled ? "Các trường bắt buộc đã hoàn tất" : "Vui lòng nhập đủ các trường bắt buộc"}
@@ -2386,36 +2443,70 @@ function CompletedForm({
         </div>
 
         {/* ─────────────────────────────────────────────────────────── */}
-        {/* COLUMN 2: REPORT                                            */}
+        {/* COLUMN 2: BÁO CÁO (RENAMED FROM REPORT)                     */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4 flex flex-col justify-between min-h-[580px]">
-          <div className="space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col justify-between h-full space-y-4">
+          <div className="space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">Report</h3>
+              <h3 className="text-base font-bold text-slate-900 tracking-tight">Báo cáo</h3>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                 <span>{currentApprovalStatus}</span>
               </span>
             </div>
 
-            {/* Template Download Box */}
-            <div className="p-3 bg-[#f8fafc] border border-slate-200 rounded-xl flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-800 truncate">Mau_bao_cao_su_co_v2.docx</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Template báo cáo sự cố · 48 KB</p>
+            {/* Template Download & Upload Box */}
+            <div className="p-3 bg-[#f8fafc] border border-slate-200 rounded-xl space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-800 truncate" title={customTemplateName}>
+                    {customTemplateName}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Template báo cáo sự cố · .doc / .docx</p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer"
+                    title="Tải mẫu template về máy"
+                  >
+                    <Download size={13} className="text-slate-600" />
+                    <span>Tải template</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => templateInputRef.current?.click()}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100/70 border border-teal-200 rounded-lg text-xs font-semibold text-teal-800 transition shadow-2xs cursor-pointer"
+                    title="Tải lên template báo cáo mới (.doc, .docx)"
+                  >
+                    <Upload size={13} className="text-teal-700" />
+                    <span>Cập nhật</span>
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleDownloadTemplate}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer shrink-0"
-              >
-                <Download size={13} className="text-slate-600" />
-                <span>Tải template</span>
-              </button>
+
+              {/* Hidden template file input */}
+              <input
+                type="file"
+                ref={templateInputRef}
+                onChange={handleTemplateUpload}
+                className="hidden"
+                accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              />
+
+              {templateUploadSuccess && (
+                <div className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1.5 animate-in fade-in duration-150">
+                  <Check size={12} className="text-emerald-600" />
+                  <span>Đã cập nhật template mới thành công!</span>
+                </div>
+              )}
             </div>
 
-            {/* File Report Box */}
-            <div className="space-y-1.5">
+            {/* File Report Upload Box */}
+            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-600 block">
                 File report <span className="text-red-500">*</span>
               </label>
@@ -2438,7 +2529,7 @@ function CompletedForm({
                       <p className="text-xs font-bold text-slate-800 truncate">
                         {finishedData.reportFileName || "BaoCao_INC-20458.docx"}
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">236 KB · vừa tải lên</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Đã đính kèm · vừa cập nhật</p>
                     </div>
                   </div>
                   {editing && (
@@ -2457,18 +2548,18 @@ function CompletedForm({
                   type="button"
                   disabled={!editing}
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-4 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                  className="w-full py-3.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1"
                 >
                   <UploadCloud size={20} className="text-[#0d9488]" />
                   <span className="text-xs font-semibold text-slate-700">Tải lên file báo cáo sự cố</span>
-                  <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .docx, .pdf, .xlsx</span>
+                  <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx</span>
                 </button>
               )}
             </div>
 
             {/* Row: Người duyệt & Trạng thái duyệt */}
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-7 space-y-1.5">
+            <div className="grid grid-cols-12 gap-2.5">
+              <div className="col-span-7 space-y-1">
                 <label className="text-xs font-semibold text-slate-600 block">
                   Người duyệt <span className="text-red-500">*</span>
                 </label>
@@ -2494,7 +2585,7 @@ function CompletedForm({
                 </select>
               </div>
 
-              <div className="col-span-5 space-y-1.5">
+              <div className="col-span-5 space-y-1">
                 <label className="text-xs font-semibold text-slate-600 block">Trạng thái duyệt</label>
                 <div className="h-9 px-2.5 rounded-xl bg-slate-100/90 border border-slate-200 flex items-center gap-1.5 text-xs font-medium text-slate-600 truncate">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
@@ -2504,23 +2595,23 @@ function CompletedForm({
             </div>
 
             {/* Field: Lý do từ chối */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-600 block">Lý do từ chối</label>
               <textarea
                 value={finishedData.rejectReason || ""}
                 onChange={(e) => onFinishedDataChange({ rejectReason: e.target.value })}
                 disabled={currentApprovalStatus !== "Từ chối" || !editing}
-                rows={3}
+                rows={2}
                 placeholder="Chỉ hiển thị khi người duyệt từ chối report."
-                className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-[#f8fafc] text-slate-700 resize-none disabled:text-slate-400 focus:outline-none"
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-[#f8fafc] text-slate-700 resize-none disabled:text-slate-400 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Checklist bàn giao */}
-          <div className="pt-3 border-t border-slate-100 space-y-2">
+          <div className="pt-2.5 border-t border-slate-100 space-y-1.5">
             <h4 className="text-xs font-bold text-slate-700">Checklist bàn giao</h4>
-            <div className="space-y-1.5 text-xs font-medium">
+            <div className="space-y-1 text-xs font-medium">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
                 <span className={isSummaryFilled && isRootcauseFilled ? "text-slate-700" : "text-slate-400"}>
@@ -2546,8 +2637,8 @@ function CompletedForm({
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 3: TỔNG KẾT                                          */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4 flex flex-col justify-between min-h-[580px]">
-          <div className="space-y-3.5">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col justify-between h-full space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 tracking-tight">Tổng kết</h3>
               <span className="text-xs font-medium text-slate-500 font-mono">
@@ -2556,78 +2647,92 @@ function CompletedForm({
             </div>
 
             {/* Segmented Timeline Progress Bar */}
-            <div className="space-y-1.5">
-              {/* Bar */}
-              <div className="w-full h-3 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
-                <div style={{ width: "10%" }} className="bg-slate-400 h-full" title="Chờ tiếp nhận: 10%" />
-                <div style={{ width: "55%" }} className="bg-[#0d9488] h-full" title="Đang xử lý: 55%" />
-                <div
-                  style={{
-                    width: "15%",
-                    backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 5px, #d97706 5px, #d97706 10px)"
-                  }}
-                  className="h-full"
-                  title="Hold: 15%"
-                />
-                <div style={{ width: "20%" }} className="bg-[#0d9488] h-full" title="Đang xử lý: 20%" />
+            <div className="space-y-1">
+              <div className="w-full h-2.5 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
+                <div style={{ width: `${pResponse}%` }} className="bg-slate-400 h-full" title={`Chờ tiếp nhận: ${pResponse}%`} />
+                <div style={{ width: `${pWork}%` }} className="bg-[#0d9488] h-full" title={`Đang xử lý: ${pWork}%`} />
+                {pHold > 0 && (
+                  <div
+                    style={{
+                      width: `${pHold}%`,
+                      backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 4px, #d97706 4px, #d97706 8px)"
+                    }}
+                    className="h-full"
+                    title={`Hold: ${pHold}%`}
+                  />
+                )}
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-4 text-[11px] text-slate-500 font-medium pt-0.5">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-slate-400" />
+              <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium pt-0.5">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-xs bg-slate-400" />
                   <span>Chờ tiếp nhận</span>
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-[#0d9488]" />
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-xs bg-[#0d9488]" />
                   <span>Đang xử lý</span>
                 </span>
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1">
                   <span
-                    style={{ backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 3px, #d97706 3px, #d97706 6px)" }}
-                    className="w-2.5 h-2.5 rounded-xs"
+                    style={{ backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #d97706 2px, #d97706 4px)" }}
+                    className="w-2 h-2 rounded-xs"
                   />
                   <span>Hold</span>
                 </span>
               </div>
             </div>
 
-            {/* 4-Milestone Grid */}
-            <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-3 grid grid-cols-4 gap-1 text-center">
+            {/* 4-Milestone Grid (Shows Date & Time) */}
+            <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 grid grid-cols-4 gap-1 text-center">
+              {/* Milestone 1: Tạo Ticket */}
               <div className="border-r border-slate-200 last:border-0 pr-1">
-                <span className="text-[10.5px] font-semibold text-slate-400 block uppercase">Tạo ticket</span>
-                <span className="text-xs font-extrabold text-slate-800 block mt-0.5 font-mono">
-                  {formatTimeOnly(createData.requestTime, "08:30")}
-                </span>
-              </div>
-              <div className="border-r border-slate-200 last:border-0 px-1">
-                <span className="text-[10.5px] font-semibold text-slate-400 block uppercase">Tiếp nhận</span>
-                <span className="text-xs font-extrabold text-slate-800 block mt-0.5 font-mono">
-                  {formatTimeOnly(ticket?.created_at, "08:42")}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium block">+12 phút</span>
-              </div>
-              <div className="border-r border-slate-200 last:border-0 px-1">
-                <span className="text-[10.5px] font-semibold text-slate-400 block uppercase truncate">Bắt đầu</span>
-                <span className="text-xs font-extrabold text-slate-800 block mt-0.5 font-mono">
-                  {formatTimeOnly(effectiveStartTime, "09:00")}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium block">+18 phút</span>
-              </div>
-              <div className="pl-1">
-                <span className="text-[10.5px] font-semibold text-slate-400 block uppercase truncate">Hoàn thành</span>
-                <span className="text-xs font-extrabold text-slate-800 block mt-0.5 font-mono">
-                  {formatTimeOnly(effectiveResolveTime, "16:20")}
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight">TẠO TICKET</span>
+                <span className="text-xs font-black text-slate-800 block mt-0.5 font-mono">
+                  {formatTimeOnly(ticketCreatedAt, "11:04")}
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium block">
+                  {formatDateShort(ticketCreatedAt) || "24/07"}
+                </span>
+              </div>
+
+              {/* Milestone 2: Tiếp nhận */}
+              <div className="border-r border-slate-200 last:border-0 px-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight">TIẾP NHẬN</span>
+                <span className="text-xs font-black text-slate-800 block mt-0.5 font-mono">
+                  {formatTimeOnly(ticketReceivedAt, "04:24")}
+                </span>
+                <span className="text-[10px] text-teal-700 font-semibold block">
+                  +{getMinutesBetween(ticketCreatedAt, ticketReceivedAt) || 12}p
+                </span>
+              </div>
+
+              {/* Milestone 3: Bắt đầu */}
+              <div className="border-r border-slate-200 last:border-0 px-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight truncate">BẮT ĐẦU</span>
+                <span className="text-xs font-black text-slate-800 block mt-0.5 font-mono">
+                  {formatTimeOnly(effectiveStartTime, "11:04")}
+                </span>
+                <span className="text-[10px] text-teal-700 font-semibold block">
+                  +{getMinutesBetween(ticketReceivedAt, effectiveStartTime) || 18}p
+                </span>
+              </div>
+
+              {/* Milestone 4: Hoàn thành */}
+              <div className="pl-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
+                <span className="text-xs font-black text-slate-800 block mt-0.5 font-mono">
+                  {formatTimeOnly(effectiveResolveTime, "11:28")}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium block truncate" title={`+${formatMinsToShortReadable(totalProcessingMins)}`}>
                   +{formatMinsToShortReadable(totalProcessingMins)}
                 </span>
               </div>
             </div>
 
             {/* Metrics List */}
-            <div className="space-y-2 text-xs divide-y divide-slate-100">
-              <div className="flex items-center justify-between pt-1">
+            <div className="space-y-1.5 text-xs divide-y divide-slate-100">
+              <div className="flex items-center justify-between pt-0.5">
                 <div>
                   <p className="font-semibold text-slate-700">Thời gian phản hồi</p>
                   <p className="text-[11px] text-slate-400">Tạo ticket → bắt đầu xử lý</p>
@@ -2635,7 +2740,7 @@ function CompletedForm({
                 <span className="font-bold text-slate-800">{formatMinsToReadableVietnamese(responseTimeMins)}</span>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1.5">
                 <div>
                   <p className="font-semibold text-slate-700">Tổng thời gian xử lý</p>
                   <p className="text-[11px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
@@ -2643,28 +2748,28 @@ function CompletedForm({
                 <span className="font-bold text-slate-800">{formatMinsToShortReadable(totalProcessingMins)}</span>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1.5">
                 <div>
                   <p className="font-semibold text-slate-700">Tổng thời gian hold</p>
-                  <p className="text-[11px] text-slate-400">Số lần hold: {displayHoldRows.length}</p>
+                  <p className="text-[11px] text-slate-400">Số lần hold: {realHoldsList.length}</p>
                 </div>
                 <span className="font-bold text-slate-800">{formatMinsToShortReadable(calculatedHoldMins)}</span>
               </div>
             </div>
 
             {/* Highlight Box: Thời gian xử lý thực */}
-            <div className="p-3.5 bg-[#eaf5f3] border border-[#aee0d4] rounded-xl flex items-center justify-between">
+            <div className="p-3 bg-[#eaf5f3] border border-[#aee0d4] rounded-xl flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-[#0f544a]">Thời gian xử lý thực</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
               </div>
-              <span className="text-xl font-extrabold text-[#0d695d] font-mono">
+              <span className="text-lg font-extrabold text-[#0d695d] font-mono">
                 {formatMinsToShortReadable(netMins)}
               </span>
             </div>
 
             {/* SLA & Vòng đời Section */}
-            <div className="space-y-2 text-xs pt-1">
+            <div className="space-y-1.5 text-xs pt-0.5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-slate-700">Tổng vòng đời ticket</p>
@@ -2673,7 +2778,7 @@ function CompletedForm({
                 <span className="font-bold text-slate-800">{formatMinsToShortReadable(totalLifecycleMins)}</span>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-0.5">
                 <span className="font-semibold text-slate-700">{slaLabel}</span>
                 <span className={`font-bold ${isInSla ? "text-[#0d9488]" : "text-rose-600"}`}>
                   {isInSla ? `Đạt SLA · còn ${formatMinsToShortReadable(slaRemainingMins)}` : `Vi phạm SLA · quá ${formatMinsToShortReadable(slaOverdueMins)}`}
@@ -2681,14 +2786,14 @@ function CompletedForm({
               </div>
 
               {/* SLA Progress Bar */}
-              <div className="space-y-1">
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div className="space-y-0.5">
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                   <div
                     style={{ width: `${slaPercentage}%` }}
                     className={`h-full rounded-full ${isInSla ? "bg-[#0d9488]" : "bg-rose-500"}`}
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-500 font-medium">
+                <div className="flex justify-between text-[10.5px] text-slate-500 font-medium">
                   <span>{formatMinsToShortReadable(netMins)} đã dùng</span>
                   <span>{slaPercentage}%</span>
                 </div>
@@ -2696,26 +2801,32 @@ function CompletedForm({
             </div>
           </div>
 
-          {/* Hold Breakdown Table */}
-          <div className="pt-2 border-t border-slate-100 space-y-1.5">
-            <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-400 pb-1 border-b border-slate-100">
-              <span className="col-span-3">Các lần hold</span>
-              <span className="col-span-6">Lý do</span>
+          {/* Real Hold Breakdown Table from Troubleshoot */}
+          <div className="pt-2 border-t border-slate-100 space-y-1">
+            <div className="grid grid-cols-12 text-[10.5px] font-semibold text-slate-400 pb-0.5 border-b border-slate-100">
+              <span className="col-span-4">Các lần hold</span>
+              <span className="col-span-5">Lý do</span>
               <span className="col-span-3 text-right">Thời lượng</span>
             </div>
 
-            <div className="space-y-1 text-xs">
-              {displayHoldRows.map((h: any, idx: number) => {
-                const durationStr = h.duration || formatMinsToReadableVietnamese(getMinutesBetween(h.startTime, h.stopTime));
-                const rangeStr = h.timeRange || (h.startTime ? `${formatTimeOnly(h.startTime)} - ${formatTimeOnly(h.stopTime)}` : "10:15 - 11:00");
-                return (
-                  <div key={idx} className="grid grid-cols-12 text-[11.5px] items-center text-slate-700 py-0.5">
-                    <span className="col-span-3 font-mono text-slate-500">{rangeStr}</span>
-                    <span className="col-span-6 truncate pr-1" title={h.reason}>{h.reason || "Tạm dừng xử lý"}</span>
-                    <span className="col-span-3 text-right font-medium text-slate-800">{durationStr}</span>
-                  </div>
-                );
-              })}
+            <div className="space-y-1 max-h-24 overflow-y-auto">
+              {realHoldsList.length > 0 ? (
+                realHoldsList.map((h: any, idx: number) => {
+                  const durationStr = h.duration || formatMinsToReadableVietnamese(getMinutesBetween(h.startTime, h.stopTime));
+                  const rangeStr = h.timeRange || (h.startTime ? `${formatTimeOnly(h.startTime)} - ${formatTimeOnly(h.stopTime)}` : "—");
+                  return (
+                    <div key={idx} className="grid grid-cols-12 text-[11px] items-center text-slate-700 py-0.5">
+                      <span className="col-span-4 font-mono text-slate-500 truncate" title={rangeStr}>{rangeStr}</span>
+                      <span className="col-span-5 truncate pr-1" title={h.reason}>{h.reason || "Tạm dừng xử lý"}</span>
+                      <span className="col-span-3 text-right font-medium text-slate-800">{durationStr}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-[11px] text-slate-400 italic py-1 text-center">
+                  Không có lần hold nào trong Troubleshoot (0 phút)
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2724,9 +2835,9 @@ function CompletedForm({
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* BOTTOM STATUS & ACTION BAR                                  */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="pt-4 border-t border-slate-200/90 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="pt-3 border-t border-slate-200/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
         {/* Left Side: Step Completion Pills */}
-        <div className="flex items-center gap-4 text-xs font-semibold text-slate-600 flex-wrap">
+        <div className="flex items-center gap-3.5 text-xs font-semibold text-slate-600 flex-wrap">
           <span className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${isTimeFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
             <span>Thời gian</span>
@@ -2750,7 +2861,7 @@ function CompletedForm({
         </div>
 
         {/* Right Side: Approval Status Selector & Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
             <span>Xem thử trạng thái duyệt</span>
             <select
