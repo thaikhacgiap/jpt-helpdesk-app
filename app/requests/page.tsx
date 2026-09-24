@@ -15,6 +15,9 @@ import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServi
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+import { fetchProjects, Project } from "@/lib/project-operations";
+import AttachmentUploader from "@/components/common/attachment-uploader";
+import { AttachedFile } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -32,7 +35,11 @@ import {
   Check, 
   FileText,
   Tag, 
-  Calendar 
+  Calendar,
+  Link as LinkIcon,
+  ExternalLink,
+  Paperclip,
+  Briefcase
 } from "lucide-react";
 
 const getLocalDateTimeString = (dateInput?: Date | string | null): string => {
@@ -53,6 +60,7 @@ export default function RequestsPage() {
   const [customerTickets, setCustomerTickets] = useState<ServiceTicket[]>([]);
   const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
   const [allContracts, setAllContracts] = useState<Contract[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,7 +76,7 @@ export default function RequestsPage() {
   const [formData, setFormData] = useState({
     code: "",
     title: "",
-    type: "Yêu cầu công việc" as RequestTask["type"],
+    type: "Triển khai dịch vụ" as RequestTask["type"],
     description: "",
     requester: "",
     assignee: "",
@@ -76,7 +84,13 @@ export default function RequestsPage() {
     startTime: "",
     receiveTime: "",
     completeTime: "",
-    status: "New" as RequestTask["status"]
+    status: "New" as RequestTask["status"],
+    customerId: "",
+    customerName: "",
+    projectId: "",
+    projectName: "",
+    contractLink: "",
+    attachedFiles: [] as AttachedFile[]
   });
 
   // Customer On-Behalf Modal States
@@ -352,6 +366,7 @@ export default function RequestsPage() {
 
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
     fetchContracts().then(setAllContracts).catch(err => console.error("Error loading all contracts:", err));
+    fetchProjects().then(setProjects).catch(err => console.error("Error loading projects:", err));
     
     // Customer tickets and customers
     loadCustomerTicketsList();
@@ -416,7 +431,7 @@ export default function RequestsPage() {
     setFormData({
       code: "",
       title: "",
-      type: defaultType || "Yêu cầu công việc",
+      type: defaultType || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
       description: "",
       requester: "",
       assignee: "",
@@ -424,7 +439,13 @@ export default function RequestsPage() {
       startTime: new Date().toISOString().split('T')[0],
       receiveTime: "",
       completeTime: "",
-      status: "New"
+      status: "New",
+      customerId: "",
+      customerName: "",
+      projectId: "",
+      projectName: "",
+      contractLink: "",
+      attachedFiles: []
     });
     setError("");
     setIsModalOpen(true);
@@ -435,7 +456,7 @@ export default function RequestsPage() {
     setFormData({
       code: req.code || "",
       title: req.title || "",
-      type: req.type || "Yêu cầu công việc",
+      type: req.type || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
       description: req.description || "",
       requester: req.requester || "",
       assignee: req.assignee || "",
@@ -443,7 +464,13 @@ export default function RequestsPage() {
       startTime: req.startTime || "",
       receiveTime: req.receiveTime || "",
       completeTime: req.completeTime || "",
-      status: req.status || "New"
+      status: req.status || "New",
+      customerId: req.customerId || "",
+      customerName: req.customerName || "",
+      projectId: req.projectId || "",
+      projectName: req.projectName || "",
+      contractLink: req.contractLink || "",
+      attachedFiles: req.attachedFiles || []
     });
     setError("");
     setIsModalOpen(true);
@@ -652,7 +679,13 @@ export default function RequestsPage() {
           startTime: formData.startTime,
           receiveTime: formData.receiveTime || undefined,
           completeTime: formData.completeTime || undefined,
-          status: formData.status
+          status: formData.status,
+          customerId: formData.customerId || undefined,
+          customerName: formData.customerName || undefined,
+          projectId: formData.projectId || undefined,
+          projectName: formData.projectName || undefined,
+          contractLink: formData.contractLink || undefined,
+          attachedFiles: formData.attachedFiles || []
         });
       } else {
         createRequest({
@@ -666,7 +699,13 @@ export default function RequestsPage() {
           startTime: formData.startTime,
           receiveTime: formData.receiveTime || undefined,
           completeTime: formData.completeTime || undefined,
-          status: formData.status || "New"
+          status: formData.status || "New",
+          customerId: formData.customerId || undefined,
+          customerName: formData.customerName || undefined,
+          projectId: formData.projectId || undefined,
+          projectName: formData.projectName || undefined,
+          contractLink: formData.contractLink || undefined,
+          attachedFiles: formData.attachedFiles || []
         });
       }
       setIsModalOpen(false);
@@ -750,7 +789,9 @@ export default function RequestsPage() {
 
   const getTypeColor = (type: RequestTask["type"]) => {
     switch (type) {
+      case "Triển khai dịch vụ":
       case "Yêu cầu triển khai": return "bg-indigo-50 text-indigo-700 border-indigo-200/50";
+      case "Xem xét hồ sơ": return "bg-teal-50 text-teal-700 border-teal-200/50";
       case "Yêu cầu hỗ trợ kỹ thuật": return "bg-rose-50 text-rose-700 border-rose-200/50";
       case "Yêu cầu tư vấn": return "bg-cyan-50 text-cyan-700 border-cyan-200/50";
       case "Yêu cầu công việc": return "bg-amber-50 text-amber-700 border-amber-200/50";
@@ -1122,6 +1163,32 @@ export default function RequestsPage() {
                       <p className="text-slate-800 text-sm font-normal truncate max-w-[400px]" title={req.description || req.title}>
                         {req.title}
                       </p>
+                      {(req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                          {req.customerName && (
+                            <span className="text-blue-600 font-medium truncate max-w-[130px]" title={req.customerName}>🏢 {req.customerName}</span>
+                          )}
+                          {req.projectName && (
+                            <span className="text-indigo-600 font-medium truncate max-w-[130px]" title={req.projectName}>📁 {req.projectName}</span>
+                          )}
+                          {req.contractLink && (
+                            <a
+                              href={req.contractLink.startsWith("http") ? req.contractLink : `https://${req.contractLink}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-teal-600 hover:underline flex items-center gap-0.5"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <LinkIcon size={11} /> Hợp đồng
+                            </a>
+                          )}
+                          {req.attachedFiles && req.attachedFiles.length > 0 && (
+                            <span className="text-amber-600 flex items-center gap-0.5">
+                              <Paperclip size={11} /> {req.attachedFiles.length} file
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="px-4 py-1 text-left">
@@ -1376,6 +1443,8 @@ export default function RequestsPage() {
                     className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
                   >
                     <option value="All">Tất cả loại dịch vụ</option>
+                    <option value="Triển khai dịch vụ">Triển khai dịch vụ</option>
+                    <option value="Xem xét hồ sơ">Xem xét hồ sơ</option>
                     <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
                     <option value="Yêu cầu hỗ trợ kỹ thuật">Yêu cầu hỗ trợ kỹ thuật</option>
                     <option value="Yêu cầu tư vấn">Yêu cầu tư vấn</option>
@@ -1414,7 +1483,7 @@ export default function RequestsPage() {
               </button>
             ) : activeTab === "service" ? (
               <button
-                onClick={() => handleCreateOpen("Yêu cầu triển khai")}
+                onClick={() => handleCreateOpen("Triển khai dịch vụ")}
                 className="h-9 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 border border-teal-400/40 text-white text-sm font-semibold flex items-center gap-1.5 transition shadow-[0_2px_8px_rgba(20,184,166,0.2)] cursor-pointer whitespace-nowrap animate-fade-in"
               >
                 <Plus size={14} />
@@ -1485,23 +1554,23 @@ export default function RequestsPage() {
 
       {/* Modal Popup for internal requests creation/editing */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-6 max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0 bg-white">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-                  <Inbox size={16} />
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-2xs">
+                  <Inbox size={18} />
                 </div>
                 <div className="text-left">
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                     {editingRequest 
                       ? (editingRequest.type === "Yêu cầu công việc" ? "Chỉnh Sửa Yêu Cầu Công Việc" : "Chỉnh Sửa Yêu Cầu Dịch Vụ") 
                       : (activeTab === "task" ? "Tạo Yêu Cầu Công Việc Mới" : "Tạo Yêu Cầu Dịch Vụ Nội Bộ Mới")}
                   </h2>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {editingRequest 
-                      ? `Cập nhật thông tin: ${editingRequest.code}` 
+                      ? `Cập nhật thông tin phiếu: ${editingRequest.code}` 
                       : (activeTab === "task" ? "Lập phiếu phân công công việc cá nhân mới." : "Lập phiếu ghi nhận yêu cầu dịch vụ nội bộ mới.")}
                   </p>
                 </div>
@@ -1510,26 +1579,27 @@ export default function RequestsPage() {
                 onClick={() => setIsModalOpen(false)} 
                 className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex-1 overflow-y-auto flex flex-col justify-between space-y-3.5">
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6 flex-1 overflow-y-auto flex flex-col justify-between space-y-4">
               {error && (
-                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2 shrink-0">
-                  <AlertCircle size={14} className="shrink-0" />
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2 shrink-0">
+                  <AlertCircle size={15} className="shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* 2-Column Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-                {/* Left Column: Tất cả thông tin */}
-                <div className="space-y-2.5">
-                  {/* Row 1: Code & Title */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div className="text-left">
+              {/* 2-Column Responsive Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* Cột Trái (lg:col-span-6): Thông tin phân loại, thực hiện & tài liệu */}
+                <div className="lg:col-span-6 space-y-3.5">
+                  {/* Row 1: Code & Request Type */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Mã <span className="text-slate-400 font-normal">(Tự sinh)</span>
                       </label>
@@ -1538,30 +1608,12 @@ export default function RequestsPage() {
                         name="code"
                         value={formData.code}
                         onChange={handleInputChange}
-                        placeholder="TR-..."
+                        placeholder={activeTab === "task" ? "TR-..." : "SR-..."}
                         disabled={!!editingRequest}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
                       />
                     </div>
 
-                    <div className="text-left sm:col-span-2">
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Tên công việc / Yêu cầu <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        placeholder="Nhập tên tóm tắt yêu cầu..."
-                        required
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 2: Type & Status / Start Time */}
-                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Loại yêu cầu <span className="text-red-500">*</span>
@@ -1570,13 +1622,15 @@ export default function RequestsPage() {
                         name="type"
                         value={formData.type}
                         onChange={handleInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium text-slate-800"
                       >
                         {activeTab === "task" ? (
                           <option value="Yêu cầu công việc">Yêu cầu công việc</option>
                         ) : (
                           <>
-                            <option value="Yêu cầu triển khai">Triển khai</option>
+                            <option value="Triển khai dịch vụ">Triển khai dịch vụ</option>
+                            <option value="Xem xét hồ sơ">Xem xét hồ sơ</option>
+                            <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
                             <option value="Yêu cầu hỗ trợ kỹ thuật">Hỗ trợ kỹ thuật</option>
                             <option value="Yêu cầu tư vấn">Tư vấn</option>
                             <option value="Yêu cầu">Chung</option>
@@ -1584,7 +1638,70 @@ export default function RequestsPage() {
                         )}
                       </select>
                     </div>
+                  </div>
 
+                  {/* Row 2: Khách hàng & Dự án */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Khách hàng liên quan
+                      </label>
+                      <CustomerSearchSelect
+                        value={formData.customerId}
+                        onChange={(cid, cust) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            customerId: cid,
+                            customerName: cust ? cust.name : ""
+                          }));
+                        }}
+                        customers={dbCustomers}
+                        placeholder="-- Chọn khách hàng --"
+                        size="sm"
+                        allowClear={true}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Dự án liên quan
+                      </label>
+                      <select
+                        name="projectId"
+                        value={formData.projectId}
+                        onChange={(e) => {
+                          const pid = e.target.value;
+                          const proj = projects.find(p => p.id === pid);
+                          setFormData(prev => {
+                            const next = {
+                              ...prev,
+                              projectId: pid,
+                              projectName: proj ? proj.name : ""
+                            };
+                            // Auto-match customer if not chosen
+                            if (proj?.customerId && !prev.customerId) {
+                              next.customerId = proj.customerId;
+                              next.customerName = proj.customer || "";
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Chọn dự án (tùy chọn) --</option>
+                        {projects
+                          .filter(p => !formData.customerId || p.customerId === formData.customerId || (formData.customerName && p.customer?.toLowerCase() === formData.customerName.toLowerCase()))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.code ? `${p.code} - ` : ""}{p.name} {p.customer ? `(${p.customer})` : ""}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Thời gian bắt đầu (hoặc Tình trạng) & Người yêu cầu */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
                     {editingRequest ? (
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -1594,7 +1711,7 @@ export default function RequestsPage() {
                           name="status"
                           value={formData.status}
                           onChange={handleInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
                         >
                           <option value="New">Chờ tiếp nhận</option>
                           <option value="In Progress">Đang xử lý</option>
@@ -1614,14 +1731,11 @@ export default function RequestsPage() {
                           value={formData.startTime}
                           onChange={handleInputChange}
                           required
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
                         />
                       </div>
                     )}
-                  </div>
 
-                  {/* Row 3: Requester & Follower */}
-                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Người yêu cầu
@@ -1630,9 +1744,29 @@ export default function RequestsPage() {
                         name="requester"
                         value={formData.requester}
                         onChange={handleInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                       >
                         <option value="">-- Chọn nhân sự --</option>
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 4: Người tiếp nhận / Được giao & Người theo dõi */}
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Người tiếp nhận / Được giao
+                      </label>
+                      <select
+                        name="assignee"
+                        value={formData.assignee}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Chưa giao / Chưa nhận --</option>
                         {staffList.map((s) => (
                           <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
                         ))}
@@ -1647,7 +1781,7 @@ export default function RequestsPage() {
                         name="follower"
                         value={formData.follower}
                         onChange={handleInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                       >
                         <option value="">-- Chọn nhân sự --</option>
                         {staffList.map((s) => (
@@ -1657,27 +1791,87 @@ export default function RequestsPage() {
                     </div>
                   </div>
 
-                  {/* Row 4: Assignee */}
+                  {/* Row 5: Link lưu trữ hợp đồng */}
                   <div className="text-left">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Người tiếp nhận / Được giao
-                    </label>
-                    <select
-                      name="assignee"
-                      value={formData.assignee}
-                      onChange={handleInputChange}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                    >
-                      <option value="">-- Chưa giao / Chưa nhận --</option>
-                      {staffList.map((s) => (
-                        <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+                        Link lưu trữ hợp đồng
+                      </label>
+                      {formData.contractLink && (
+                        <a
+                          href={formData.contractLink.startsWith("http") ? formData.contractLink : `https://${formData.contractLink}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition"
+                        >
+                          <ExternalLink size={11} /> Mở liên kết
+                        </a>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <LinkIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        name="contractLink"
+                        value={formData.contractLink}
+                        onChange={handleInputChange}
+                        placeholder="https://drive.google.com/... hoặc đường dẫn lưu hợp đồng"
+                        className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition text-slate-700"
+                      />
+                    </div>
                   </div>
 
-                  {/* Row 5: Receive & Complete Time */}
+                  {/* Row 6: Attach Phiếu yêu cầu triển khai */}
+                  <div className="text-left pt-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                      Phiếu yêu cầu triển khai / Tài liệu đính kèm
+                    </label>
+                    <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                      <AttachmentUploader
+                        files={formData.attachedFiles || []}
+                        onChange={(files) => setFormData(prev => ({ ...prev, attachedFiles: files }))}
+                        module="requests"
+                        maxFiles={5}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cột Phải (lg:col-span-6): Tên công việc / Yêu cầu & Mô tả yêu cầu */}
+                <div className="lg:col-span-6 flex flex-col h-full text-left space-y-3.5">
+                  {/* Tên công việc / Yêu cầu * (ĐƯỢC ĐƯA LÊN PHÍA TRÊN PHẦN MÔ TẢ YÊU CẦU) */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                      Tên công việc / Yêu cầu <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="Nhập tên tóm tắt yêu cầu (VD: Triển khai dịch vụ máy chủ ảo)..."
+                      required
+                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition shadow-2xs"
+                    />
+                  </div>
+
+                  {/* Mô tả yêu cầu */}
+                  <div className="flex-1 flex flex-col min-h-[220px]">
+                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                      Mô tả yêu cầu
+                    </label>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ, kế hoạch phối hợp..."
+                      className="w-full flex-1 min-h-[200px] p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Row 5: Receive & Complete Time (nếu editing) */}
                   {editingRequest && (
-                    <div className="grid grid-cols-2 gap-2.5 text-left">
+                    <div className="grid grid-cols-2 gap-2.5 text-left pt-1">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
@@ -1704,24 +1898,10 @@ export default function RequestsPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Right Column: Chỉ dành cho Mô tả yêu cầu */}
-                <div className="flex flex-col h-full text-left">
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                    Mô tả yêu cầu
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ..."
-                    className="w-full flex-1 min-h-[220px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
-                  />
-                </div>
               </div>
 
               {/* Buttons Footer */}
-              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-slate-100 shrink-0">
                 {editingRequest ? (
                   <button
                     type="button"
@@ -1737,7 +1917,7 @@ export default function RequestsPage() {
                   </button>
                 ) : <div />}
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {editingRequest && (formData.status === "New" || !formData.assignee) && (
                     <button
                       type="button"

@@ -2,7 +2,7 @@ export interface RequestTask {
   id: string;
   code: string;
   title: string;
-  type: 'Yêu cầu triển khai' | 'Yêu cầu hỗ trợ kỹ thuật' | 'Yêu cầu tư vấn' | 'Yêu cầu' | 'Yêu cầu công việc';
+  type: 'Triển khai dịch vụ' | 'Xem xét hồ sơ' | 'Yêu cầu triển khai' | 'Yêu cầu hỗ trợ kỹ thuật' | 'Yêu cầu tư vấn' | 'Yêu cầu' | 'Yêu cầu công việc' | string;
   description: string;
   requester: string;  // Người yêu cầu
   assignee: string;   // Người được giao / Người tiếp nhận
@@ -11,6 +11,12 @@ export interface RequestTask {
   receiveTime?: string; // Thời gian tiếp nhận
   completeTime?: string; // Thời gian hoàn thành
   status: 'New' | 'In Progress' | 'Completed' | 'Rejected' | 'On Hold'; // Tình trạng
+  customerId?: string; // ID khách hàng liên kết
+  customerName?: string; // Tên khách hàng
+  projectId?: string; // ID dự án liên kết
+  projectName?: string; // Tên dự án
+  contractLink?: string; // Link lưu trữ hợp đồng
+  attachedFiles?: any[]; // Danh sách file đính kèm / phiếu yêu cầu triển khai
 }
 
 const DEFAULT_REQUESTS: RequestTask[] = [
