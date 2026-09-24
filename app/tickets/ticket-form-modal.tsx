@@ -2305,11 +2305,11 @@ function CompletedForm({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#eef4f2] text-slate-800">
       {/* Scrollable content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4.5 pt-3 pb-2 flex flex-col space-y-2.5">
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* HEADER: TICKET CODE, TITLE, STATUS & METADATA               */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="space-y-1.5 shrink-0 px-1">
+      <div className="space-y-1 shrink-0 px-0.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xl sm:text-2xl font-black text-[#0f433f] tracking-tight">
@@ -2347,19 +2347,19 @@ function CompletedForm({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* 3-COLUMN DASHBOARD (EQUAL HEIGHT, MATCHES MOCKUP)           */}
+      {/* 3-COLUMN DASHBOARD (CLOSER GAP, STRETCHED TO BOTTOM)        */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 sm:gap-3 items-stretch flex-1 min-h-0">
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 1: HOÀN THÀNH                                        */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between h-full space-y-4">
-          <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+          <div className="space-y-3">
             <h3 className="text-base font-bold text-slate-900 tracking-tight">Hoàn thành</h3>
 
             {/* Row: Start & Resolve Times */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600 block">
                   Thời gian bắt đầu <span className="text-red-500">*</span>
                 </label>
@@ -2375,7 +2375,7 @@ function CompletedForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600 block">
                   Thời gian hoàn thành <span className="text-red-500">*</span>
                 </label>
@@ -2393,7 +2393,7 @@ function CompletedForm({
             </div>
 
             {/* Field: Tóm tắt xử lý */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">
                 Tóm tắt xử lý <span className="text-red-500">*</span>
               </label>
@@ -2404,7 +2404,7 @@ function CompletedForm({
                   disabled={!editing}
                   rows={4}
                   placeholder="Kiểm tra log FortiGate, phát hiện tunnel IPsec của chi nhánh Hải Phòng bị ngắt do lệch pre-shared key sau đợt đổi chứng chỉ. Đã cấu hình lại key hai đầu và kiểm tra kết nối ổn định trong 30 phút."
-                  className="w-full text-xs leading-relaxed p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
+                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
                 <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
                   {(finishedData.briefSummary || "").length}/500
@@ -2413,7 +2413,7 @@ function CompletedForm({
             </div>
 
             {/* Field: Kết luận / Nguyên nhân gốc */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">
                 Kết luận / Nguyên nhân gốc <span className="text-red-500">*</span>
               </label>
@@ -2428,7 +2428,7 @@ function CompletedForm({
                   disabled={!editing}
                   rows={4}
                   placeholder="Nguyên nhân gốc: quy trình đổi chứng chỉ định kỳ không cập nhật pre-shared key của hệ thống VPN trung tâm. Đề xuất bổ sung bước kiểm tra VPN vào checklist đổi chứng chỉ và cảnh báo trước khi hết hạn."
-                  className="w-full text-xs leading-relaxed p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
+                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
                 <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
                   {(finishedData.rootcause || reportingData.chanDoan || "").length}/500
@@ -2449,18 +2449,18 @@ function CompletedForm({
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 2: REPORT                                            */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between h-full space-y-4">
-          <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 tracking-tight">Report</h3>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                 <span>{currentApprovalStatus}</span>
               </span>
             </div>
 
             {/* Template Download & Upload Box */}
-            <div className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+            <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2.5 shadow-2xs">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-bold text-slate-900 truncate" title={customTemplateName}>
@@ -2484,11 +2484,11 @@ function CompletedForm({
                 <button
                   type="button"
                   onClick={handleDownloadTemplate}
-                  className="flex flex-col items-center justify-center px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer group"
+                  className="flex flex-col items-center justify-center px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer group"
                   title="Tải mẫu template về máy"
                 >
-                  <Download size={14} className="text-slate-500 mb-0.5 group-hover:text-teal-700 transition" />
-                  <span className="text-[11px] font-bold">Tải template</span>
+                  <Download size={13} className="text-slate-500 mb-0.5 group-hover:text-teal-700 transition" />
+                  <span className="text-[10.5px] font-bold">Tải template</span>
                 </button>
               </div>
 
@@ -2510,7 +2510,7 @@ function CompletedForm({
             )}
 
             {/* File Report Upload Box */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">
                 File report <span className="text-red-500">*</span>
               </label>
@@ -2524,7 +2524,7 @@ function CompletedForm({
               />
 
               {finishedData.reportFileName || finishedData.reportUrl || ticket?.document_link ? (
-                <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
                       <FileText size={16} />
@@ -2552,9 +2552,9 @@ function CompletedForm({
                   type="button"
                   disabled={!editing}
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-3 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1"
+                  className="w-full py-2.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1"
                 >
-                  <UploadCloud size={20} className="text-[#0d9488]" />
+                  <UploadCloud size={18} className="text-[#0d9488]" />
                   <span className="text-xs font-semibold text-slate-700">Tải lên file báo cáo sự cố</span>
                   <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx</span>
                 </button>
@@ -2562,8 +2562,8 @@ function CompletedForm({
             </div>
 
             {/* Row: Người duyệt & Trạng thái duyệt */}
-            <div className="grid grid-cols-12 gap-2.5">
-              <div className="col-span-7 space-y-1.5">
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-7 space-y-1">
                 <label className="text-xs font-medium text-slate-600 block">
                   Người duyệt <span className="text-red-500">*</span>
                 </label>
@@ -2571,7 +2571,7 @@ function CompletedForm({
                   value={finishedData.approver || (nhanSuList[0]?.ten_nhan_su ? `${nhanSuList[0].ten_nhan_su} – ${nhanSuList[0].chuc_vu || "Giám đốc"}` : "Vũ Thanh Tùng – Giám đốc Kỹ thuật")}
                   onChange={(e) => onFinishedDataChange({ approver: e.target.value })}
                   disabled={!editing}
-                  className="w-full text-xs h-9 px-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] text-slate-800 disabled:bg-slate-50 truncate"
+                  className="w-full text-xs h-8.5 px-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] text-slate-800 disabled:bg-slate-50 truncate"
                 >
                   {nhanSuList && nhanSuList.length > 0 ? (
                     nhanSuList.map((ns) => (
@@ -2589,9 +2589,9 @@ function CompletedForm({
                 </select>
               </div>
 
-              <div className="col-span-5 space-y-1.5">
+              <div className="col-span-5 space-y-1">
                 <label className="text-xs font-medium text-slate-600 block">Trạng thái duyệt</label>
-                <div className="h-9 px-3 rounded-xl bg-slate-100/90 border border-slate-200 flex items-center gap-1.5 text-xs font-medium text-slate-600 truncate">
+                <div className="h-8.5 px-2.5 rounded-xl bg-slate-100/90 border border-slate-200 flex items-center gap-1.5 text-xs font-medium text-slate-600 truncate">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
                   <span className="truncate">{currentApprovalStatus}</span>
                 </div>
@@ -2599,7 +2599,7 @@ function CompletedForm({
             </div>
 
             {/* Field: Lý do từ chối */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">Lý do từ chối</label>
               <textarea
                 value={finishedData.rejectReason || ""}
@@ -2607,15 +2607,15 @@ function CompletedForm({
                 disabled={currentApprovalStatus !== "Từ chối" || !editing}
                 rows={2}
                 placeholder="Chỉ hiển thị khi người duyệt từ chối report."
-                className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-[#f9fafb] text-slate-600 placeholder:text-slate-400 resize-none disabled:text-slate-400 focus:outline-none"
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-[#f9fafb] text-slate-600 placeholder:text-slate-400 resize-none disabled:text-slate-400 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Checklist bàn giao */}
-          <div className="space-y-2 pt-1">
+          <div className="space-y-1.5 pt-0.5">
             <h4 className="text-xs font-bold text-slate-700">Checklist bàn giao</h4>
-            <div className="space-y-1.5 text-xs font-medium">
+            <div className="space-y-1 text-xs font-medium">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
                 <span className={isSummaryFilled && isRootcauseFilled ? "text-slate-700" : "text-slate-400"}>
@@ -2641,8 +2641,8 @@ function CompletedForm({
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 3: TỔNG KẾT                                          */}
         {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between h-full space-y-4">
-          <div className="space-y-3.5">
+        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 tracking-tight">Tổng kết</h3>
               <span className="text-xs font-medium text-slate-500">
@@ -2651,8 +2651,8 @@ function CompletedForm({
             </div>
 
             {/* Segmented Timeline Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="w-full h-3 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
+            <div className="space-y-1">
+              <div className="w-full h-2.5 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
                 <div style={{ width: `${pResponse}%` }} className="bg-slate-400 h-full" title={`Chờ tiếp nhận: ${pResponse}%`} />
                 <div style={{ width: `${pWork}%` }} className="bg-[#0d9488] h-full" title={`Đang xử lý: ${pWork}%`} />
                 {pHold > 0 && (
@@ -2668,16 +2668,16 @@ function CompletedForm({
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-3.5 text-xs text-slate-500 font-medium pt-0.5">
-                <span className="flex items-center gap-1.5">
+              <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium pt-0.5">
+                <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-xs bg-slate-400" />
                   <span>Chờ tiếp nhận</span>
                 </span>
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-xs bg-[#0d9488]" />
                   <span>Đang xử lý</span>
                 </span>
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1">
                   <span
                     style={{ backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #d97706 2px, #d97706 4px)" }}
                     className="w-2 h-2 rounded-xs"
@@ -2688,99 +2688,99 @@ function CompletedForm({
             </div>
 
             {/* 4-Milestone Grid (Shows Date & Time) */}
-            <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-3 grid grid-cols-4 gap-1 text-center">
+            <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-2 grid grid-cols-4 gap-1 text-center">
               {/* Milestone 1: Tạo Ticket */}
               <div className="border-r border-slate-200 pr-1">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight">TẠO TICKET</span>
-                <span className="text-sm font-bold text-slate-900 block mt-0.5">
+                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TẠO TICKET</span>
+                <span className="text-xs font-bold text-slate-900 block mt-0.5">
                   {formatTimeOnly(ticketCreatedAt, "08:30")}
                 </span>
               </div>
 
               {/* Milestone 2: Tiếp nhận */}
               <div className="border-r border-slate-200 px-1">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight">TIẾP NHẬN</span>
-                <span className="text-sm font-bold text-slate-900 block mt-0.5">
+                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TIẾP NHẬN</span>
+                <span className="text-xs font-bold text-slate-900 block mt-0.5">
                   {formatTimeOnly(ticketReceivedAt, "08:42")}
                 </span>
-                <span className="text-[10px] text-teal-700 font-semibold block">
+                <span className="text-[9.5px] text-teal-700 font-semibold block">
                   +{getMinutesBetween(ticketCreatedAt, ticketReceivedAt) || 12} phút
                 </span>
               </div>
 
               {/* Milestone 3: Bắt đầu xử lý */}
               <div className="border-r border-slate-200 px-1">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight truncate" title="BẮT ĐẦU XỬ LÝ">
+                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate" title="BẮT ĐẦU XỬ LÝ">
                   BẮT ĐẦU XỬ LÝ
                 </span>
-                <span className="text-sm font-bold text-slate-900 block mt-0.5">
+                <span className="text-xs font-bold text-slate-900 block mt-0.5">
                   {formatTimeOnly(effectiveStartTime, "09:00")}
                 </span>
-                <span className="text-[10px] text-teal-700 font-semibold block">
+                <span className="text-[9.5px] text-teal-700 font-semibold block">
                   +{getMinutesBetween(ticketReceivedAt, effectiveStartTime) || 18} phút
                 </span>
               </div>
 
               {/* Milestone 4: Hoàn thành */}
               <div className="pl-1">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
-                <span className="text-sm font-bold text-slate-900 block mt-0.5">
+                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
+                <span className="text-xs font-bold text-slate-900 block mt-0.5">
                   {formatTimeOnly(effectiveResolveTime, "16:20")}
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium block truncate" title={`+${formatMinsToShortReadable(totalProcessingMins)}`}>
+                <span className="text-[9.5px] text-slate-500 font-medium block truncate" title={`+${formatMinsToShortReadable(totalProcessingMins)}`}>
                   +{formatMinsToShortReadable(totalProcessingMins)}
                 </span>
               </div>
             </div>
 
             {/* Metrics List */}
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                 <div>
                   <p className="font-semibold text-slate-800">Thời gian phản hồi</p>
-                  <p className="text-[11px] text-slate-400">Tạo ticket → bắt đầu xử lý</p>
+                  <p className="text-[10.5px] text-slate-400">Tạo ticket → bắt đầu xử lý</p>
                 </div>
                 <span className="font-semibold text-slate-800">{formatMinsToReadableVietnamese(responseTimeMins)}</span>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+              <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <div>
                   <p className="font-semibold text-slate-800">Tổng thời gian xử lý</p>
-                  <p className="text-[11px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
+                  <p className="text-[10.5px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
                 </div>
                 <span className="font-semibold text-slate-800">{formatMinsToShortReadable(totalProcessingMins)}</span>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+              <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <div>
                   <p className="font-semibold text-slate-800">Tổng thời gian hold</p>
-                  <p className="text-[11px] text-slate-400">Số lần hold: {realHoldsList.length}</p>
+                  <p className="text-[10.5px] text-slate-400">Số lần hold: {realHoldsList.length}</p>
                 </div>
                 <span className="font-semibold text-slate-800">{formatMinsToShortReadable(calculatedHoldMins)}</span>
               </div>
 
               {/* Highlight Box: Thời gian xử lý thực */}
-              <div className="p-3 bg-[#dff3eb] border border-[#aee0d4] rounded-xl flex items-center justify-between">
+              <div className="p-2.5 bg-[#dff3eb] border border-[#aee0d4] rounded-xl flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-[#0d544a]">Thời gian xử lý thực</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
+                  <p className="text-[10.5px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
                 </div>
-                <span className="text-xl font-black text-[#0d544a]">
+                <span className="text-lg font-black text-[#0d544a]">
                   {formatMinsToShortReadable(netMins)}
                 </span>
               </div>
 
               {/* Tổng vòng đời ticket */}
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+              <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <div>
                   <p className="font-semibold text-slate-800">Tổng vòng đời ticket</p>
-                  <p className="text-[11px] text-slate-400">Tạo ticket → hoàn thành</p>
+                  <p className="text-[10.5px] text-slate-400">Tạo ticket → hoàn thành</p>
                 </div>
                 <span className="font-semibold text-slate-800">{formatMinsToShortReadable(totalLifecycleMins)}</span>
               </div>
 
               {/* SLA Section */}
-              <div className="space-y-1 py-1.5 border-b border-slate-100">
+              <div className="space-y-0.5 py-1 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-800">{slaLabel}</span>
                   <span className={`font-bold ${isInSla ? "text-teal-700" : "text-rose-600"}`}>
@@ -2796,7 +2796,7 @@ function CompletedForm({
                       className={`h-full rounded-full ${isInSla ? "bg-[#0d9488]" : "bg-rose-500"}`}
                     />
                   </div>
-                  <div className="flex justify-between text-[10.5px] text-slate-500 font-medium">
+                  <div className="flex justify-between text-[10px] text-slate-500 font-medium">
                     <span>{formatMinsToShortReadable(netMins)} đã dùng</span>
                     <span>{slaPercentage}%</span>
                   </div>
@@ -2806,20 +2806,20 @@ function CompletedForm({
           </div>
 
           {/* Real Hold Breakdown Table from Troubleshoot */}
-          <div className="space-y-1 pt-1">
-            <div className="grid grid-cols-12 text-[10.5px] font-semibold text-slate-400 pb-0.5">
+          <div className="space-y-1 pt-0.5">
+            <div className="grid grid-cols-12 text-[10px] font-semibold text-slate-400 pb-0.5">
               <span className="col-span-4">Các lần hold</span>
               <span className="col-span-5">Lý do</span>
               <span className="col-span-3 text-right">Thời lượng</span>
             </div>
 
-            <div className="space-y-1 max-h-24 overflow-y-auto">
+            <div className="space-y-0.5 max-h-20 overflow-y-auto">
               {realHoldsList.length > 0 ? (
                 realHoldsList.map((h: any, idx: number) => {
                   const durationStr = h.duration || formatMinsToReadableVietnamese(getMinutesBetween(h.startTime, h.stopTime));
                   const rangeStr = h.timeRange || (h.startTime ? `${formatTimeOnly(h.startTime)} - ${formatTimeOnly(h.stopTime)}` : "—");
                   return (
-                    <div key={idx} className="grid grid-cols-12 text-[11px] items-center text-slate-700 py-0.5">
+                    <div key={idx} className="grid grid-cols-12 text-[10.5px] items-center text-slate-700 py-0.5">
                       <span className="col-span-4 text-slate-500 truncate" title={rangeStr}>{rangeStr}</span>
                       <span className="col-span-5 truncate pr-1" title={h.reason}>{h.reason || "Tạm dừng xử lý"}</span>
                       <span className="col-span-3 text-right font-medium text-slate-800">{durationStr}</span>
@@ -2827,7 +2827,7 @@ function CompletedForm({
                   );
                 })
               ) : (
-                <div className="text-[11px] text-slate-400 italic py-1 text-center">
+                <div className="text-[10.5px] text-slate-400 italic py-0.5 text-center">
                   Không có lần hold nào trong Troubleshoot (0 phút)
                 </div>
               )}
