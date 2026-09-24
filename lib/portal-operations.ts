@@ -105,6 +105,9 @@ export async function createServiceRequest(customerId: string, data: {
   start_time?: string | null;
   assigned?: string | null;
   end_time?: string | null;
+  creator_name?: string | null;
+  tt_status?: string | null;
+  requester?: string | null;
 }): Promise<ServiceTicket> {
   // Generate next ticket ID — use shared TH-YYYYMMDD-NNN format
   const ticket_id = await generateNextPortalTicketId();
@@ -120,9 +123,10 @@ export async function createServiceRequest(customerId: string, data: {
     validCustomerId = custCheck ? customerId : null;
   }
 
-  // Store contract number in remark field
+  // Store contract number and requester in remark field
   const remarkParts: string[] = [];
   if (data.contract_no) remarkParts.push(`Hợp đồng: ${data.contract_no}`);
+  if (data.requester) remarkParts.push(`Người yêu cầu: ${data.requester}`);
 
   const insertPayload: any = {
     ticket_id,
@@ -135,7 +139,8 @@ export async function createServiceRequest(customerId: string, data: {
     remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
     hold_reason: data.affected_service || null,
     assigned: data.assigned || null,
-    tt_status: "New",
+    creator_name: data.creator_name || data.requester || null,
+    tt_status: data.tt_status || "New",
     start_time: data.start_time || new Date().toISOString(),
     end_time: data.end_time || null,
     created_at: new Date().toISOString(),

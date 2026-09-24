@@ -93,8 +93,9 @@ export default function RequestsPage() {
     contract_no: "",
     incident_start_time: getLocalDateTimeString(),
     affected_service: "",
+    requester: "",
     assigned: "",
-    receive_time: "",
+    receive_time: getLocalDateTimeString(),
     end_time: "",
     tt_status: "New"
   });
@@ -121,10 +122,15 @@ export default function RequestsPage() {
   const handleCustomerEditOpen = (ticket: ServiceTicket) => {
     setEditingCustomerTicket(ticket);
     
-    // Extract contract no from remark
+    // Extract contract no and requester from remark
     let contractNo = "";
-    if (ticket.remark && ticket.remark.startsWith("Hợp đồng: ")) {
-      contractNo = ticket.remark.replace(/^Hợp đồng:\s*/i, "").split(" | ")[0];
+    let requesterName = "";
+    if (ticket.remark) {
+      const contractMatch = ticket.remark.match(/Hợp đồng:\s*([^|]+)/i);
+      if (contractMatch) contractNo = contractMatch[1].trim();
+
+      const requesterMatch = ticket.remark.match(/Người yêu cầu:\s*([^|]+)/i);
+      if (requesterMatch) requesterName = requesterMatch[1].trim();
     }
     
     // Split description and incident information if present
@@ -142,10 +148,11 @@ export default function RequestsPage() {
       category: ticket.category || "",
       priority: ticket.priority || "Medium",
       contract_no: contractNo,
-      incident_start_time: getLocalDateTimeString(ticket.start_time),
+      incident_start_time: getLocalDateTimeString((ticket as any).event_time || ticket.start_time),
       affected_service: ticket.hold_reason || "",
+      requester: requesterName || ticket.creator_name || "",
       assigned: ticket.assigned || "",
-      receive_time: getLocalDateTimeString(ticket.start_time),
+      receive_time: getLocalDateTimeString(ticket.start_time || ticket.created_at),
       end_time: getLocalDateTimeString(ticket.end_time),
       tt_status: ticket.tt_status || "New"
     });
@@ -154,6 +161,10 @@ export default function RequestsPage() {
   };
 
   const handleCustomerCreateOpen = () => {
+    const currentUser = getCurrentUser();
+    const matchedStaff = staffList.find(s => s.ten_nhan_su === currentUser?.name || s.email === currentUser?.email);
+    const defaultAssigned = matchedStaff?.ten_nhan_su || currentUser?.name || "";
+
     setEditingCustomerTicket(null);
     setCustomerFormData({
       customerId: dbCustomers[0]?.id || "",
@@ -165,8 +176,9 @@ export default function RequestsPage() {
       contract_no: "",
       incident_start_time: getLocalDateTimeString(),
       affected_service: "",
-      assigned: "",
-      receive_time: "",
+      requester: "",
+      assigned: defaultAssigned,
+      receive_time: getLocalDateTimeString(),
       end_time: "",
       tt_status: "New"
     });
@@ -203,12 +215,15 @@ export default function RequestsPage() {
 
       const remarkParts: string[] = [];
       if (customerFormData.contract_no) remarkParts.push(`Hợp đồng: ${customerFormData.contract_no}`);
+      if (customerFormData.requester.trim()) remarkParts.push(`Người yêu cầu: ${customerFormData.requester.trim()}`);
 
       const startTimeValue = customerFormData.receive_time
         ? new Date(customerFormData.receive_time).toISOString()
-        : (customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi")
-          ? new Date(customerFormData.incident_start_time).toISOString()
-          : new Date().toISOString();
+        : new Date().toISOString();
+
+      const eventTimeValue = customerFormData.incident_start_time
+        ? new Date(customerFormData.incident_start_time).toISOString()
+        : startTimeValue;
 
       const endTimeValue = customerFormData.end_time
         ? new Date(customerFormData.end_time).toISOString()
@@ -223,8 +238,10 @@ export default function RequestsPage() {
         remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
         hold_reason: customerFormData.affected_service || null,
         assigned: customerFormData.assigned || null,
+        creator_name: customerFormData.requester.trim() || null,
         tt_status: customerFormData.tt_status || "New",
         start_time: startTimeValue,
+        event_time: eventTimeValue,
         end_time: endTimeValue
       };
 
@@ -244,7 +261,10 @@ export default function RequestsPage() {
           affected_service: customerFormData.affected_service,
           start_time: updateData.start_time,
           assigned: updateData.assigned,
-          end_time: updateData.end_time
+          end_time: updateData.end_time,
+          creator_name: customerFormData.requester.trim() || null,
+          tt_status: updateData.tt_status,
+          requester: customerFormData.requester.trim() || null
         });
       }
       setIsCustomerModalOpen(false);
@@ -1732,10 +1752,10 @@ export default function RequestsPage() {
               )}
 
               {/* 2-Column Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-                {/* Left Column: Tất cả thông tin */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3.5">
+                {/* Left Column: Khách hàng, Hợp đồng, Loại/Danh mục, Thời gian, Người yêu cầu/tiếp nhận, Trạng thái */}
                 <div className="space-y-2.5">
-                  {/* Customer Selection */}
+                  {/* 1. Customer Selection */}
                   <div className="text-left">
                     <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                       Khách hàng <span className="text-red-500">*</span>
@@ -1750,23 +1770,51 @@ export default function RequestsPage() {
                     />
                   </div>
 
-                  {/* Title */}
+                  {/* 2. Chọn hợp đồng */}
                   <div className="text-left">
                     <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Tiêu đề yêu cầu <span className="text-red-500">*</span>
+                      Chọn hợp đồng
                     </label>
-                    <input
-                      type="text"
-                      name="title"
-                      value={customerFormData.title}
+                    <select
+                      name="contract_no"
+                      value={customerFormData.contract_no}
                       onChange={handleCustomerInputChange}
-                      placeholder="Nhập tên tóm tắt sự cố hoặc yêu cầu..."
-                      required
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
-                    />
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                    >
+                      <option value="">-- Không liên kết hợp đồng --</option>
+                      {customerContracts.map((c) => (
+                        <option key={c.id} value={c.contract_no || c.code}>
+                          {c.name} ({c.contract_no || c.code})
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Contract Description Display */}
+                    {(() => {
+                      const selectedContract = customerContracts.find(
+                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                             (c.code && c.code === customerFormData.contract_no) ||
+                             (c.name && c.name === customerFormData.contract_no)
+                      ) || allContracts.find(
+                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
+                             (c.code && c.code === customerFormData.contract_no) ||
+                             (c.name && c.name === customerFormData.contract_no)
+                      );
+                      
+                      if (!selectedContract?.description) return null;
+                      return (
+                        <div className="mt-1.5 p-2 bg-blue-50/80 border border-blue-200/60 rounded-lg text-xs text-slate-700 flex items-start gap-2 max-h-16 overflow-y-auto animate-fade-in">
+                          <FileText size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                          <div className="leading-tight text-[11px]">
+                            <span className="font-semibold text-blue-900 mr-1">Mô tả hợp đồng:</span>
+                            <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Type and Category */}
+                  {/* 3. Type and Category */}
                   <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -1814,158 +1862,145 @@ export default function RequestsPage() {
 
                   {/* Conditional Incident Fields */}
                   {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
-                    <div className="grid grid-cols-2 gap-2.5 text-left animate-fade-in">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian sự cố <span className="text-red-500">*</span>
-                        </label>
-                        <DateTimePicker
-                          value={customerFormData.incident_start_time}
-                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, incident_start_time: v }))}
-                          placeholder="Chọn thời gian sự cố..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Dịch vụ ảnh hưởng <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="affected_service"
-                          value={customerFormData.affected_service}
-                          onChange={handleCustomerInputChange}
-                          placeholder="ERP, Website..."
-                          required
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
-                        />
-                      </div>
+                    <div className="text-left animate-fade-in">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Dịch vụ ảnh hưởng <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="affected_service"
+                        value={customerFormData.affected_service}
+                        onChange={handleCustomerInputChange}
+                        placeholder="ERP, Website..."
+                        required
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
+                      />
                     </div>
                   )}
 
-                  {/* Contract Selector & Contract Description */}
-                  <div className="text-left">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Chọn hợp đồng liên quan
-                    </label>
-                    <select
-                      name="contract_no"
-                      value={customerFormData.contract_no}
-                      onChange={handleCustomerInputChange}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                    >
-                      <option value="">-- Không liên kết hợp đồng --</option>
-                      {customerContracts.map((c) => (
-                        <option key={c.id} value={c.contract_no || c.code}>
-                          {c.name} ({c.contract_no || c.code})
-                        </option>
-                      ))}
-                    </select>
+                  {/* 4. Thời gian tiếp nhận & Thời gian bắt đầu dịch vụ/sự cố */}
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Thời gian tiếp nhận
+                      </label>
+                      <DateTimePicker
+                        value={customerFormData.receive_time}
+                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, receive_time: v }))}
+                        placeholder="Chọn thời gian tiếp nhận..."
+                      />
+                    </div>
 
-                    {/* Contract Description Display */}
-                    {(() => {
-                      const selectedContract = customerContracts.find(
-                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                             (c.code && c.code === customerFormData.contract_no) ||
-                             (c.name && c.name === customerFormData.contract_no)
-                      ) || allContracts.find(
-                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                             (c.code && c.code === customerFormData.contract_no) ||
-                             (c.name && c.name === customerFormData.contract_no)
-                      );
-                      
-                      if (!selectedContract?.description) return null;
-                      return (
-                        <div className="mt-1.5 p-2 bg-blue-50/80 border border-blue-200/60 rounded-lg text-xs text-slate-700 flex items-start gap-2 max-h-16 overflow-y-auto animate-fade-in">
-                          <FileText size={14} className="text-blue-600 shrink-0 mt-0.5" />
-                          <div className="leading-tight text-[11px]">
-                            <span className="font-semibold text-blue-900 mr-1">Mô tả hợp đồng:</span>
-                            <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Thời gian bắt đầu DV/sự cố
+                      </label>
+                      <DateTimePicker
+                        value={customerFormData.incident_start_time}
+                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, incident_start_time: v }))}
+                        placeholder="Chọn thời gian bắt đầu..."
+                      />
+                    </div>
                   </div>
 
-                  {/* Edit-Only Fields: Trạng thái & Người tiếp nhận */}
-                  {editingCustomerTicket && (
-                    <div className="grid grid-cols-2 gap-2.5 text-left">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Trạng thái <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="tt_status"
-                          value={customerFormData.tt_status}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
-                        >
-                          <option value="New">Chờ tiếp nhận</option>
-                          <option value="In Progress">Đang xử lý</option>
-                          <option value="On Hold">Tạm dừng</option>
-                          <option value="Resolved">Hoàn thành</option>
-                          <option value="Rejected">Hủy bỏ</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Người tiếp nhận
-                        </label>
-                        <select
-                          name="assigned"
-                          value={customerFormData.assigned}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                        >
-                          <option value="">-- Chưa nhận --</option>
-                          {staffList.map((s) => (
-                            <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                          ))}
-                        </select>
-                      </div>
+                  {/* 5. Người yêu cầu & Người tiếp nhận */}
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Người yêu cầu
+                      </label>
+                      <input
+                        type="text"
+                        name="requester"
+                        value={customerFormData.requester}
+                        onChange={handleCustomerInputChange}
+                        placeholder="Nhập tên người yêu cầu..."
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
+                      />
                     </div>
-                  )}
 
-                  {/* Edit-Only Fields: Thời gian tiếp nhận & Thời gian hoàn thành */}
-                  {editingCustomerTicket && (
-                    <div className="grid grid-cols-2 gap-2.5 text-left">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian tiếp nhận
-                        </label>
-                        <DateTimePicker
-                          value={customerFormData.receive_time}
-                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, receive_time: v }))}
-                          placeholder="Chọn thời gian tiếp nhận..."
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian hoàn thành
-                        </label>
-                        <DateTimePicker
-                          value={customerFormData.end_time}
-                          onChange={(v) => setCustomerFormData(prev => ({ ...prev, end_time: v }))}
-                          placeholder="Chọn thời gian hoàn thành..."
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Người tiếp nhận
+                      </label>
+                      <select
+                        name="assigned"
+                        value={customerFormData.assigned}
+                        onChange={handleCustomerInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                      >
+                        <option value="">-- Chưa nhận --</option>
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                        ))}
+                      </select>
                     </div>
-                  )}
+                  </div>
+
+                  {/* 6. Trạng thái & Thời gian hoàn thành */}
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Trạng thái <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="tt_status"
+                        value={customerFormData.tt_status}
+                        onChange={handleCustomerInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                      >
+                        <option value="New">Chờ tiếp nhận</option>
+                        <option value="In Progress">Đang xử lý</option>
+                        <option value="On Hold">Tạm dừng</option>
+                        <option value="Resolved">Hoàn thành</option>
+                        <option value="Rejected">Hủy bỏ</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Thời gian hoàn thành
+                      </label>
+                      <DateTimePicker
+                        value={customerFormData.end_time}
+                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, end_time: v }))}
+                        placeholder="Chọn thời gian hoàn thành..."
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Right Column: Chỉ dành cho Mô tả chi tiết */}
-                <div className="flex flex-col h-full text-left">
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                    Mô tả chi tiết
-                  </label>
-                  <textarea
-                    name="description"
-                    value={customerFormData.description}
-                    onChange={handleCustomerInputChange}
-                    placeholder="Mô tả cụ thể nội dung sự cố, thông tin máy chủ, mã lỗi, hoặc các hướng dẫn chi tiết..."
-                    className="w-full flex-1 min-h-[220px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
-                  />
+                {/* Right Column: Tiêu đề yêu cầu & Mô tả chi tiết */}
+                <div className="flex flex-col h-full text-left space-y-2.5">
+                  {/* Title */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Tiêu đề yêu cầu <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={customerFormData.title}
+                      onChange={handleCustomerInputChange}
+                      placeholder="Nhập tên tóm tắt sự cố hoặc yêu cầu..."
+                      required
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="flex flex-col flex-1 min-h-0">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Mô tả chi tiết
+                    </label>
+                    <textarea
+                      name="description"
+                      value={customerFormData.description}
+                      onChange={handleCustomerInputChange}
+                      placeholder="Mô tả cụ thể nội dung sự cố, thông tin máy chủ, mã lỗi, hoặc các hướng dẫn chi tiết..."
+                      className="w-full flex-1 min-h-[250px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                    />
+                  </div>
                 </div>
               </div>
 
