@@ -625,83 +625,103 @@ const getStepSublabel = (key: StepKey) => {
   }
 };
 
-function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStepClick }: {
+function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStepClick, ttStatus, setTtStatus }: {
   currentStep: StepKey; completedSteps: Set<StepKey>; savedSteps: Set<StepKey>;
   editing: boolean; onStepClick: (key: StepKey) => void;
+  ttStatus: string; setTtStatus: (v: string) => void;
 }) {
   const labelStyle = "text-xs font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1.5";
 
   return (
-    <div className="flex flex-col py-8 px-6 border-r border-slate-100 bg-[#f8fafc]/80 shrink-0" style={{ width: 245 }}>
-      <p className="text-xs font-bold text-slate-400 mb-8 uppercase tracking-wider pl-1">Process</p>
-      <div className="flex-1 flex flex-col">
-        {STEPS.map((step, i) => {
-          const isCompleted = completedSteps.has(step.key);
-          const isSaved     = savedSteps.has(step.key);
-          const isActive    = step.key === currentStep;
+    <div className="flex flex-col justify-between py-7 px-5 border-r border-slate-100 bg-[#f8fafc]/80 shrink-0 h-full" style={{ width: 245 }}>
+      <div>
+        <p className="text-xs font-bold text-slate-400 mb-7 uppercase tracking-wider pl-1">Process</p>
+        <div className="flex flex-col">
+          {STEPS.map((step, i) => {
+            const isCompleted = completedSteps.has(step.key);
+            const isSaved     = savedSteps.has(step.key);
+            const isActive    = step.key === currentStep;
 
-          let circleColorClass = "bg-white border border-slate-200 text-slate-400";
-          let iconColorClass = "text-slate-400";
-          let titleColorClass = "text-slate-500 font-medium";
+            let circleColorClass = "bg-white border border-slate-200 text-slate-400";
+            let iconColorClass = "text-slate-400";
+            let titleColorClass = "text-slate-500 font-medium";
 
-          if (isActive) {
-            circleColorClass = "bg-blue-600 border border-blue-600 text-white shadow-md shadow-blue-500/20";
-            iconColorClass = "text-blue-600";
-            titleColorClass = "text-blue-600 font-bold";
-          } else if (isCompleted) {
-            circleColorClass = "bg-green-500 border border-green-500 text-white";
-            iconColorClass = "text-green-600";
-            titleColorClass = "text-slate-800";
-          } else if (isSaved) {
-            circleColorClass = "bg-rose-500 border border-rose-500 text-white";
-            iconColorClass = "text-rose-600";
-            titleColorClass = "text-slate-800";
-          }
+            if (isActive) {
+              circleColorClass = "bg-blue-600 border border-blue-600 text-white shadow-md shadow-blue-500/20";
+              iconColorClass = "text-blue-600";
+              titleColorClass = "text-blue-600 font-bold";
+            } else if (isCompleted) {
+              circleColorClass = "bg-green-500 border border-green-500 text-white";
+              iconColorClass = "text-green-600";
+              titleColorClass = "text-slate-800";
+            } else if (isSaved) {
+              circleColorClass = "bg-rose-500 border border-rose-500 text-white";
+              iconColorClass = "text-rose-600";
+              titleColorClass = "text-slate-800";
+            }
 
-          const StepIcon = getStepIcon(step.key);
-          const stepSublabel = getStepSublabel(step.key);
+            const StepIcon = getStepIcon(step.key);
+            const stepSublabel = getStepSublabel(step.key);
 
-          // Connector line color calculation
-          const nextStepKey = STEPS[i + 1]?.key;
-          const isLineActive = nextStepKey && (completedSteps.has(step.key) || savedSteps.has(step.key));
+            // Connector line color calculation
+            const nextStepKey = STEPS[i + 1]?.key;
+            const isLineActive = nextStepKey && (completedSteps.has(step.key) || savedSteps.has(step.key));
 
-          return (
-            <div
-              key={step.key}
-              onClick={() => onStepClick(step.key)}
-              className="relative flex items-stretch gap-3.5 pb-6.5 cursor-pointer group select-none"
-            >
-              {/* Connector Line */}
-              {i < STEPS.length - 1 && (
-                <div
-                  className={`absolute left-3.5 top-7 bottom-0 w-0.5 -translate-x-1/2 transition ${
-                    isLineActive ? "bg-green-400" : "bg-slate-200"
-                  }`}
-                />
-              )}
-
-              {/* Step Circle Indicator */}
+            return (
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold z-10 shrink-0 transition group-hover:scale-105 duration-200 ${circleColorClass}`}
+                key={step.key}
+                onClick={() => onStepClick(step.key)}
+                className="relative flex items-stretch gap-3.5 pb-6 cursor-pointer group select-none"
               >
-                {i + 1}
-              </div>
+                {/* Connector Line */}
+                {i < STEPS.length - 1 && (
+                  <div
+                    className={`absolute left-3.5 top-7 bottom-0 w-0.5 -translate-x-1/2 transition ${
+                      isLineActive ? "bg-green-400" : "bg-slate-200"
+                    }`}
+                  />
+                )}
 
-              {/* Step Label Content */}
-              <div className="flex items-start gap-2.5 pt-0.5">
-                <StepIcon size={14} className={`shrink-0 transition mt-0.5 ${iconColorClass}`} />
-                <div className="space-y-0.5">
-                  <span className={`text-xs block leading-none transition ${titleColorClass}`}>
-                    {step.label}
-                  </span>
-                  <span className="text-[10px] font-medium text-slate-400 block leading-none">
-                    {stepSublabel}
-                  </span>
+                {/* Step Circle Indicator */}
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold z-10 shrink-0 transition group-hover:scale-105 duration-200 ${circleColorClass}`}
+                >
+                  {i + 1}
+                </div>
+
+                {/* Step Label Content */}
+                <div className="flex items-start gap-2.5 pt-0.5">
+                  <StepIcon size={14} className={`shrink-0 transition mt-0.5 ${iconColorClass}`} />
+                  <div className="space-y-0.5">
+                    <span className={`text-xs block leading-none transition ${titleColorClass}`}>
+                      {step.label}
+                    </span>
+                    <span className="text-[10px] font-medium text-slate-400 block leading-none">
+                      {stepSublabel}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Ticket Status at the bottom of Process Panel */}
+      <div className="mt-auto pt-3">
+        <div className="bg-white rounded-xl border border-slate-200/90 p-2.5 shadow-2xs flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-slate-500 pl-1 shrink-0">Status</span>
+          <div className="flex-1 min-w-0">
+            <TealSelect
+              value={ttStatus}
+              onChange={setTtStatus}
+              options={TT_STATUS_OPTIONS}
+              placeholder="In progress"
+              dropUp={true}
+              fullWidth={true}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -712,13 +732,11 @@ function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStep
 /* ═══════════════════════════════════════════════════════════ */
 function FooterBar({
   currentStep,
-  ttStatus, setTtStatus, onsite, setOnsite, showOnsite,
+  onsite, setOnsite, showOnsite,
   editing, isStepDone, onEdit, onSave, onConfirm, submitting,
   onFullScreen, showFullScreen, extraLeftButtons, extraRightButtons,
-  showStatus = true,
 }: {
   currentStep: StepKey;
-  ttStatus: string; setTtStatus: (v: string) => void;
   onsite: string; setOnsite: (v: string) => void;
   showOnsite: boolean;
   editing: boolean; isStepDone: boolean;
@@ -727,22 +745,10 @@ function FooterBar({
   onFullScreen?: () => void; showFullScreen?: boolean;
   extraLeftButtons?: React.ReactNode;
   extraRightButtons?: React.ReactNode;
-  showStatus?: boolean;
 }) {
   return (
     <div className="px-8 py-4 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
       <div className="flex items-center gap-3">
-        {showStatus && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Status</span>
-            <TealSelect
-              value={ttStatus} onChange={setTtStatus}
-              options={TT_STATUS_OPTIONS} placeholder="In progress"
-              readOnly={isStepDone && !editing} fullWidth={false}
-              dropUp={true}
-            />
-          </div>
-        )}
         {showOnsite && (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 ml-3">Onsite</span>
@@ -2236,10 +2242,10 @@ function CompletedForm({
   const calculatedHoldMins = calculateHoldMinutes(realHoldsList);
 
   // Lifecycle & Work time calculations
-  const totalLifecycleMins = getMinutesBetween(ticketCreatedAt || effectiveStartTime, effectiveResolveTime) || 470;
-  const totalProcessingMins = getMinutesBetween(effectiveStartTime, effectiveResolveTime) || 440;
+  const totalLifecycleMins = effectiveResolveTime ? getMinutesBetween(ticketCreatedAt || effectiveStartTime, effectiveResolveTime) : 0;
+  const totalProcessingMins = effectiveResolveTime ? getMinutesBetween(effectiveStartTime, effectiveResolveTime) : 0;
   const netMins = Math.max(0, totalProcessingMins - calculatedHoldMins);
-  const responseTimeMins = getMinutesBetween(ticketCreatedAt, effectiveStartTime) || 30;
+  const responseTimeMins = getMinutesBetween(ticketCreatedAt, effectiveStartTime);
 
   // SLA Calculation
   const priorityStr = createData.priority || ticket?.priority || "P2 – Cao";
@@ -2347,9 +2353,9 @@ function CompletedForm({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* 3-COLUMN DASHBOARD (CLOSER GAP, STRETCHED TO BOTTOM)        */}
+      {/* 3-COLUMN DASHBOARD (WIDER SUMMARY, STRETCHED TO BOTTOM)    */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 sm:gap-3 items-stretch flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr_1fr] gap-2.5 sm:gap-3 items-stretch flex-1 min-h-0">
         {/* ─────────────────────────────────────────────────────────── */}
         {/* COLUMN 1: HOÀN THÀNH                                        */}
         {/* ─────────────────────────────────────────────────────────── */}
@@ -2377,7 +2383,7 @@ function CompletedForm({
 
               <div className="space-y-1">
                 <label className="text-xs font-medium text-slate-600 block">
-                  Thời gian hoàn thành <span className="text-red-500">*</span>
+                  Thời gian hoàn thành
                 </label>
                 <DateTimePicker
                   value={effectiveResolveTime}
@@ -2387,7 +2393,7 @@ function CompletedForm({
                     onReportingDataChange({ thoiGianKetThuc: v });
                   }}
                   readOnly={!editing}
-                  placeholder="09/21/2026 04:20 PM"
+                  placeholder="DD/MM/YYYY HH:mm"
                 />
               </div>
             </div>
@@ -2400,13 +2406,13 @@ function CompletedForm({
               <div className="relative">
                 <textarea
                   value={finishedData.briefSummary}
-                  onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 500) })}
+                  onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 1000) })}
                   disabled={!editing}
-                  rows={10}
-                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
+                  rows={13}
+                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700 min-h-[280px]"
                 />
                 <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
-                  {(finishedData.briefSummary || "").length}/500
+                  {(finishedData.briefSummary || "").length}/1000
                 </div>
               </div>
             </div>
@@ -2723,10 +2729,10 @@ function CompletedForm({
               <div className="pl-1">
                 <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
                 <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {formatTimeOnly(effectiveResolveTime, "16:20")}
+                  {effectiveResolveTime ? formatTimeOnly(effectiveResolveTime, "—") : "—"}
                 </span>
-                <span className="text-[9.5px] text-slate-500 font-medium block truncate" title={`+${formatMinsToShortReadable(totalProcessingMins)}`}>
-                  +{formatMinsToShortReadable(totalProcessingMins)}
+                <span className="text-[9.5px] text-slate-500 font-medium block truncate" title={effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}>
+                  {effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}
                 </span>
               </div>
             </div>
@@ -2746,7 +2752,7 @@ function CompletedForm({
                   <p className="font-semibold text-slate-800">Tổng thời gian xử lý</p>
                   <p className="text-[10.5px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
                 </div>
-                <span className="font-semibold text-slate-800">{formatMinsToShortReadable(totalProcessingMins)}</span>
+                <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalProcessingMins) : "—"}</span>
               </div>
 
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
@@ -2764,7 +2770,7 @@ function CompletedForm({
                   <p className="text-[10.5px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
                 </div>
                 <span className="text-lg font-black text-[#0d544a]">
-                  {formatMinsToShortReadable(netMins)}
+                  {effectiveResolveTime ? formatMinsToShortReadable(netMins) : "—"}
                 </span>
               </div>
 
@@ -2774,15 +2780,17 @@ function CompletedForm({
                   <p className="font-semibold text-slate-800">Tổng vòng đời ticket</p>
                   <p className="text-[10.5px] text-slate-400">Tạo ticket → hoàn thành</p>
                 </div>
-                <span className="font-semibold text-slate-800">{formatMinsToShortReadable(totalLifecycleMins)}</span>
+                <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalLifecycleMins) : "—"}</span>
               </div>
 
               {/* SLA Section */}
               <div className="space-y-0.5 py-1 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-800">{slaLabel}</span>
-                  <span className={`font-bold ${isInSla ? "text-teal-700" : "text-rose-600"}`}>
-                    {isInSla ? `Đạt SLA · còn ${formatMinsToShortReadable(slaRemainingMins)}` : `Vi phạm SLA · quá ${formatMinsToShortReadable(slaOverdueMins)}`}
+                  <span className={`font-bold ${effectiveResolveTime ? (isInSla ? "text-teal-700" : "text-rose-600") : "text-slate-500"}`}>
+                    {effectiveResolveTime
+                      ? (isInSla ? `Đạt SLA · còn ${formatMinsToShortReadable(slaRemainingMins)}` : `Vi phạm SLA · quá ${formatMinsToShortReadable(slaOverdueMins)}`)
+                      : "Chưa hoàn thành"}
                   </span>
                 </div>
 
@@ -4969,17 +4977,15 @@ export default function TicketFormModal({
       setActiveSubTab("troubleshoot");
 
       let resolveLocal = "";
-      if (ticket.end_time || ticket.tt_close_time) {
+      if (ticket.end_time || ticket.tt_close_time || (ticket as any).resolve_time) {
         try {
-          const rd = new Date(ticket.end_time || ticket.tt_close_time || "");
+          const rd = new Date(ticket.end_time || ticket.tt_close_time || (ticket as any).resolve_time || "");
           if (!isNaN(rd.getTime())) {
             const tzoffset = rd.getTimezoneOffset() * 60000;
             resolveLocal = (new Date(rd.getTime() - tzoffset)).toISOString().slice(0, 16);
           }
         } catch {}
       }
-
-
 
       setFinishedData({
         ticketStatus: ticket.tt_status || "Completed",
@@ -4994,17 +5000,14 @@ export default function TicketFormModal({
       });
 
       let closeLocal = "";
-      if (ticket.tt_close_time) {
+      if (ticket.tt_close_time || ticket.end_time || (ticket as any).resolve_time) {
         try {
-          const cd = new Date(ticket.tt_close_time);
+          const cd = new Date(ticket.tt_close_time || ticket.end_time || (ticket as any).resolve_time || "");
           if (!isNaN(cd.getTime())) {
             const tzoffset = cd.getTimezoneOffset() * 60000;
             closeLocal = (new Date(cd.getTime() - tzoffset)).toISOString().slice(0, 16);
           }
         } catch {}
-      } else {
-        const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-        closeLocal = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
       }
       setCloseTime(closeLocal);
 
@@ -5220,7 +5223,7 @@ export default function TicketFormModal({
 
       } else if (currentStep === "completed") {
         const updatePayload: any = {
-          tt_status:     finishedData.ticketStatus || ttStatus,
+          tt_status:     ttStatus || finishedData.ticketStatus || "Completed",
           start_time:    finishedData.startTime || createData.startTime || null,
           end_time:      finishedData.resolveTime  || null,
           resolve_time:  finishedData.resolveTime  || null,
@@ -5413,7 +5416,7 @@ export default function TicketFormModal({
       } else if (currentStep === "completed") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const updatePayload: any = {
-          tt_status:     finishedData.ticketStatus || ttStatus,
+          tt_status:     ttStatus || finishedData.ticketStatus || "Completed",
           start_time:    finishedData.startTime || createData.startTime || null,
           end_time:      finishedData.resolveTime  || null,
           resolve_time:  finishedData.resolveTime  || null,
@@ -5773,6 +5776,8 @@ export default function TicketFormModal({
         savedSteps={savedSteps}
         editing={editing}
         onStepClick={handleStepClick}
+        ttStatus={ttStatus}
+        setTtStatus={setTtStatus}
       />
 
       {/* RIGHT */}
@@ -5888,11 +5893,8 @@ export default function TicketFormModal({
         {currentStep !== "completed" && (
           <FooterBar
             currentStep={currentStep}
-            ttStatus={ttStatus}
-            setTtStatus={setTtStatus}
             onsite={onsite}
             setOnsite={setOnsite}
-            showStatus={currentStep !== "troubleshoot" || activeSubTab !== "runbook"}
             showOnsite={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
             editing={editing}
             isStepDone={isStepDone}
