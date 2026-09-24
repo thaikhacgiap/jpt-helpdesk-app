@@ -15,7 +15,6 @@ import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServi
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
-import { DateTimePicker } from "@/components/common/datetime-picker";
 import { getCurrentUser } from "@/lib/auth-operations";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -1626,10 +1625,11 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian tiếp nhận
                         </label>
-                        <DateTimePicker
-                          value={formData.receiveTime}
-                          onChange={(v) => setFormData(prev => ({ ...prev, receiveTime: v }))}
-                          placeholder="Chọn thời gian tiếp nhận..."
+                        <input
+                          type="datetime-local"
+                          value={formData.receiveTime || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, receiveTime: e.target.value }))}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                         />
                       </div>
 
@@ -1637,10 +1637,11 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Thời gian hoàn thành
                         </label>
-                        <DateTimePicker
-                          value={formData.completeTime}
-                          onChange={(v) => setFormData(prev => ({ ...prev, completeTime: v }))}
-                          placeholder="Chọn thời gian hoàn thành..."
+                        <input
+                          type="datetime-local"
+                          value={formData.completeTime || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, completeTime: e.target.value }))}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                         />
                       </div>
                     </div>
@@ -1881,10 +1882,12 @@ export default function RequestsPage() {
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Thời gian tiếp nhận
                       </label>
-                      <DateTimePicker
-                        value={customerFormData.receive_time}
-                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, receive_time: v }))}
-                        placeholder="Chọn thời gian tiếp nhận..."
+                      <input
+                        type="datetime-local"
+                        name="receive_time"
+                        value={customerFormData.receive_time || ""}
+                        onChange={handleCustomerInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                       />
                     </div>
 
@@ -1892,10 +1895,12 @@ export default function RequestsPage() {
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Thời gian bắt đầu DV/sự cố
                       </label>
-                      <DateTimePicker
-                        value={customerFormData.incident_start_time}
-                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, incident_start_time: v }))}
-                        placeholder="Chọn thời gian bắt đầu..."
+                      <input
+                        type="datetime-local"
+                        name="incident_start_time"
+                        value={customerFormData.incident_start_time || ""}
+                        onChange={handleCustomerInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                       />
                     </div>
                   </div>
@@ -1958,10 +1963,12 @@ export default function RequestsPage() {
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Thời gian hoàn thành
                       </label>
-                      <DateTimePicker
-                        value={customerFormData.end_time}
-                        onChange={(v) => setCustomerFormData(prev => ({ ...prev, end_time: v }))}
-                        placeholder="Chọn thời gian hoàn thành..."
+                      <input
+                        type="datetime-local"
+                        name="end_time"
+                        value={customerFormData.end_time || ""}
+                        onChange={handleCustomerInputChange}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                       />
                     </div>
                   </div>
