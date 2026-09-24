@@ -99,6 +99,38 @@ export default function RequestsPage() {
     tt_status: "New"
   });
 
+  // Check URL parameters for search filter (e.g. when clicked from ticket table)
+  useEffect(() => {
+    const handleUrlSearch = () => {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const searchParam = params.get("search") || params.get("code") || "";
+        if (searchParam) {
+          const trimmed = searchParam.trim();
+          setSearchQuery(trimmed);
+
+          const upper = trimmed.toUpperCase();
+          if (upper.startsWith("SR-")) {
+            setActiveTab("service");
+          } else if (upper.startsWith("TR-")) {
+            setActiveTab("task");
+          } else {
+            setActiveTab("customer");
+          }
+
+          // Clean URL parameter so the filter does not persist across page transitions
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+    };
+
+    handleUrlSearch();
+    window.addEventListener("popstate", handleUrlSearch);
+    return () => {
+      window.removeEventListener("popstate", handleUrlSearch);
+    };
+  }, []);
+
   // Load contracts when selected customer changes
   useEffect(() => {
     if (customerFormData.customerId) {
@@ -731,14 +763,23 @@ export default function RequestsPage() {
     // Only show customer requests from portal (which start with 'TH-' or 'CR-')
     if (!t.ticket_id.startsWith("TH-") && !t.ticket_id.startsWith("CR-")) return false;
 
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+    const altQuery = query.startsWith("cr-")
+      ? query.replace(/^cr-/, "th-")
+      : query.startsWith("th-")
+        ? query.replace(/^th-/, "cr-")
+        : query;
     const formattedId = t.ticket_id.replace(/^TH-/, "CR-").toLowerCase();
     const matchesSearch = 
+      !query ||
       t.ticket_id.toLowerCase().includes(query) ||
+      t.ticket_id.toLowerCase().includes(altQuery) ||
       formattedId.includes(query) ||
+      formattedId.includes(altQuery) ||
       t.title.toLowerCase().includes(query) ||
       (t.description || "").toLowerCase().includes(query) ||
-      (t.assigned || "").toLowerCase().includes(query);
+      (t.assigned || "").toLowerCase().includes(query) ||
+      (t.remark || "").toLowerCase().includes(query);
 
     const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
     const matchesType = typeFilter === "All" || t.tt_type === typeFilter;
@@ -757,8 +798,9 @@ export default function RequestsPage() {
   // 2. FILTER & SPLIT FOR SERVICE REQUESTS (Tab 2)
   const serviceRequests = requests.filter(req => req.type !== "Yêu cầu công việc");
   const filteredServiceRequests = serviceRequests.filter(req => {
-    const term = searchQuery.toLowerCase();
+    const term = searchQuery.toLowerCase().trim();
     const matchesSearch = 
+      !term ||
       req.title.toLowerCase().includes(term) || 
       req.code.toLowerCase().includes(term) ||
       (req.description || "").toLowerCase().includes(term) ||
@@ -781,8 +823,9 @@ export default function RequestsPage() {
   // 3. FILTER & SPLIT FOR TASK REQUESTS (Tab 3)
   const taskRequests = requests.filter(req => req.type === "Yêu cầu công việc");
   const filteredTaskRequests = taskRequests.filter(req => {
-    const term = searchQuery.toLowerCase();
+    const term = searchQuery.toLowerCase().trim();
     const matchesSearch = 
+      !term ||
       req.title.toLowerCase().includes(term) || 
       req.code.toLowerCase().includes(term) ||
       (req.description || "").toLowerCase().includes(term) ||
@@ -1292,6 +1335,20 @@ export default function RequestsPage() {
                 </button>
               )}
             </div>
+
+            {searchQuery && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold shrink-0 animate-fade-in">
+                <span>Đang lọc mã: <strong>{searchQuery}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="p-0.5 hover:bg-blue-100 rounded text-blue-500 hover:text-blue-800 transition cursor-pointer"
+                  title="Bỏ lọc"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
 
             {/* Conditional Type Filter options */}
             {activeTab !== "task" && (
