@@ -2395,15 +2395,14 @@ function CompletedForm({
             {/* Field: Tóm tắt xử lý */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">
-                Tóm tắt xử lý <span className="text-red-500">*</span>
+                Tóm tắt xử lý
               </label>
               <div className="relative">
                 <textarea
                   value={finishedData.briefSummary}
                   onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 500) })}
                   disabled={!editing}
-                  rows={4}
-                  placeholder="Kiểm tra log FortiGate, phát hiện tunnel IPsec của chi nhánh Hải Phòng bị ngắt do lệch pre-shared key sau đợt đổi chứng chỉ. Đã cấu hình lại key hai đầu và kiểm tra kết nối ổn định trong 30 phút."
+                  rows={10}
                   className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
                 <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
@@ -2415,7 +2414,7 @@ function CompletedForm({
             {/* Field: Kết luận / Nguyên nhân gốc */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600 block">
-                Kết luận / Nguyên nhân gốc <span className="text-red-500">*</span>
+                Kết luận / Nguyên nhân gốc
               </label>
               <div className="relative">
                 <textarea
@@ -2426,8 +2425,7 @@ function CompletedForm({
                     onReportingDataChange({ chanDoan: val });
                   }}
                   disabled={!editing}
-                  rows={4}
-                  placeholder="Nguyên nhân gốc: quy trình đổi chứng chỉ định kỳ không cập nhật pre-shared key của hệ thống VPN trung tâm. Đề xuất bổ sung bước kiểm tra VPN vào checklist đổi chứng chỉ và cảnh báo trước khi hết hạn."
+                  rows={6}
                   className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
                 />
                 <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
@@ -2439,9 +2437,9 @@ function CompletedForm({
 
           {/* Footer Status inside Column 1 */}
           <div className="pt-1 flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${isTimeFilled && isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
-            <span className={isTimeFilled && isSummaryFilled && isRootcauseFilled ? "text-slate-600 font-medium" : "text-slate-400"}>
-              {isTimeFilled && isSummaryFilled && isRootcauseFilled ? "Các trường bắt buộc đã hoàn tất" : "Vui lòng nhập đủ các trường bắt buộc"}
+            <span className={`w-2 h-2 rounded-full ${isTimeFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
+            <span className={isTimeFilled ? "text-slate-600 font-medium" : "text-slate-400"}>
+              {isTimeFilled ? "Các trường bắt buộc đã hoàn tất" : "Vui lòng nhập đủ các trường bắt buộc"}
             </span>
           </div>
         </div>
