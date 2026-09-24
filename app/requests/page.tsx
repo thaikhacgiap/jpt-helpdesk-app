@@ -209,8 +209,8 @@ export default function RequestsPage() {
 
     try {
       let finalDescription = customerFormData.description.trim();
-      if ((customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && customerFormData.affected_service) {
-        finalDescription += `\n\n[Thông tin sự cố]\n- Thời gian bắt đầu sự cố: ${customerFormData.incident_start_time.replace("T", " ")}\n- Dịch vụ bị ảnh hưởng: ${customerFormData.affected_service}`;
+      if (customerFormData.affected_service.trim()) {
+        finalDescription += `\n\n[Dịch vụ bị ảnh hưởng]\n${customerFormData.affected_service.trim()}`;
       }
 
       const remarkParts: string[] = [];
@@ -1860,23 +1860,20 @@ export default function RequestsPage() {
                     </div>
                   </div>
 
-                  {/* Conditional Incident Fields */}
-                  {(customerFormData.tt_type === "Xử lý sự cố" || customerFormData.tt_type === "Xử lý lỗi") && (
-                    <div className="text-left animate-fade-in">
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Dịch vụ ảnh hưởng <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="affected_service"
-                        value={customerFormData.affected_service}
-                        onChange={handleCustomerInputChange}
-                        placeholder="ERP, Website..."
-                        required
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
-                      />
-                    </div>
-                  )}
+                  {/* Dịch vụ bị ảnh hưởng */}
+                  <div className="text-left">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Dịch vụ bị ảnh hưởng
+                    </label>
+                    <input
+                      type="text"
+                      name="affected_service"
+                      value={customerFormData.affected_service}
+                      onChange={handleCustomerInputChange}
+                      placeholder="Nhập dịch vụ bị ảnh hưởng (ERP, Website, Mail, Hệ thống mạng...)"
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
+                    />
+                  </div>
 
                   {/* 4. Thời gian tiếp nhận & Thời gian bắt đầu dịch vụ/sự cố */}
                   <div className="grid grid-cols-2 gap-2.5 text-left">
