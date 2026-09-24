@@ -2087,8 +2087,10 @@ function CompletedForm({
   ttStatus,
   setTtStatus,
   onEdit,
+  isStepDone,
 }: {
   editing: boolean;
+  isStepDone?: boolean;
   createData: CreateFormData;
   onCreateDataChange: (patch: Partial<CreateFormData>) => void;
   finishedData: FinishedFormData;
@@ -2301,7 +2303,9 @@ function CompletedForm({
   const pWork = Math.max(10, 100 - pResponse - pHold);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-[#eef4f2] text-slate-800 p-5 sm:p-6 space-y-4">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#eef4f2] text-slate-800">
+      {/* Scrollable content area */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* HEADER: TICKET CODE, TITLE, STATUS & METADATA               */}
       {/* ═══════════════════════════════════════════════════════════ */}
@@ -2831,11 +2835,12 @@ function CompletedForm({
           </div>
         </div>
       </div>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* BOTTOM STATUS & ACTION BAR                                  */}
+      {/* BOTTOM STATUS & ACTION BAR PINNED TO BOTTOM (SÁT LỀ DƯỚI)   */}
       {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="pt-3 border-t border-slate-200/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
+      <div className="shrink-0 px-6 py-3 border-t border-slate-200/90 bg-white flex flex-wrap items-center justify-between gap-3">
         {/* Left Side: Step Completion Pills */}
         <div className="flex items-center gap-3.5 text-xs font-semibold text-slate-600 flex-wrap">
           <span className="flex items-center gap-1.5">
@@ -2860,25 +2865,40 @@ function CompletedForm({
           </span>
         </div>
 
-        {/* Right Side: Edit & Complete Buttons */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onEdit || onSave}
-            disabled={submitting}
-            className="px-5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl transition shadow-2xs cursor-pointer"
-          >
-            Edit
-          </button>
+        {/* Right Side: Edit/Save & Confirm Buttons */}
+        <div className="flex items-center gap-2">
+          {!editing ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer"
+            >
+              <Edit2 size={13} className="text-slate-500" />
+              <span>Edit</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={submitting}
+              className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-[#0099cc] text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer"
+            >
+              <Save size={13} className="text-[#0099cc]" />
+              <span>Save</span>
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={onConfirm || onSave}
-            disabled={submitting}
-            className="flex items-center gap-1.5 px-5 py-2 bg-[#0d9488] hover:bg-[#0f766e] text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer disabled:opacity-50"
+            onClick={onConfirm}
+            disabled={submitting || isStepDone}
+            className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold transition shadow-md cursor-pointer disabled:opacity-40 disabled:pointer-events-none
+              ${isStepDone
+                ? "bg-green-600 text-white border border-green-600 cursor-default"
+                : "bg-blue-600 hover:bg-blue-700 text-white border border-blue-600"}`}
           >
-            <Check size={14} />
-            <span>Hoàn thành</span>
+            <CheckCircle size={13} />
+            <span>{isStepDone ? "Confirmed" : "Confirm"}</span>
           </button>
         </div>
       </div>
@@ -5840,6 +5860,7 @@ export default function TicketFormModal({
         {currentStep === "completed" && (
           <CompletedForm
             editing={editing}
+            isStepDone={isStepDone}
             createData={createData}
             onCreateDataChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
             finishedData={finishedData}
