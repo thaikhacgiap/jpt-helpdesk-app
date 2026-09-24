@@ -384,6 +384,146 @@ export async function resetUserPassword(id: string, newPassword: string): Promis
   return { success: true };
 }
 
+export async function updateUserRole(
+  id: string,
+  groupId: string,
+  department?: string,
+  customerId?: string | null
+): Promise<{ success: boolean; error?: string }> {
+  // Fetch group to get role and role_label
+  const { data: groupData, error: groupError } = await supabase
+    .from("user_groups")
+    .select("*")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupError || !groupData) {
+    return { success: false, error: "Không tìm thấy nhóm phân quyền tương ứng." };
+  }
+
+  const updates: Record<string, any> = {
+    group_id: groupId,
+    role: groupData.role,
+    role_label: groupData.name,
+  };
+
+  if (department !== undefined) {
+    updates.department = department;
+  }
+
+  if (customerId !== undefined) {
+    updates.customer_id = customerId;
+  }
+
+  const { error: updateError } = await supabase
+    .from("system_users")
+    .update(updates)
+    .eq("id", id);
+
+  if (updateError) {
+    console.error("Error updating user role:", updateError);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật quyền hạn người dùng." };
+  }
+
+  // Update current session if the updated user is the active user
+  if (isClient()) {
+    const session = getCurrentUser();
+    if (session) {
+      const { data: updatedUser } = await supabase
+        .from("system_users")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (updatedUser && session.email.toLowerCase() === updatedUser.email.toLowerCase()) {
+        const newSession: UserSession = {
+          ...session,
+          role: groupData.role,
+          roleLabel: groupData.name,
+          department: updatedUser.department,
+          customerId: updatedUser.customer_id,
+          permissions: groupData.permissions
+        };
+        localStorage.setItem("jpt_auth_session", JSON.stringify(newSession));
+      }
+    }
+  }
+
+  logOperation("Thay đổi quyền người dùng", `Đã cập nhật quyền hạn cho người dùng ID ${id} sang nhóm "${groupData.name}" (${groupData.role}).`);
+  return { success: true };
+}
+
+export async function updateUser(
+  id: string,
+  updates: {
+    name?: string;
+    phone?: string;
+    groupId?: string;
+    department?: string;
+    customerId?: string | null;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name.trim();
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone.trim();
+  if (updates.department !== undefined) dbUpdates.department = updates.department;
+  if (updates.customerId !== undefined) dbUpdates.customer_id = updates.customerId;
+
+  let groupData: UserGroup | null = null;
+  if (updates.groupId) {
+    const { data: gData } = await supabase
+      .from("user_groups")
+      .select("*")
+      .eq("id", updates.groupId)
+      .maybeSingle();
+
+    if (gData) {
+      groupData = gData;
+      dbUpdates.group_id = updates.groupId;
+      dbUpdates.role = gData.role;
+      dbUpdates.role_label = gData.name;
+    }
+  }
+
+  const { error } = await supabase
+    .from("system_users")
+    .update(dbUpdates)
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error updating user:", error);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật người dùng." };
+  }
+
+  if (isClient() && groupData) {
+    const session = getCurrentUser();
+    if (session) {
+      const { data: updatedUser } = await supabase
+        .from("system_users")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (updatedUser && session.email.toLowerCase() === updatedUser.email.toLowerCase()) {
+        const newSession: UserSession = {
+          ...session,
+          name: updatedUser.name,
+          phone: updatedUser.phone,
+          role: groupData.role,
+          roleLabel: groupData.name,
+          department: updatedUser.department,
+          customerId: updatedUser.customer_id,
+          permissions: groupData.permissions
+        };
+        localStorage.setItem("jpt_auth_session", JSON.stringify(newSession));
+      }
+    }
+  }
+
+  logOperation("Cập nhật thông tin người dùng", `Đã cập nhật thông tin tài khoản người dùng ID ${id}.`);
+  return { success: true };
+}
+
 // Group CRUD Helpers
 export async function createGroup(data: Omit<UserGroup, 'id'>): Promise<{ success: boolean; group?: UserGroup; error?: string }> {
   const { data: duplicate } = await supabase
