@@ -8,7 +8,7 @@ import {
   fetchProjects, 
   createProject, 
   deleteProject, 
-  syncProjectsToSupabase,
+  subscribeToProjects,
   Project,
   ProjectType
 } from "@/lib/project-operations";
@@ -43,8 +43,7 @@ import {
   ShoppingCart,
   Home,
   Target,
-  RefreshCw,
-  Database
+  Cloud
 } from "lucide-react";
 
 export default function ProjectsPage() {
@@ -85,14 +84,20 @@ export default function ProjectsPage() {
     description: ""
   });
 
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
-
-  // Load Initial Data
+  // Load Initial Data with Automatic Realtime Sync
   useEffect(() => {
     fetchProjects().then(setProjects).catch(err => console.error("Error loading projects:", err));
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
     fetchCustomers().then(setCustomers).catch(err => console.error("Error loading customers:", err));
+
+    // Auto Realtime synchronization: automatically updates whenever database changes
+    const unsubscribe = subscribeToProjects((latestProjects) => {
+      setProjects(latestProjects);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const refreshProjects = async () => {
@@ -101,23 +106,6 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error("Error refreshing projects:", err);
-    }
-  };
-
-  const handleSyncSupabase = async () => {
-    setIsSyncing(true);
-    setSyncStatus(null);
-    try {
-      const res = await syncProjectsToSupabase();
-      setSyncStatus(res.message);
-      if (res.success) {
-        await refreshProjects();
-      }
-    } catch (err: any) {
-      setSyncStatus(`Lỗi đồng bộ: ${err.message || String(err)}`);
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => setSyncStatus(null), 6000);
     }
   };
 
@@ -474,16 +462,12 @@ export default function ProjectsPage() {
             </button>
           </div>
 
-          {/* Supabase Sync Button */}
-          <button
-            onClick={handleSyncSupabase}
-            disabled={isSyncing}
-            title="Đồng bộ toàn bộ danh sách dự án lên Supabase Cloud Database"
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 rounded-xl font-medium text-sm transition shadow-2xs cursor-pointer disabled:opacity-60 shrink-0"
-          >
-            <RefreshCw size={15} className={`text-emerald-600 ${isSyncing ? "animate-spin" : ""}`} />
-            <span>{isSyncing ? "Đang đồng bộ..." : "Đồng bộ Supabase"}</span>
-          </button>
+          {/* Automatic Cloud Sync Status Indicator */}
+          <div className="hidden sm:flex items-center gap-2 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200/80 rounded-xl text-xs font-semibold text-emerald-700 shadow-2xs">
+            <Cloud size={15} className="text-emerald-600" />
+            <span>Tự động đồng bộ Cloud</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
 
           <button
             onClick={handleOpenCreateModal}
@@ -494,23 +478,6 @@ export default function ProjectsPage() {
           </button>
         </div>
       </div>
-
-      {/* Sync Status Banner */}
-      {syncStatus && (
-        <div className={`mb-6 p-4 rounded-2xl border text-sm flex items-center justify-between ${
-          syncStatus.includes("Lỗi") || syncStatus.includes("chưa được tạo")
-            ? "bg-amber-50 border-amber-200 text-amber-800"
-            : "bg-emerald-50 border-emerald-200 text-emerald-800"
-        }`}>
-          <div className="flex items-center gap-3">
-            <Database size={18} className={syncStatus.includes("Lỗi") ? "text-amber-600" : "text-emerald-600"} />
-            <span className="font-medium">{syncStatus}</span>
-          </div>
-          <button onClick={() => setSyncStatus(null)} className="text-slate-400 hover:text-slate-600 p-1">
-            <X size={16} />
-          </button>
-        </div>
-      )}
 
       {/* Projects Grid / Table */}
       {filteredProjects.length === 0 ? (

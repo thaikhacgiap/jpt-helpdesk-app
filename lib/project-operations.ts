@@ -1246,7 +1246,7 @@ export async function syncProjectsToSupabase(): Promise<{ success: boolean; mess
   }
 }
 
-// ─── Fetch Projects (Supabase with LocalStorage Fallback) ───────
+// ─── Fetch Projects (Automatic Bidirectional Sync with Supabase) ───────
 export async function fetchProjects(): Promise<Project[]> {
   if (isClient()) {
     try {
@@ -1256,24 +1256,35 @@ export async function fetchProjects(): Promise<Project[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        if (data.length > 0) {
-          const list = data.map(fromDbProject);
-          setStoredProjects(list);
-          return list;
-        } else {
-          // Table exists in DB but empty -> auto-seed default/local projects to Supabase!
-          const localList = getStoredProjects();
-          if (localList.length > 0) {
-            console.log("Seeding initial projects to Supabase...");
-            const dbPayloads = localList.map(toDbProject);
-            supabase.from('projects').insert(dbPayloads).then(({ error: seedErr }) => {
-              if (seedErr) console.warn("Auto-seed projects warning:", seedErr.message);
-            });
-          }
+        const localList = getStoredProjects();
+
+        if (data.length === 0 && localList.length > 0) {
+          // 1. Supabase table is empty -> automatically push all local projects to Supabase!
+          console.log("Auto-syncing initial local projects to Supabase...");
+          const dbPayloads = localList.map(toDbProject);
+          supabase.from('projects').upsert(dbPayloads, { onConflict: 'id' }).then(({ error: seedErr }) => {
+            if (seedErr) console.warn("Auto-sync projects warning:", seedErr.message);
+          });
           return localList;
+        } else if (data.length > 0) {
+          // 2. Supabase has data -> check if any local project was created while offline
+          const dbProjects = data.map(fromDbProject);
+          const dbIdSet = new Set(dbProjects.map(p => p.id));
+          const unSyncedLocals = localList.filter(p => !dbIdSet.has(p.id));
+
+          if (unSyncedLocals.length > 0) {
+            // Automatically push unsynced local projects to Supabase in the background
+            const payloads = unSyncedLocals.map(toDbProject);
+            supabase.from('projects').upsert(payloads, { onConflict: 'id' }).then(({ error: syncErr }) => {
+              if (syncErr) console.warn("Auto-sync unsynced local projects warning:", syncErr.message);
+            });
+            dbProjects.push(...unSyncedLocals);
+          }
+
+          setStoredProjects(dbProjects);
+          return dbProjects;
         }
       } else if (error) {
-        // Table doesn't exist yet or connection error
         console.warn("Supabase projects table notice:", error.message);
       }
     } catch (e) {
@@ -1282,6 +1293,42 @@ export async function fetchProjects(): Promise<Project[]> {
   }
 
   return getStoredProjects();
+}
+
+// ─── Realtime Subscription for Automatic Background Sync ───────
+export function subscribeToProjects(onUpdate: (projects: Project[]) => void): () => void {
+  if (!isClient()) return () => {};
+  try {
+    const channel = supabase
+      .channel('projects-realtime-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        async () => {
+          try {
+            const { data } = await supabase
+              .from('projects')
+              .select('*')
+              .order('created_at', { ascending: false });
+            if (data) {
+              const list = data.map(fromDbProject);
+              setStoredProjects(list);
+              onUpdate(list);
+            }
+          } catch (e) {
+            console.warn("Realtime reload projects warning:", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch (err) {
+    console.warn("subscribeToProjects error:", err);
+    return () => {};
+  }
 }
 
 export function getProjectById(id: string): Project | undefined {

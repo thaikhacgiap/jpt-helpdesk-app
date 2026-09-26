@@ -17,6 +17,7 @@ import {
   addDocument,
   addDiaryEntry,
   updateProjectPlan,
+  subscribeToProjects,
   Project,
   ProjectTask,
   ProjectMilestone,
@@ -371,6 +372,16 @@ export default function ProjectDetailPage() {
       if (fresh) setProject(fresh);
     });
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
+
+    // Auto Realtime sync for this project
+    const unsubscribe = subscribeToProjects((latestProjects) => {
+      const match = latestProjects.find(p => p.id === projectId);
+      if (match) setProject(match);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [projectId]);
 
   // Refresh current project from cache and Supabase
