@@ -366,7 +366,7 @@ export default function RequestsPage() {
 
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
     fetchContracts().then(setAllContracts).catch(err => console.error("Error loading all contracts:", err));
-    setProjects(fetchProjects());
+    fetchProjects().then(setProjects).catch(err => console.error("Error loading projects:", err));
     
     // Customer tickets and customers
     loadCustomerTicketsList();

@@ -7,6 +7,7 @@ import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import {
   getProjectById,
+  fetchProjectById,
   updateProject,
   addTask,
   updateTask,
@@ -366,15 +367,21 @@ export default function ProjectDetailPage() {
     if (loadedProj) {
       setProject(loadedProj);
     }
+    fetchProjectById(projectId).then(fresh => {
+      if (fresh) setProject(fresh);
+    });
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
   }, [projectId]);
 
-  // Refresh current project from localStorage
+  // Refresh current project from cache and Supabase
   const refreshProjectData = () => {
     const loadedProj = getProjectById(projectId);
     if (loadedProj) {
       setProject(loadedProj);
     }
+    fetchProjectById(projectId).then(fresh => {
+      if (fresh) setProject(fresh);
+    });
   };
 
   if (!project) {

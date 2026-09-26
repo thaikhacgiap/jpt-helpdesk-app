@@ -39,7 +39,7 @@ export default function DashboardPage() {
         const dashData = await fetchDashboardData();
         setData(dashData);
 
-        const projData = fetchProjects();
+        const projData = await fetchProjects();
         setProjects(projData || []);
 
         const reqData = fetchRequests();

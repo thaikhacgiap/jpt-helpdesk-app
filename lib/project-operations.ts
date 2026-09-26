@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 export interface ProjectTask {
   id: string;
   title: string;
@@ -1052,7 +1054,72 @@ function isClient() {
   return typeof window !== 'undefined';
 }
 
-function getStoredProjects(): Project[] {
+function isValidUUID(val?: string | null): boolean {
+  if (!val) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
+
+export function fromDbProject(r: any): Project {
+  return {
+    id: r.id,
+    code: r.code || "",
+    name: r.name || "",
+    customer: r.customer || "",
+    customerId: r.customer_id || undefined,
+    contractId: r.contract_id || undefined,
+    contractNo: r.contract_no || undefined,
+    opportunityId: r.opportunity_id || undefined,
+    opportunityCode: r.opportunity_code || undefined,
+    opportunityName: r.opportunity_name || undefined,
+    projectType: (r.project_type as ProjectType) || 'professional',
+    manager: r.manager || "",
+    startDate: r.start_date || "",
+    endDate: r.end_date || "",
+    budget: Number(r.budget) || 0,
+    status: r.status || "Planning",
+    description: r.description || "",
+    progress: Number(r.progress) || 0,
+    plan: Array.isArray(r.plan) ? r.plan : [],
+    timeline: Array.isArray(r.timeline) ? r.timeline : [],
+    documents: Array.isArray(r.documents) ? r.documents : [],
+    diary: Array.isArray(r.diary) ? r.diary : [],
+    sow: Array.isArray(r.sow) ? r.sow : [],
+    notes: Array.isArray(r.notes) ? r.notes : [],
+  };
+}
+
+export function toDbProject(p: Partial<Project>): any {
+  const dbObj: any = {
+    updated_at: new Date().toISOString()
+  };
+  if (p.id !== undefined) dbObj.id = p.id;
+  if (p.code !== undefined) dbObj.code = p.code;
+  if (p.name !== undefined) dbObj.name = p.name;
+  if (p.customer !== undefined) dbObj.customer = p.customer;
+  if (p.customerId !== undefined) dbObj.customer_id = isValidUUID(p.customerId) ? p.customerId : null;
+  if (p.contractId !== undefined) dbObj.contract_id = isValidUUID(p.contractId) ? p.contractId : null;
+  if (p.contractNo !== undefined) dbObj.contract_no = p.contractNo;
+  if (p.opportunityId !== undefined) dbObj.opportunity_id = isValidUUID(p.opportunityId) ? p.opportunityId : null;
+  if (p.opportunityCode !== undefined) dbObj.opportunity_code = p.opportunityCode;
+  if (p.opportunityName !== undefined) dbObj.opportunity_name = p.opportunityName;
+  if (p.projectType !== undefined) dbObj.project_type = p.projectType;
+  if (p.manager !== undefined) dbObj.manager = p.manager;
+  if (p.startDate !== undefined) dbObj.start_date = p.startDate;
+  if (p.endDate !== undefined) dbObj.end_date = p.endDate;
+  if (p.budget !== undefined) dbObj.budget = typeof p.budget === 'number' ? p.budget : Number(p.budget) || 0;
+  if (p.status !== undefined) dbObj.status = p.status;
+  if (p.description !== undefined) dbObj.description = p.description;
+  if (p.progress !== undefined) dbObj.progress = typeof p.progress === 'number' ? p.progress : Number(p.progress) || 0;
+  if (p.plan !== undefined) dbObj.plan = p.plan;
+  if (p.timeline !== undefined) dbObj.timeline = p.timeline;
+  if (p.documents !== undefined) dbObj.documents = p.documents;
+  if (p.diary !== undefined) dbObj.diary = p.diary;
+  if (p.sow !== undefined) dbObj.sow = p.sow;
+  if (p.notes !== undefined) dbObj.notes = p.notes;
+  return dbObj;
+}
+
+export function getStoredProjects(): Project[] {
   if (!isClient()) return DEFAULT_PROJECTS;
   const stored = localStorage.getItem('jpt_projects');
   if (!stored) {
@@ -1086,7 +1153,7 @@ function getStoredProjects(): Project[] {
   }
 }
 
-function setStoredProjects(projects: Project[]) {
+export function setStoredProjects(projects: Project[]) {
   if (!isClient()) return;
   localStorage.setItem('jpt_projects', JSON.stringify(projects));
 }
@@ -1103,13 +1170,148 @@ function recalculateProgress(project: Project): Project {
   return project;
 }
 
-export function fetchProjects(): Project[] {
+// ─── Supabase Async Helpers ─────────────────────────────────────
+export async function saveProjectToSupabase(project: Project): Promise<{ success: boolean; error?: string }> {
+  try {
+    const payload = toDbProject(project);
+    const { error } = await supabase
+      .from('projects')
+      .upsert(payload, { onConflict: 'id' });
+    
+    if (error) {
+      console.warn("Supabase saveProject warning:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.warn("saveProjectToSupabase error:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteProjectFromSupabase(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      console.warn("Supabase deleteProject warning:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function checkSupabaseProjectsTable(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('projects').select('id').limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function syncProjectsToSupabase(): Promise<{ success: boolean; message: string; count?: number }> {
+  try {
+    const localProjects = getStoredProjects();
+    if (!localProjects || localProjects.length === 0) {
+      return { success: false, message: "Không có dữ liệu dự án nào để đồng bộ." };
+    }
+
+    const payloads = localProjects.map(toDbProject);
+    const { error } = await supabase
+      .from('projects')
+      .upsert(payloads, { onConflict: 'id' });
+
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('relation "projects" does not exist')) {
+        return {
+          success: false,
+          message: "Bảng 'projects' chưa được tạo trên Supabase. Vui lòng chạy file projects_migration.sql trên Supabase SQL Editor."
+        };
+      }
+      return { success: false, message: `Lỗi đồng bộ Supabase: ${error.message}` };
+    }
+
+    return {
+      success: true,
+      count: localProjects.length,
+      message: `Đồng bộ thành công ${localProjects.length} dự án lên Supabase!`
+    };
+  } catch (err: any) {
+    return { success: false, message: `Lỗi kết nối Supabase: ${err.message || String(err)}` };
+  }
+}
+
+// ─── Fetch Projects (Supabase with LocalStorage Fallback) ───────
+export async function fetchProjects(): Promise<Project[]> {
+  if (isClient()) {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        if (data.length > 0) {
+          const list = data.map(fromDbProject);
+          setStoredProjects(list);
+          return list;
+        } else {
+          // Table exists in DB but empty -> auto-seed default/local projects to Supabase!
+          const localList = getStoredProjects();
+          if (localList.length > 0) {
+            console.log("Seeding initial projects to Supabase...");
+            const dbPayloads = localList.map(toDbProject);
+            supabase.from('projects').insert(dbPayloads).then(({ error: seedErr }) => {
+              if (seedErr) console.warn("Auto-seed projects warning:", seedErr.message);
+            });
+          }
+          return localList;
+        }
+      } else if (error) {
+        // Table doesn't exist yet or connection error
+        console.warn("Supabase projects table notice:", error.message);
+      }
+    } catch (e) {
+      console.warn("fetchProjects Supabase connection warning:", e);
+    }
+  }
+
   return getStoredProjects();
 }
 
 export function getProjectById(id: string): Project | undefined {
   const projects = getStoredProjects();
   return projects.find(p => p.id === id);
+}
+
+export async function fetchProjectById(id: string): Promise<Project | undefined> {
+  if (isClient()) {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (!error && data) {
+        const p = fromDbProject(data);
+        const list = getStoredProjects();
+        const idx = list.findIndex(item => item.id === id);
+        if (idx >= 0) list[idx] = p;
+        else list.push(p);
+        setStoredProjects(list);
+        return p;
+      }
+    } catch (e) {
+      console.warn("fetchProjectById warning:", e);
+    }
+  }
+  return getProjectById(id);
 }
 
 export function createProject(formData: Omit<Project, 'id' | 'progress' | 'plan' | 'timeline' | 'documents' | 'diary'>): Project {
@@ -1146,8 +1348,12 @@ export function createProject(formData: Omit<Project, 'id' | 'progress' | 'plan'
     ]
   };
 
-  projects.push(newProject);
+  projects.unshift(newProject);
   setStoredProjects(projects);
+
+  // Background sync to Supabase
+  saveProjectToSupabase(newProject).catch(err => console.warn("Supabase background create error:", err));
+
   return newProject;
 }
 
@@ -1162,6 +1368,10 @@ export function updateProject(id: string, updates: Partial<Omit<Project, 'id' | 
   } as Project;
 
   setStoredProjects(projects);
+
+  // Background sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase background update error:", err));
+
   return projects[index];
 }
 
@@ -1170,6 +1380,10 @@ export function deleteProject(id: string): boolean {
   const filtered = projects.filter(p => p.id !== id);
   if (filtered.length === projects.length) return false;
   setStoredProjects(filtered);
+
+  // Background sync delete
+  deleteProjectFromSupabase(id).catch(err => console.warn("Supabase background delete error:", err));
+
   return true;
 }
 
@@ -1188,6 +1402,10 @@ export function addTask(projectId: string, task: Omit<ProjectTask, 'id' | 'progr
   projects[index].plan.push(newTask);
   recalculateProgress(projects[index]);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync addTask error:", err));
+
   return newTask;
 }
 
@@ -1199,7 +1417,6 @@ export function updateTask(projectId: string, taskId: string, updates: Partial<P
   const taskIndex = projects[pIndex].plan.findIndex(t => t.id === taskId);
   if (taskIndex === -1) return undefined;
 
-  // If status changes, update progress if it wasn't explicitly changed
   let progress = updates.progress !== undefined ? updates.progress : projects[pIndex].plan[taskIndex].progress;
   if (updates.status && updates.progress === undefined) {
     if (updates.status === 'Completed') progress = 100;
@@ -1207,7 +1424,6 @@ export function updateTask(projectId: string, taskId: string, updates: Partial<P
     else if (updates.status === 'Todo') progress = 0;
   }
 
-  // If progress is changed to 100, set Completed. If progress > 0 and < 100, In Progress. If progress = 0, Todo.
   let status = updates.status || projects[pIndex].plan[taskIndex].status;
   if (updates.progress !== undefined && updates.status === undefined) {
     if (updates.progress === 100) status = 'Completed';
@@ -1224,6 +1440,10 @@ export function updateTask(projectId: string, taskId: string, updates: Partial<P
 
   recalculateProgress(projects[pIndex]);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[pIndex]).catch(err => console.warn("Supabase sync updateTask error:", err));
+
   return projects[pIndex].plan[taskIndex];
 }
 
@@ -1238,6 +1458,10 @@ export function deleteTask(projectId: string, taskId: string): boolean {
 
   recalculateProgress(projects[pIndex]);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[pIndex]).catch(err => console.warn("Supabase sync deleteTask error:", err));
+
   return true;
 }
 
@@ -1254,6 +1478,10 @@ export function addMilestone(projectId: string, milestone: Omit<ProjectMilestone
 
   projects[index].timeline.push(newMilestone);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync addMilestone error:", err));
+
   return newMilestone;
 }
 
@@ -1271,6 +1499,10 @@ export function updateMilestone(projectId: string, milestoneId: string, updates:
   };
 
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[pIndex]).catch(err => console.warn("Supabase sync updateMilestone error:", err));
+
   return projects[pIndex].timeline[msIndex];
 }
 
@@ -1288,6 +1520,10 @@ export function addDocument(projectId: string, doc: Omit<ProjectDocument, 'id' |
 
   projects[index].documents.push(newDoc);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync addDocument error:", err));
+
   return newDoc;
 }
 
@@ -1303,8 +1539,12 @@ export function addDiaryEntry(projectId: string, entry: Omit<ProjectDiaryEntry, 
     timestamp: new Date().toISOString()
   };
 
-  projects[index].diary.unshift(newEntry); // new entries at top
+  projects[index].diary.unshift(newEntry);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync addDiaryEntry error:", err));
+
   return newEntry;
 }
 
@@ -1316,5 +1556,9 @@ export function updateProjectPlan(projectId: string, plan: ProjectTask[]): Proje
   projects[index].plan = plan;
   recalculateProgress(projects[index]);
   setStoredProjects(projects);
+
+  // Sync to Supabase
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync updateProjectPlan error:", err));
+
   return projects[index];
 }

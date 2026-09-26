@@ -261,15 +261,14 @@ export default function PortalPage() {
       .catch(err => console.error("Error fetching customer details:", err));
 
     // Load projects
-    try {
-      const allProjects = fetchProjects();
+    fetchProjects().then(allProjects => {
       setProjects(allProjects);
       if (allProjects.length > 0) {
         setSelectedProject(allProjects[0]);
       }
-    } catch (err) {
+    }).catch(err => {
       console.error("Error loading projects:", err);
-    }
+    });
   }, [router]);
 
   // Generate trend line chart data
