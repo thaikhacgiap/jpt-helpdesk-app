@@ -36,6 +36,7 @@ export interface TicketData {
   contract_id?: string;
   request_code?: string;
   request_id?: string;
+  request_status?: string;
   tt_type?: string;
   contract_scope?: string;
   category?: string;

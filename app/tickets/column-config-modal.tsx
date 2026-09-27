@@ -19,6 +19,7 @@ export interface ColumnTemplate {
 export const DEFAULT_COLUMN_ORDER: string[] = [
   "ticket_id",
   "request_code",
+  "request_status",
   "title",
   "customer_name",
   "creator_name",
@@ -44,7 +45,8 @@ export const DEFAULT_COLUMN_ORDER: string[] = [
 
 export const COLUMN_LABELS: Record<string, string> = {
   ticket_id: "Ticket ID",
-  request_code: "Mã yêu cầu",
+  request_code: "Request ID",
+  request_status: "Request Status",
   title: "Tiêu đề",
   customer_name: "Khách hàng",
   creator_name: "Người tạo",
@@ -72,6 +74,7 @@ export const DEFAULT_COL_WIDTHS: Record<string, number> = {
   select: 44,
   ticket_id: 155,
   request_code: 160,
+  request_status: 140,
   title: 220,
   customer_name: 180,
   creator_name: 140,
@@ -110,12 +113,13 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     name: "Tập trung SLA & Thời gian",
     isSystem: true,
     order: [
-      "ticket_id", "request_code", "title", "customer_name", "start_time",
+      "ticket_id", "request_code", "request_status", "title", "customer_name", "start_time",
       "resolve_time", "duration", "work_duration", "sla_time", "sla_status", "tt_status", "assigned"
     ],
     visible: {
       ticket_id: true,
       request_code: true,
+      request_status: true,
       title: true,
       customer_name: true,
       start_time: true,
@@ -134,11 +138,13 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     name: "Phân loại & Trạng thái",
     isSystem: true,
     order: [
-      "ticket_id", "title", "customer_name", "tt_type", "contract_scope",
+      "ticket_id", "request_code", "request_status", "title", "customer_name", "tt_type", "contract_scope",
       "category", "priority", "tt_status", "assigned", "creator_name", "created_at", "updated_at"
     ],
     visible: {
       ticket_id: true,
+      request_code: true,
+      request_status: true,
       title: true,
       customer_name: true,
       tt_type: true,
@@ -157,9 +163,11 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     id: "compact",
     name: "Gọn gàng (Cơ bản)",
     isSystem: true,
-    order: ["ticket_id", "title", "customer_name", "priority", "tt_status", "sla_status", "assigned"],
+    order: ["ticket_id", "request_code", "request_status", "title", "customer_name", "priority", "tt_status", "sla_status", "assigned"],
     visible: {
       ticket_id: true,
+      request_code: true,
+      request_status: true,
       title: true,
       customer_name: true,
       priority: true,
@@ -280,7 +288,13 @@ export default function ColumnConfigModal({
 
   const filteredOrder = columnOrder.map((key, index) => ({ key, index })).filter(({ key }) => {
     const label = COLUMN_LABELS[key] || key;
-    return label.toLowerCase().includes(searchTerm.toLowerCase()) || key.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const aliases: Record<string, string> = {
+      request_code: "mã yêu cầu request id request code",
+      request_status: "trạng thái yêu cầu request status request_status",
+    };
+    const extra = aliases[key] || "";
+    return label.toLowerCase().includes(term) || key.toLowerCase().includes(term) || extra.includes(term);
   });
 
   const visibleCount = Object.values(visibleColumns).filter(Boolean).length;

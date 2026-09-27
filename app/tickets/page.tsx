@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
-import { fetchTickets, deleteTicket, getTicketRequestCode } from "@/lib/ticket-operations";
+import { fetchTickets, deleteTicket, getTicketRequestCode, getTicketRequestStatus } from "@/lib/ticket-operations";
+import { fetchAllAvailableRequests } from "@/components/common/request-search-select";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
@@ -33,6 +34,7 @@ interface Ticket {
   contract_no?: string;
   request_code?: string;
   request_id?: string;
+  request_status?: string;
   tt_type?: string;
   contract_scope?: string;
   category?: string;
@@ -513,6 +515,40 @@ const renderStatusBadge = (status?: string) => {
   );
 };
 
+const renderRequestStatusBadge = (status?: string) => {
+  if (!status) return <span className="text-slate-400">—</span>;
+  let styles = "bg-slate-50 text-slate-600 border-slate-200";
+  let dotColor = "bg-slate-400";
+  
+  const sLower = status.toLowerCase();
+  if (sLower === "new" || sLower === "mới") {
+    styles = "bg-sky-50 text-sky-700 border-sky-200";
+    dotColor = "bg-sky-500";
+  } else if (sLower === "in progress" || sLower === "in-progress" || sLower === "đang xử lý" || sLower === "assigned") {
+    styles = "bg-amber-50 text-amber-700 border-amber-200";
+    dotColor = "bg-amber-500";
+  } else if (sLower === "completed" || sLower === "resolved" || sLower === "closed" || sLower === "hoàn thành" || sLower === "đã đóng") {
+    styles = "bg-emerald-50 text-emerald-700 border-emerald-200";
+    dotColor = "bg-emerald-500";
+  } else if (sLower === "on hold" || sLower === "on-hold" || sLower === "hold" || sLower === "tạm dừng") {
+    styles = "bg-orange-50 text-orange-700 border-orange-200";
+    dotColor = "bg-orange-500";
+  } else if (sLower === "rejected" || sLower === "cancel" || sLower === "cancelled" || sLower === "hủy" || sLower === "từ chối") {
+    styles = "bg-rose-50 text-rose-700 border-rose-200";
+    dotColor = "bg-rose-500";
+  } else {
+    styles = "bg-indigo-50 text-indigo-700 border-indigo-200";
+    dotColor = "bg-indigo-500";
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold border ${styles} whitespace-nowrap shadow-2xs`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+      <span>{status}</span>
+    </span>
+  );
+};
+
 const renderSlaStatusBadge = (slaStatus?: string) => {
   if (!slaStatus) return <span className="text-slate-400">—</span>;
   let styles = "bg-slate-50 text-slate-600 border-slate-200";
@@ -578,6 +614,27 @@ export default function TicketsPage() {
   const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
 
+  // Request Status Map for linked requests
+  const [requestStatusMap, setRequestStatusMap] = useState<Record<string, string>>({});
+
+  const loadRequestsMap = async () => {
+    try {
+      const list = await fetchAllAvailableRequests();
+      const map: Record<string, string> = {};
+      list.forEach((r) => {
+        if (r.code) map[r.code.toUpperCase()] = r.status || "New";
+        if (r.id) map[r.id.toUpperCase()] = r.status || "New";
+      });
+      setRequestStatusMap(map);
+    } catch (err) {
+      console.error("Error loading requests map:", err);
+    }
+  };
+
+  const getTicketStatus = (ticket: Ticket): string => {
+    return getTicketRequestStatus(ticket, requestStatusMap);
+  };
+
   // On-behalf ticket linking states
   const [linkedRequestDbId, setLinkedRequestDbId] = useState<string | null>(null);
   const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null);
@@ -609,22 +666,41 @@ export default function TicketsPage() {
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         if (parsed.order && Array.isArray(parsed.order)) {
+          let loadedOrder = parsed.order.filter((k: string) => DEFAULT_COLUMN_ORDER.includes(k));
+          if (!loadedOrder.includes("request_status")) {
+            const reqCodeIdx = loadedOrder.indexOf("request_code");
+            if (reqCodeIdx !== -1) {
+              loadedOrder.splice(reqCodeIdx + 1, 0, "request_status");
+            } else {
+              loadedOrder.push("request_status");
+            }
+          }
           const fullOrder = [
-            ...parsed.order.filter((k: string) => DEFAULT_COLUMN_ORDER.includes(k)),
-            ...DEFAULT_COLUMN_ORDER.filter((k) => !parsed.order.includes(k)),
+            ...loadedOrder,
+            ...DEFAULT_COLUMN_ORDER.filter((k) => !loadedOrder.includes(k)),
           ];
           setColumnOrder(fullOrder);
         }
         if (parsed.visible && typeof parsed.visible === "object") {
-          setVisibleColumns((prev) => ({ ...prev, ...parsed.visible }));
+          const vis = { ...parsed.visible };
+          if (vis.request_status === undefined) {
+            vis.request_status = vis.request_code !== false;
+          }
+          setVisibleColumns((prev) => ({ ...prev, ...vis }));
         }
         if (parsed.widths && typeof parsed.widths === "object") {
-          setColWidths((prev) => ({ ...prev, ...parsed.widths }));
+          const w = { ...parsed.widths };
+          if (!w.request_status) {
+            w.request_status = DEFAULT_COL_WIDTHS.request_status || 140;
+          }
+          setColWidths((prev) => ({ ...prev, ...w }));
         }
         if (parsed.templateId) {
           setActiveTemplateId(parsed.templateId);
         }
       }
+
+      loadRequestsMap();
     } catch (err) {
       console.error("Error loading column preferences:", err);
     }
@@ -861,6 +937,7 @@ export default function TicketsPage() {
       setLoading(true);
       const data = await fetchTickets();
       setTickets(data as Ticket[]);
+      loadRequestsMap();
     } catch (err) {
       console.error("Error loading tickets:", err);
     } finally {
@@ -947,7 +1024,13 @@ export default function TicketsPage() {
     if (t.tt_type === 'Maintenance' || t.tt_type?.toLowerCase() === 'maintenance') {
       return false;
     }
-    if (search && !Object.values(t).some((v) => String(v ?? "").toLowerCase().includes(search.toLowerCase()))) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchObj = Object.values(t).some((v) => String(v ?? "").toLowerCase().includes(q));
+      const matchReqCode = getTicketRequestCode(t as any).toLowerCase().includes(q);
+      const matchReqStatus = getTicketStatus(t).toLowerCase().includes(q);
+      if (!matchObj && !matchReqCode && !matchReqStatus) return false;
+    }
     if (filters.tt_type && t.tt_type !== filters.tt_type) return false;
     if (filters.contract_scope && t.contract_scope !== filters.contract_scope) return false;
     if (filters.category && t.category !== filters.category) return false;
@@ -974,7 +1057,8 @@ export default function TicketsPage() {
 
     const headers = [
       "Ticket ID",
-      "Mã yêu cầu",
+      "Request ID",
+      "Request Status",
       "Tiêu đề",
       "Khách hàng",
       "Người tạo",
@@ -1007,6 +1091,7 @@ export default function TicketsPage() {
     const rows = filtered.map((t) => [
       escapeCsv(t.ticket_id),
       escapeCsv(getTicketRequestCode(t)),
+      escapeCsv(getTicketStatus(t)),
       escapeCsv(t.title),
       escapeCsv(t.customer_name || ""),
       escapeCsv(t.creator_name || ""),
@@ -1084,6 +1169,36 @@ export default function TicketsPage() {
                   title={`Xem chi tiết yêu cầu: ${reqCode}`}
                 >
                   <span>{reqCode}</span>
+                </button>
+              );
+            })()}
+          </td>
+        );
+
+      case "request_status":
+        return (
+          <td
+            key="request_status"
+            style={{ width: `${colWidths.request_status || 140}px`, minWidth: `${colWidths.request_status || 140}px` }}
+            className="px-3 py-2 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+          >
+            {(() => {
+              const reqStatus = getTicketStatus(ticket);
+              const reqCode = getTicketRequestCode(ticket as any);
+              if (!reqStatus) return <span className="text-slate-400">—</span>;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (reqCode) {
+                      e.stopPropagation();
+                      router.push(`/requests?search=${reqCode}`);
+                    }
+                  }}
+                  className={`inline-block text-left ${reqCode ? "cursor-pointer transition-transform hover:scale-105 active:scale-95" : ""}`}
+                  title={reqCode ? `Xem chi tiết yêu cầu: ${reqCode} (${reqStatus})` : `Trạng thái yêu cầu: ${reqStatus}`}
+                >
+                  {renderRequestStatusBadge(reqStatus)}
                 </button>
               );
             })()}

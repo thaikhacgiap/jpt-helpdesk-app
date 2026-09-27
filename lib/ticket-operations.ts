@@ -232,6 +232,19 @@ export function getTicketRequestCode(ticket: any): string {
   return "";
 }
 
+// Helper to extract or resolve request status from a ticket
+export function getTicketRequestStatus(ticket: any, customMap?: Record<string, string>): string {
+  if (!ticket) return "";
+  if (ticket.request_status) return ticket.request_status;
+  const reqCode = getTicketRequestCode(ticket);
+  if (!reqCode) return "";
+  if (customMap) {
+    const fromMap = customMap[reqCode.toUpperCase()] || customMap[(ticket.request_id || "").toUpperCase()];
+    if (fromMap) return fromMap;
+  }
+  return "";
+}
+
 // Fetch all tickets (excluding Requests)
 export async function fetchTickets(): Promise<Ticket[]> {
   try {
@@ -245,12 +258,56 @@ export async function fetchTickets(): Promise<Ticket[]> {
       return []
     }
 
+    // Build map of request code -> status from all records in tickets table
+    const requestStatusMap = new Map<string, string>();
+    (data || []).forEach(t => {
+      const tid = (t.ticket_id || '').toUpperCase();
+      const status = t.tt_status || (t as any).status || 'New';
+      if (t.id) requestStatusMap.set(t.id, status);
+      if (tid) {
+        requestStatusMap.set(tid, status);
+        if (tid.startsWith('TH-')) requestStatusMap.set(tid.replace(/^TH-/, 'CR-'), status);
+        if (tid.startsWith('CR-')) requestStatusMap.set(tid.replace(/^CR-/, 'TH-'), status);
+      }
+    });
+
+    // Also include internal requests from localStorage if available
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('jpt_requests');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            list.forEach((r: any) => {
+              const code = (r.code || r.id || '').toUpperCase();
+              const status = r.status || 'New';
+              if (code) requestStatusMap.set(code, status);
+              if (r.id) requestStatusMap.set(r.id, status);
+            });
+          }
+        }
+      } catch {}
+    }
+
     // Filter out customer/service requests (CR-, TH-, SR-, TR-) and maintenance plans (BTR-, or tt_type = 'Maintenance')
     const ticketsOnly = (data || []).filter(t => {
       const tid = (t.ticket_id || '').toUpperCase();
       if (tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-') || tid.startsWith('BTR-')) return false;
       if (t.tt_type === 'Maintenance' || t.tt_type?.toLowerCase() === 'maintenance') return false;
       return true;
+    }).map(t => {
+      const reqCode = getTicketRequestCode(t);
+      let reqStatus = (t as any).request_status;
+      if (!reqStatus && reqCode) {
+        reqStatus = requestStatusMap.get(reqCode.toUpperCase())
+          || requestStatusMap.get((t.request_id || '').toUpperCase())
+          || '';
+      }
+      return {
+        ...t,
+        request_code: t.request_code || reqCode || undefined,
+        request_status: reqStatus || undefined,
+      };
     });
 
     return ticketsOnly;
@@ -272,6 +329,28 @@ export async function fetchTicketById(ticketId: string): Promise<Ticket | null> 
     if (error) {
       console.error('Error fetching ticket:', error)
       return null
+    }
+
+    if (data) {
+      const reqCode = getTicketRequestCode(data);
+      let reqStatus = (data as any).request_status;
+      if (!reqStatus && reqCode) {
+        try {
+          const { data: reqData } = await supabase
+            .from('tickets')
+            .select('tt_status')
+            .or(`ticket_id.eq.${reqCode},ticket_id.eq.${reqCode.replace(/^CR-/, 'TH-')},ticket_id.eq.${reqCode.replace(/^TH-/, 'CR-')}`)
+            .maybeSingle();
+          if (reqData && reqData.tt_status) {
+            reqStatus = reqData.tt_status;
+          }
+        } catch {}
+      }
+      return {
+        ...data,
+        request_code: data.request_code || reqCode || undefined,
+        request_status: reqStatus || undefined,
+      };
     }
 
     return data
