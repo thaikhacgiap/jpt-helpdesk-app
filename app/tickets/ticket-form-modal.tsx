@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   X, ChevronDown, Save, Edit2, CheckCircle, CheckCircle2,
-  Search, Building2, FileText, Check, Maximize2, Download,
+  Search, Building2, FileText, Check, Maximize2, Download, Plus,
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
   Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, Upload, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
 } from "lucide-react";
@@ -2935,8 +2935,8 @@ interface TroubleshootFormProps {
   setRunbooksList: (v: any[]) => void;
   activeRunbookName: string;
   setActiveRunbookName: (v: string) => void;
-  activeSubTab: "troubleshoot" | "runbook";
-  setActiveSubTab: (v: "troubleshoot" | "runbook") => void;
+  activeSubTab: "troubleshoot" | "hold" | "runbook";
+  setActiveSubTab: (v: "troubleshoot" | "hold" | "runbook") => void;
   onSave: () => Promise<void>;
   onEdit: () => void;
   submitting: boolean;
@@ -3333,6 +3333,22 @@ function TroubleshootForm({
         </button>
         <button
           type="button"
+          onClick={() => setActiveSubTab("hold")}
+          className={`flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-t-lg transition border-t border-x -mb-px cursor-pointer
+            ${activeSubTab === "hold"
+              ? "bg-white text-amber-600 border-t-2 border-t-amber-500 border-x-slate-200 border-b-white"
+              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700"}`}
+        >
+          <Pause size={14} className={activeSubTab === "hold" ? "text-amber-500" : "text-slate-400"} />
+          Hold (Tạm dừng)
+          {holdsList.length > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeSubTab === "hold" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600"}`}>
+              {holdsList.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveSubTab("runbook")}
           className={`flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-t-lg transition border-t border-x -mb-px cursor-pointer
             ${activeSubTab === "runbook"
@@ -3346,8 +3362,8 @@ function TroubleshootForm({
 
       {/* Tab Contents */}
       <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm min-h-0">
-        {activeSubTab === "troubleshoot" ? (
-          <div className="flex-1 flex flex-col p-4 space-y-4 min-h-0 overflow-y-auto bg-slate-50/30">
+        {activeSubTab === "troubleshoot" && (
+          <div className="flex-1 flex flex-col p-4 min-h-0 overflow-hidden bg-slate-50/30">
             {/* Updates History (Modern Interactive Chat UI) */}
             <div className="bg-white border border-slate-200 rounded-xl flex-1 flex flex-col min-h-0 shadow-2xs overflow-hidden">
               {/* Chat Top Bar */}
@@ -3514,18 +3530,20 @@ function TroubleshootForm({
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-
-
-            {/* Hold Details Table (Professional Redesign) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shrink-0 space-y-4 shadow-2xs">
+        {/* Hold Details Table (Dedicated Sub-tab for maximum workspace) */}
+        {activeSubTab === "hold" && (
+          <div className="flex-1 flex flex-col p-4 space-y-4 min-h-0 overflow-y-auto bg-slate-50/30">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shrink-0 space-y-4 shadow-2xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-orange-600">
-                  <AlertCircle size={16} className="text-orange-500 animate-pulse" />
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-600">
+                  <Pause size={16} className="text-amber-500" />
                   <span>Bảng chi tiết Hold (Tạm dừng)</span>
                 </div>
                 <div className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-                  Tổng thời gian tạm dừng: <span className="text-orange-500 font-bold ml-1">{calculateTotalDuration(holdsList)}</span>
+                  Tổng thời gian tạm dừng: <span className="text-amber-600 font-bold ml-1">{calculateTotalDuration(holdsList)}</span>
                 </div>
               </div>
 
@@ -3544,7 +3562,7 @@ function TroubleshootForm({
                   <tbody>
                     {holdsList.length === 0 ? (
                       <tr>
-                        <td colSpan={editing ? 6 : 5} className="p-4 text-center text-slate-400 italic">
+                        <td colSpan={editing ? 6 : 5} className="p-8 text-center text-slate-400 italic">
                           Chưa có bản ghi Hold nào
                         </td>
                       </tr>
@@ -3559,7 +3577,7 @@ function TroubleshootForm({
                                 value={row.reason}
                                 onChange={(e) => handleHoldRowChange(idx, "reason", e.target.value)}
                                 placeholder="Nhập lý do tạm dừng..."
-                                className="w-full bg-transparent border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-orange-500 p-1.5 rounded focus:border-orange-500 focus:bg-white"
+                                className="w-full bg-transparent border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-amber-500 p-1.5 rounded focus:border-amber-500 focus:bg-white"
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 block truncate" title={row.reason}>{row.reason || "—"}</span>
@@ -3615,7 +3633,7 @@ function TroubleshootForm({
                   <button
                     type="button"
                     onClick={handleAddHoldRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded text-xs transition font-semibold cursor-pointer shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs transition font-semibold cursor-pointer shadow-sm"
                   >
                     + Thêm dòng Hold
                   </button>
@@ -3623,7 +3641,10 @@ function TroubleshootForm({
               )}
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Runbook Tab */}
+        {activeSubTab === "runbook" && (
           <div className="flex-1 p-3 flex flex-col min-h-0 space-y-3">
             {/* Spreadsheet step list */}
             <div className="flex-1 overflow-auto bg-white border border-slate-200 rounded-lg shadow-sm min-h-0">
@@ -4468,7 +4489,7 @@ export default function TicketFormModal({
   const [onsite, setOnsite] = useState("");
   const [isFullScreenUpdate, setIsFullScreenUpdate] = useState(false);
 /* Runbook states */
-  const [activeSubTab, setActiveSubTab] = useState<"troubleshoot" | "runbook">("troubleshoot");
+  const [activeSubTab, setActiveSubTab] = useState<"troubleshoot" | "hold" | "runbook">("troubleshoot");
   const [runbooksList, setRunbooksList] = useState<any[]>([]);
   const [activeRunbookName, setActiveRunbookName] = useState<string>("");
   const [runbookSteps, setRunbookSteps] = useState<any[]>(() =>
@@ -5115,6 +5136,9 @@ export default function TicketFormModal({
   /* ── EDIT clicked ── */
   const handleEditClick = () => {
     setEditing(true);
+    if (currentStep === "troubleshoot") {
+      setActiveSubTab("hold");
+    }
     setCompletedSteps((prev) => {
       const next = new Set(prev);
       next.delete(currentStep);
