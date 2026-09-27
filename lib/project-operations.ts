@@ -1119,37 +1119,49 @@ export function toDbProject(p: Partial<Project>): any {
   return dbObj;
 }
 
+export function getDeletedProjectIds(): Set<string> {
+  if (!isClient()) return new Set();
+  try {
+    const raw = localStorage.getItem('jpt_deleted_project_ids');
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedProjectId(id: string) {
+  if (!isClient() || !id) return;
+  try {
+    const set = getDeletedProjectIds();
+    set.add(id);
+    localStorage.setItem('jpt_deleted_project_ids', JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.warn("Error saving deleted project id:", e);
+  }
+}
+
 export function getStoredProjects(): Project[] {
   if (!isClient()) return DEFAULT_PROJECTS;
   const stored = localStorage.getItem('jpt_projects');
+  const deletedIds = getDeletedProjectIds();
+
   if (!stored) {
-    localStorage.setItem('jpt_projects', JSON.stringify(DEFAULT_PROJECTS));
-    return DEFAULT_PROJECTS;
+    const initial = DEFAULT_PROJECTS.filter(p => !deletedIds.has(p.id));
+    localStorage.setItem('jpt_projects', JSON.stringify(initial));
+    return initial;
   }
   try {
     const list: Project[] = JSON.parse(stored);
-    let updated = false;
-    list.forEach(p => {
-      if (p.id === "proj-1" && p.customer !== "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)") {
-        p.customer = "Ngân hàng TMCP Việt Nam Thịnh Vượng (VPBank)";
-        updated = true;
-      }
-    });
-    if (!list.some(p => p.id === "proj-4")) {
-      const proj4 = DEFAULT_PROJECTS.find(p => p.id === "proj-4");
-      if (proj4) { list.push(proj4); updated = true; }
+    const filtered = list.filter(p => !deletedIds.has(p.id));
+    if (filtered.length !== list.length) {
+      localStorage.setItem('jpt_projects', JSON.stringify(filtered));
     }
-    if (!list.some(p => p.id === "proj-5")) {
-      const proj5 = DEFAULT_PROJECTS.find(p => p.id === "proj-5");
-      if (proj5) { list.push(proj5); updated = true; }
-    }
-    if (updated) {
-      localStorage.setItem('jpt_projects', JSON.stringify(list));
-    }
-    return list;
+    return filtered;
   } catch (e) {
     console.error("Error parsing stored projects", e);
-    return DEFAULT_PROJECTS;
+    return DEFAULT_PROJECTS.filter(p => !deletedIds.has(p.id));
   }
 }
 
@@ -1248,6 +1260,8 @@ export async function syncProjectsToSupabase(): Promise<{ success: boolean; mess
 
 // ─── Fetch Projects (Automatic Bidirectional Sync with Supabase) ───────
 export async function fetchProjects(): Promise<Project[]> {
+  const deletedIds = getDeletedProjectIds();
+
   if (isClient()) {
     try {
       const { data, error } = await supabase
@@ -1256,21 +1270,31 @@ export async function fetchProjects(): Promise<Project[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        const localList = getStoredProjects();
+        // If Supabase returned any projects that were deleted locally, ensure they get deleted from Supabase
+        const deletedInDb = data.filter(r => deletedIds.has(r.id));
+        if (deletedInDb.length > 0) {
+          deletedInDb.forEach(r => {
+            supabase.from('projects').delete().eq('id', r.id).then(() => {});
+          });
+        }
 
-        if (data.length === 0 && localList.length > 0) {
-          // 1. Supabase table is empty -> automatically push all local projects to Supabase!
-          console.log("Auto-syncing initial local projects to Supabase...");
+        const validDbRows = data.filter(r => !deletedIds.has(r.id));
+        const localList = getStoredProjects().filter(p => !deletedIds.has(p.id));
+        const hasSeeded = localStorage.getItem('jpt_projects_seeded') === 'true';
+
+        if (validDbRows.length === 0 && localList.length > 0 && !hasSeeded) {
+          // 1. First time initial seed only
+          localStorage.setItem('jpt_projects_seeded', 'true');
           const dbPayloads = localList.map(toDbProject);
           supabase.from('projects').upsert(dbPayloads, { onConflict: 'id' }).then(({ error: seedErr }) => {
             if (seedErr) console.warn("Auto-sync projects warning:", seedErr.message);
           });
           return localList;
-        } else if (data.length > 0) {
-          // 2. Supabase has data -> check if any local project was created while offline
-          const dbProjects = data.map(fromDbProject);
+        } else if (validDbRows.length > 0 || hasSeeded) {
+          localStorage.setItem('jpt_projects_seeded', 'true');
+          const dbProjects = validDbRows.map(fromDbProject);
           const dbIdSet = new Set(dbProjects.map(p => p.id));
-          const unSyncedLocals = localList.filter(p => !dbIdSet.has(p.id));
+          const unSyncedLocals = localList.filter(p => !dbIdSet.has(p.id) && !deletedIds.has(p.id));
 
           if (unSyncedLocals.length > 0) {
             // Automatically push unsynced local projects to Supabase in the background
@@ -1292,7 +1316,7 @@ export async function fetchProjects(): Promise<Project[]> {
     }
   }
 
-  return getStoredProjects();
+  return getStoredProjects().filter(p => !deletedIds.has(p.id));
 }
 
 // ─── Realtime Subscription for Automatic Background Sync ───────
@@ -1311,7 +1335,8 @@ export function subscribeToProjects(onUpdate: (projects: Project[]) => void): ()
               .select('*')
               .order('created_at', { ascending: false });
             if (data) {
-              const list = data.map(fromDbProject);
+              const deletedIds = getDeletedProjectIds();
+              const list = data.filter(r => !deletedIds.has(r.id)).map(fromDbProject);
               setStoredProjects(list);
               onUpdate(list);
             }
@@ -1422,14 +1447,19 @@ export function updateProject(id: string, updates: Partial<Omit<Project, 'id' | 
   return projects[index];
 }
 
-export function deleteProject(id: string): boolean {
+export async function deleteProject(id: string): Promise<boolean> {
+  addDeletedProjectId(id);
+
   const projects = getStoredProjects();
   const filtered = projects.filter(p => p.id !== id);
-  if (filtered.length === projects.length) return false;
   setStoredProjects(filtered);
 
-  // Background sync delete
-  deleteProjectFromSupabase(id).catch(err => console.warn("Supabase background delete error:", err));
+  // Background/direct sync delete with Supabase
+  try {
+    await deleteProjectFromSupabase(id);
+  } catch (err) {
+    console.warn("Supabase background delete error:", err);
+  }
 
   return true;
 }

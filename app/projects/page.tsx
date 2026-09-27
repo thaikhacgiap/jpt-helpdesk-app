@@ -233,13 +233,14 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault(); // Stop click propagating to Card Link
     e.stopPropagation();
     
     if (window.confirm("Bạn có chắc chắn muốn xóa dự án này? Toàn bộ kế hoạch, tài liệu và nhật ký sẽ bị xóa vĩnh viễn.")) {
-      deleteProject(id);
-      refreshProjects();
+      setProjects(prev => prev.filter(p => p.id !== id));
+      await deleteProject(id);
+      await refreshProjects();
     }
   };
 

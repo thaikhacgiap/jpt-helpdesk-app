@@ -9,6 +9,7 @@ import {
   getProjectById,
   fetchProjectById,
   updateProject,
+  deleteProject,
   addTask,
   updateTask,
   deleteTask,
@@ -241,6 +242,14 @@ export default function ProjectDetailPage() {
   const [tempPlan, setTempPlan] = useState<ProjectTask[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    if (window.confirm(`Bạn có chắc chắn muốn xóa dự án "${project.name}" (${project.code})? Toàn bộ kế hoạch, tài liệu và nhật ký sẽ bị xóa vĩnh viễn.`)) {
+      await deleteProject(project.id);
+      router.push("/projects");
+    }
+  };
 
   // Description Edit Handlers
   const handleStartEditDesc = () => {
@@ -1054,8 +1063,8 @@ export default function ProjectDetailPage() {
               </div>
             </div>
 
-            {/* Right Status Controller */}
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Right Status Controller & Actions */}
+            <div className="flex items-center gap-2.5 shrink-0">
               <span className="text-xs text-slate-500 font-semibold">Trạng thái:</span>
               <div className="relative">
                 <select
@@ -1073,6 +1082,15 @@ export default function ProjectDetailPage() {
                   ▼
                 </div>
               </div>
+
+              <button
+                onClick={handleDeleteProject}
+                className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                title="Xóa dự án này"
+              >
+                <Trash2 size={13} />
+                <span>Xóa dự án</span>
+              </button>
             </div>
           </div>
         </div>
