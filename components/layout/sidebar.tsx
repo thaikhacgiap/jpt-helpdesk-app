@@ -138,6 +138,11 @@ export default function Sidebar() {
               {showLink("/requests") && (
                 <Link
                   href="/requests"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("sidebar-navigate-requests"));
+                    }
+                  }}
                   className={menuItemClass({ isActive: pathname.startsWith("/requests") })}
                 >
                   <Inbox size={18} className="shrink-0" />

@@ -164,7 +164,7 @@ export default function RequestsPage() {
           }
         }
 
-        if (createParam === "task") {
+        if (createParam === "task" && ticketIdParam) {
           hasParams = true;
           setActiveTab("task");
           const nowLocal = getLocalDateTimeString();
@@ -187,7 +187,7 @@ export default function RequestsPage() {
             requester: defaultRequester,
             assignee: "",
             follower: "",
-            startTime: nowLocal, // Thời gian tạo (tự điền, không được chỉnh sửa)
+            startTime: nowLocal,
             receiveTime: "",
             completeTime: "",
             status: "New",
@@ -200,6 +200,10 @@ export default function RequestsPage() {
           });
           setError("");
           setIsModalOpen(true);
+        } else if (!createParam) {
+          // Khi người dùng bấm vào Yêu cầu từ sidebar hoặc điều hướng bình thường, đảm bảo modal luôn đóng
+          setIsModalOpen(false);
+          setIsCustomerModalOpen(false);
         }
 
         if (hasParams) {
@@ -213,6 +217,26 @@ export default function RequestsPage() {
     window.addEventListener("popstate", handleUrlSearch);
     return () => {
       window.removeEventListener("popstate", handleUrlSearch);
+    };
+  }, []);
+
+  // Lắng nghe sự kiện click từ Sidebar để đảm bảo reset về bảng quản lý và đóng mọi modal tạo/sửa yêu cầu
+  useEffect(() => {
+    const handleSidebarNavigate = () => {
+      setIsModalOpen(false);
+      setIsCustomerModalOpen(false);
+      setEditingRequest(null);
+      setEditingCustomerTicket(null);
+      setSearchQuery("");
+      setError("");
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    };
+
+    window.addEventListener("sidebar-navigate-requests", handleSidebarNavigate);
+    return () => {
+      window.removeEventListener("sidebar-navigate-requests", handleSidebarNavigate);
     };
   }, []);
 
