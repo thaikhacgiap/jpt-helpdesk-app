@@ -119,25 +119,87 @@ export default function RequestsPage() {
     tt_status: "New"
   });
 
-  // Check URL parameters for search filter (e.g. when clicked from ticket table)
+  // Check URL parameters for search filter, tab selection, or auto-creating task request from ticket
   useEffect(() => {
     const handleUrlSearch = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const searchParam = params.get("search") || params.get("code") || "";
+        const tabParam = params.get("tab");
+        const createParam = params.get("create");
+        const ticketIdParam = params.get("ticketId") || params.get("ticketCode") || "";
+        const titleParam = params.get("title") || "";
+
+        let hasParams = false;
+
+        if (tabParam === "task") {
+          setActiveTab("task");
+          hasParams = true;
+        } else if (tabParam === "service") {
+          setActiveTab("service");
+          hasParams = true;
+        } else if (tabParam === "customer") {
+          setActiveTab("customer");
+          hasParams = true;
+        }
+
         if (searchParam) {
+          hasParams = true;
           const trimmed = searchParam.trim();
           setSearchQuery(trimmed);
 
           const upper = trimmed.toUpperCase();
-          if (upper.startsWith("SR-")) {
-            setActiveTab("service");
-          } else if (upper.startsWith("TR-")) {
-            setActiveTab("task");
-          } else {
-            setActiveTab("customer");
+          if (!tabParam) {
+            if (upper.startsWith("SR-")) {
+              setActiveTab("service");
+            } else if (upper.startsWith("TR-")) {
+              setActiveTab("task");
+            } else if (upper.startsWith("TK-")) {
+              setActiveTab("task");
+            } else {
+              setActiveTab("customer");
+            }
           }
+        }
 
+        if (createParam === "task") {
+          hasParams = true;
+          setActiveTab("task");
+          const nowLocal = getLocalDateTimeString();
+          const currentUser = getCurrentUser();
+          const defaultRequester = currentUser?.name || "";
+
+          setEditingRequest(null);
+          setFormData({
+            code: "",
+            title: titleParam || (ticketIdParam ? `Xử lý Ticket ${ticketIdParam}` : ""),
+            type: "Yêu cầu công việc",
+            taskCategory: "Mã ticket",
+            taskRefCode: ticketIdParam,
+            soKy: "",
+            requestTime: nowLocal,
+            deadlineTime: "",
+            actualCompleteTime: "",
+            description: "",
+            requester: defaultRequester,
+            assignee: "",
+            follower: "",
+            startTime: nowLocal,
+            receiveTime: "",
+            completeTime: "",
+            status: "New",
+            customerId: "",
+            customerName: "",
+            projectId: "",
+            projectName: "",
+            contractLink: "",
+            attachedFiles: []
+          });
+          setError("");
+          setIsModalOpen(true);
+        }
+
+        if (hasParams) {
           // Clean URL parameter so the filter does not persist across page transitions
           window.history.replaceState({}, document.title, window.location.pathname);
         }

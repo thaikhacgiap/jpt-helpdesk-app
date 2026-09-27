@@ -626,17 +626,60 @@ const getStepSublabel = (key: StepKey) => {
   }
 };
 
-function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStepClick, ttStatus, setTtStatus }: {
-  currentStep: StepKey; completedSteps: Set<StepKey>; savedSteps: Set<StepKey>;
-  editing: boolean; onStepClick: (key: StepKey) => void;
-  ttStatus: string; setTtStatus: (v: string) => void;
+function ProcessPanel({
+  currentStep,
+  completedSteps,
+  savedSteps,
+  editing,
+  onStepClick,
+  ttStatus,
+  setTtStatus,
+  ticketId,
+  ticketTitle,
+}: {
+  currentStep: StepKey;
+  completedSteps: Set<StepKey>;
+  savedSteps: Set<StepKey>;
+  editing: boolean;
+  onStepClick: (key: StepKey) => void;
+  ttStatus: string;
+  setTtStatus: (v: string) => void;
+  ticketId?: string;
+  ticketTitle?: string;
 }) {
-  const labelStyle = "text-xs font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1.5";
+  const handleCreateTaskRequest = () => {
+    if (!ticketId) {
+      alert("Vui lòng lưu thông tin ticket trước để có mã ticket tạo yêu cầu!");
+      return;
+    }
+    const titleToUse = ticketTitle ? `Xử lý ${ticketId}: ${ticketTitle}` : `Xử lý Ticket ${ticketId}`;
+    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&title=${encodeURIComponent(titleToUse)}`;
+    window.open(url, "_blank");
+  };
+
+  const handleViewRelatedRequests = () => {
+    if (!ticketId) {
+      alert("Vui lòng lưu thông tin ticket trước để có mã ticket xem yêu cầu liên quan!");
+      return;
+    }
+    const url = `/requests?tab=task&search=${encodeURIComponent(ticketId)}`;
+    window.open(url, "_blank");
+  };
 
   return (
-    <div className="flex flex-col justify-between py-7 px-5 border-r border-slate-100 bg-[#f8fafc]/80 shrink-0 h-full" style={{ width: 245 }}>
-      <div>
-        <p className="text-xs font-bold text-slate-400 mb-7 uppercase tracking-wider pl-1">Process</p>
+    <div className="flex flex-col justify-between py-5 px-3.5 border-r border-slate-200/80 bg-slate-50/60 shrink-0 h-full overflow-y-auto" style={{ width: 255 }}>
+      {/* ── KHU VỰC 1: PROCESS ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 mb-2.5">
+        <div className="flex items-center justify-between mb-3.5 pb-2 border-b border-slate-100">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-0.5 flex items-center gap-1.5">
+            <Activity size={13} className="text-blue-500" />
+            <span>Process</span>
+          </p>
+          <span className="text-[10px] text-slate-400 font-semibold bg-slate-100 px-2 py-0.5 rounded-full">
+            {STEPS.findIndex(s => s.key === currentStep) + 1} / {STEPS.length}
+          </span>
+        </div>
+
         <div className="flex flex-col">
           {STEPS.map((step, i) => {
             const isCompleted = completedSteps.has(step.key);
@@ -672,12 +715,14 @@ function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStep
               <div
                 key={step.key}
                 onClick={() => onStepClick(step.key)}
-                className="relative flex items-stretch gap-3.5 pb-6 cursor-pointer group select-none"
+                className={`relative flex items-stretch gap-2.5 cursor-pointer group select-none transition ${
+                  i < STEPS.length - 1 ? "pb-3.5" : "pb-0.5"
+                }`}
               >
                 {/* Connector Line */}
                 {i < STEPS.length - 1 && (
                   <div
-                    className={`absolute left-3.5 top-7 bottom-0 w-0.5 -translate-x-1/2 transition ${
+                    className={`absolute left-3 top-6 bottom-0 w-0.5 -translate-x-1/2 transition ${
                       isLineActive ? "bg-green-400" : "bg-slate-200"
                     }`}
                   />
@@ -685,19 +730,19 @@ function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStep
 
                 {/* Step Circle Indicator */}
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold z-10 shrink-0 transition group-hover:scale-105 duration-200 ${circleColorClass}`}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 shrink-0 transition group-hover:scale-105 duration-200 ${circleColorClass}`}
                 >
                   {i + 1}
                 </div>
 
                 {/* Step Label Content */}
-                <div className="flex items-start gap-2.5 pt-0.5">
-                  <StepIcon size={14} className={`shrink-0 transition mt-0.5 ${iconColorClass}`} />
-                  <div className="space-y-0.5">
-                    <span className={`text-xs block leading-none transition ${titleColorClass}`}>
+                <div className="flex items-start gap-2 pt-0.5 min-w-0">
+                  <StepIcon size={13} className={`shrink-0 transition mt-0.5 ${iconColorClass}`} />
+                  <div className="space-y-0.5 min-w-0">
+                    <span className={`text-xs block leading-tight transition truncate ${titleColorClass}`}>
                       {step.label}
                     </span>
-                    <span className="text-[10px] font-medium text-slate-400 block leading-none">
+                    <span className="text-[10px] font-medium text-slate-400 block leading-tight truncate">
                       {stepSublabel}
                     </span>
                   </div>
@@ -708,11 +753,31 @@ function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStep
         </div>
       </div>
 
-      {/* Ticket Status at the bottom of Process Panel */}
-      <div className="mt-auto pt-3">
-        <div className="bg-white rounded-xl border border-slate-200/90 p-2.5 shadow-2xs flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-slate-500 pl-1 shrink-0">Status</span>
-          <div className="flex-1 min-w-0">
+      {/* ── KHU VỰC 2: HANDLE TICKET ── */}
+      <div className="mt-auto">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 space-y-2.5">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-1.5">
+              <Wrench size={13} className="text-teal-600" />
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                Handle Ticket
+              </span>
+            </div>
+            {ticketId ? (
+              <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate max-w-[100px]" title={`Mã Ticket: ${ticketId}`}>
+                {ticketId}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400 italic">Mới</span>
+            )}
+          </div>
+
+          {/* Status Dropdown inside Handle Ticket */}
+          <div className="space-y-1">
+            <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              Status
+            </span>
             <TealSelect
               value={ttStatus}
               onChange={setTtStatus}
@@ -721,6 +786,31 @@ function ProcessPanel({ currentStep, completedSteps, savedSteps, editing, onStep
               dropUp={true}
               fullWidth={true}
             />
+          </div>
+
+          {/* Action buttons */}
+          <div className="space-y-1.5 pt-0.5">
+            {/* Nút Yêu cầu (Tạo yêu cầu trong task request tự động điền mã ticket) */}
+            <button
+              type="button"
+              onClick={handleCreateTaskRequest}
+              className="w-full py-2 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs hover:shadow transition flex items-center justify-center gap-1.5 cursor-pointer group"
+              title="Tạo yêu cầu công việc mới tự động điền mã ticket này"
+            >
+              <ClipboardList size={13} className="transition group-hover:scale-110" />
+              <span>Yêu Cầu (Task)</span>
+            </button>
+
+            {/* Nút Yêu cầu liên quan (Chuyển sang trang yêu cầu và filter mã ticket) */}
+            <button
+              type="button"
+              onClick={handleViewRelatedRequests}
+              className="w-full py-1.5 px-2.5 bg-slate-50 hover:bg-teal-50 text-slate-700 hover:text-teal-700 border border-slate-200 hover:border-teal-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer group"
+              title="Chuyển sang trang Yêu cầu và lọc các yêu cầu có cùng mã ticket này"
+            >
+              <ExternalLink size={12} className="text-slate-400 group-hover:text-teal-600 transition" />
+              <span>Yêu Cầu Liên Quan</span>
+            </button>
           </div>
         </div>
       </div>
@@ -5803,6 +5893,8 @@ export default function TicketFormModal({
         onStepClick={handleStepClick}
         ttStatus={ttStatus}
         setTtStatus={setTtStatus}
+        ticketId={ticket?.ticket_id || savedTicketId}
+        ticketTitle={ticket?.title || createData.title}
       />
 
       {/* RIGHT */}
