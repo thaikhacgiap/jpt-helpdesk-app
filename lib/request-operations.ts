@@ -8,6 +8,7 @@ export interface RequestTask {
   assignee: string;   // Người được giao / Người tiếp nhận
   follower: string;   // Người theo dõi
   startTime: string;  // Thời gian bắt đầu
+  createdAt?: string; // Thời gian tạo
   receiveTime?: string; // Thời gian tiếp nhận
   completeTime?: string; // Thời gian hoàn thành
   requestTime?: string; // Thời gian yêu cầu (tự động điền khi tạo task)
@@ -145,6 +146,7 @@ export function createRequest(formData: Omit<RequestTask, 'id' | 'code'> & { cod
     type: isTask ? 'Yêu cầu công việc' : formData.type,
     id: `req-${Date.now()}`,
     code,
+    createdAt: formData.createdAt || new Date().toISOString(),
   };
 
   requests.push(newRequest);
