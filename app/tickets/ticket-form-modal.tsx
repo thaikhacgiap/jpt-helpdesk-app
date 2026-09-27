@@ -652,9 +652,9 @@ function ProcessPanel({
       alert("Vui lòng lưu thông tin ticket trước để có mã ticket tạo yêu cầu!");
       return;
     }
-    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request
+    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request, chuyển trang và mở form trên cùng tab
     const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&ttTitle=${encodeURIComponent(ticketTitle || "")}`;
-    window.open(url, "_blank");
+    window.location.href = url;
   };
 
   const handleViewRelatedRequests = () => {
@@ -663,7 +663,7 @@ function ProcessPanel({
       return;
     }
     const url = `/requests?tab=task&search=${encodeURIComponent(ticketId)}`;
-    window.open(url, "_blank");
+    window.location.href = url;
   };
 
   return (
