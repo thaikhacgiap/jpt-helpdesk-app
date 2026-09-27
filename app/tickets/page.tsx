@@ -8,8 +8,11 @@ import { fetchTickets, deleteTicket, getTicketRequestCode } from "@/lib/ticket-o
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
-  Ticket
+  Ticket, GripVertical, Layout
 } from "lucide-react";
+import ColumnConfigModal, {
+  DEFAULT_COLUMN_ORDER, COLUMN_LABELS, DEFAULT_COL_WIDTHS, SYSTEM_TEMPLATES, ColumnTemplate
+} from "./column-config-modal";
 
 /* ─── Dropdown options ─────────────────────────────────────── */
 const TT_TYPE_OPTIONS = ["Xử lý sự cố", "HTKT thông thường", "HTKT nâng cao", "Thay đổi hệ thống", "Tư vấn kỹ thuật", "Bảo Trì", "Triển khai dự án"];
@@ -530,35 +533,6 @@ const renderSlaStatusBadge = (slaStatus?: string) => {
   );
 };
 
-/* ─── Default Column Widths (px) ───────────────────────────── */
-const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  select: 44,
-  ticket_id: 155,
-  request_code: 160,
-  title: 220,
-  customer_name: 180,
-  creator_name: 140,
-  created_at: 145,
-  start_time: 145,
-  resolve_time: 145,
-  duration: 100,
-  paused_time: 145,
-  resumed_time: 145,
-  pause_duration: 125,
-  work_duration: 130,
-  sla_time: 110,
-  contract_no: 130,
-  tt_type: 140,
-  contract_scope: 130,
-  category: 120,
-  priority: 120,
-  tt_status: 120,
-  sla_status: 130,
-  assigned: 140,
-  updated_at: 120,
-  actions: 85,
-};
-
 /* ─── Page ─────────────────────────────────────────────────── */
 export default function TicketsPage() {
   const router = useRouter();
@@ -590,44 +564,19 @@ export default function TicketsPage() {
     sla_status: "",
   });
 
-  // Column Widths for resizing
+  // Column Orders, Visibility, Widths, and Templates
+  const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() =>
+    DEFAULT_COLUMN_ORDER.reduce((acc, k) => ({ ...acc, [k]: true }), {})
+  );
   const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_COL_WIDTHS);
-  const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+  const [templates, setTemplates] = useState<ColumnTemplate[]>(SYSTEM_TEMPLATES);
+  const [activeTemplateId, setActiveTemplateId] = useState<string>("default");
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
-  // Column Resizer Handler
-  const handleMouseDown = (colKey: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    resizingRef.current = {
-      colKey,
-      startX: e.clientX,
-      startWidth: colWidths[colKey] || DEFAULT_COL_WIDTHS[colKey] || 120,
-    };
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!resizingRef.current) return;
-      const { colKey, startX, startWidth } = resizingRef.current;
-      const delta = moveEvent.clientX - startX;
-      const newWidth = Math.max(60, startWidth + delta);
-      setColWidths((prev) => ({
-        ...prev,
-        [colKey]: newWidth,
-      }));
-    };
-
-    const onMouseUp = () => {
-      resizingRef.current = null;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  };
+  // Drag and drop column headers
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
 
   // On-behalf ticket linking states
   const [linkedRequestDbId, setLinkedRequestDbId] = useState<string | null>(null);
@@ -637,51 +586,208 @@ export default function TicketsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Column Visibility States
-  const [columnDropdownOpen, setColumnDropdownOpen] = useState(false);
-  const columnRef = useRef<HTMLTableHeaderCellElement>(null);
-  const [visibleColumns, setVisibleColumns] = useState({
-    ticket_id: true,
-    request_code: true,
-    title: true,
-    customer_name: true,
-    creator_name: true,
-    created_at: true,
-    start_time: true,
-    resolve_time: true,
-    duration: true,
-    paused_time: true,
-    resumed_time: true,
-    pause_duration: true,
-    work_duration: true,
-    sla_time: true,
-    contract_no: true,
-    tt_type: true,
-    contract_scope: true,
-    category: true,
-    priority: true,
-    tt_status: true,
-    sla_status: true,
-    assigned: true,
-    updated_at: true,
-  });
+  const STORAGE_CONFIG_KEY = "jpt_ticket_column_config_v1";
+  const STORAGE_TEMPLATES_KEY = "jpt_ticket_column_templates_v1";
 
-  const toggleColumn = (col: keyof typeof visibleColumns) => {
-    setVisibleColumns((prev) => ({
-      ...prev,
-      [col]: !prev[col],
-    }));
+  // Load saved configuration and templates on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      // 1. Load custom templates
+      const savedTemplates = localStorage.getItem(STORAGE_TEMPLATES_KEY);
+      let allTemplates = [...SYSTEM_TEMPLATES];
+      if (savedTemplates) {
+        const parsed = JSON.parse(savedTemplates);
+        if (Array.isArray(parsed)) {
+          allTemplates = [...SYSTEM_TEMPLATES, ...parsed];
+          setTemplates(allTemplates);
+        }
+      }
+
+      // 2. Load active column configuration
+      const savedConfig = localStorage.getItem(STORAGE_CONFIG_KEY);
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed.order && Array.isArray(parsed.order)) {
+          const fullOrder = [
+            ...parsed.order.filter((k: string) => DEFAULT_COLUMN_ORDER.includes(k)),
+            ...DEFAULT_COLUMN_ORDER.filter((k) => !parsed.order.includes(k)),
+          ];
+          setColumnOrder(fullOrder);
+        }
+        if (parsed.visible && typeof parsed.visible === "object") {
+          setVisibleColumns((prev) => ({ ...prev, ...parsed.visible }));
+        }
+        if (parsed.widths && typeof parsed.widths === "object") {
+          setColWidths((prev) => ({ ...prev, ...parsed.widths }));
+        }
+        if (parsed.templateId) {
+          setActiveTemplateId(parsed.templateId);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading column preferences:", err);
+    }
+  }, []);
+
+  const saveActiveConfig = (patch: {
+    order?: string[];
+    visible?: Record<string, boolean>;
+    widths?: Record<string, number>;
+    templateId?: string;
+  }) => {
+    if (typeof window === "undefined") return;
+    try {
+      const current = {
+        order: patch.order ?? columnOrder,
+        visible: patch.visible ?? visibleColumns,
+        widths: patch.widths ?? colWidths,
+        templateId: patch.templateId ?? activeTemplateId,
+      };
+      localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(current));
+    } catch (err) {
+      console.error("Error saving column preferences:", err);
+    }
   };
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (columnRef.current && !columnRef.current.contains(e.target as Node)) {
-        setColumnDropdownOpen(false);
-      }
+  const handleApplyTemplate = (tpl: ColumnTemplate) => {
+    setColumnOrder(tpl.order);
+    setVisibleColumns(tpl.visible);
+    setColWidths(tpl.widths);
+    setActiveTemplateId(tpl.id);
+    saveActiveConfig({
+      order: tpl.order,
+      visible: tpl.visible,
+      widths: tpl.widths,
+      templateId: tpl.id,
+    });
+  };
+
+  const handleSelectTemplate = (templateId: string) => {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (tpl) {
+      handleApplyTemplate(tpl);
+    }
+  };
+
+  const handleSaveNewTemplate = (name: string) => {
+    const newTpl: ColumnTemplate = {
+      id: "custom_" + Date.now(),
+      name,
+      isSystem: false,
+      order: [...columnOrder],
+      visible: { ...visibleColumns },
+      widths: { ...colWidths },
+      createdAt: new Date().toISOString(),
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    const updated = [...templates, newTpl];
+    setTemplates(updated);
+    setActiveTemplateId(newTpl.id);
+
+    const customOnly = updated.filter((t) => !t.isSystem);
+    localStorage.setItem(STORAGE_TEMPLATES_KEY, JSON.stringify(customOnly));
+    saveActiveConfig({ templateId: newTpl.id });
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    const updated = templates.filter((t) => t.id !== templateId);
+    setTemplates(updated);
+    const customOnly = updated.filter((t) => !t.isSystem);
+    localStorage.setItem(STORAGE_TEMPLATES_KEY, JSON.stringify(customOnly));
+    if (activeTemplateId === templateId) {
+      setActiveTemplateId("default");
+      saveActiveConfig({ templateId: "default" });
+    }
+  };
+
+  const handleResetToDefault = () => {
+    const defaultVis = DEFAULT_COLUMN_ORDER.reduce((acc, k) => ({ ...acc, [k]: true }), {});
+    setColumnOrder([...DEFAULT_COLUMN_ORDER]);
+    setVisibleColumns(defaultVis);
+    setColWidths({ ...DEFAULT_COL_WIDTHS });
+    setActiveTemplateId("default");
+    saveActiveConfig({
+      order: DEFAULT_COLUMN_ORDER,
+      visible: defaultVis,
+      widths: DEFAULT_COL_WIDTHS,
+      templateId: "default",
+    });
+  };
+
+  // Column Resizer Handler
+  const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+
+  const handleMouseDown = (colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = {
+      colKey,
+      startX: e.clientX,
+      startWidth: colWidths[colKey] || DEFAULT_COL_WIDTHS[colKey] || 120,
+    };
+
+    let latestWidths = { ...colWidths };
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { colKey, startX, startWidth } = resizingRef.current;
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(60, startWidth + delta);
+      latestWidths = {
+        ...latestWidths,
+        [colKey]: newWidth,
+      };
+      setColWidths(latestWidths);
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      saveActiveConfig({ widths: latestWidths });
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  // Drag and drop column headers
+  const handleHeaderDragStart = (e: React.DragEvent, colKey: string) => {
+    setDraggedColKey(colKey);
+    e.dataTransfer.setData("text/plain", colKey);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleHeaderDragOver = (e: React.DragEvent, colKey: string) => {
+    e.preventDefault();
+    if (draggedColKey && draggedColKey !== colKey) {
+      setDragOverColKey(colKey);
+    }
+  };
+
+  const handleHeaderDrop = (e: React.DragEvent, targetColKey: string) => {
+    e.preventDefault();
+    if (!draggedColKey || draggedColKey === targetColKey) {
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      return;
+    }
+    const oldIdx = columnOrder.indexOf(draggedColKey);
+    const newIdx = columnOrder.indexOf(targetColKey);
+    if (oldIdx !== -1 && newIdx !== -1) {
+      const newOrder = [...columnOrder];
+      newOrder.splice(oldIdx, 1);
+      newOrder.splice(newIdx, 0, draggedColKey);
+      setColumnOrder(newOrder);
+      saveActiveConfig({ order: newOrder });
+    }
+    setDraggedColKey(null);
+    setDragOverColKey(null);
+  };
 
   useEffect(() => { loadTickets(); }, []);
 
@@ -941,6 +1047,308 @@ export default function TicketsPage() {
 
   const visibleCount = Object.values(visibleColumns).filter(Boolean).length + 2;
 
+  // Render individual table cell based on colKey
+  const renderTableCell = (colKey: string, ticket: Ticket, slaInfo: any) => {
+    switch (colKey) {
+      case "ticket_id":
+        return (
+          <td
+            key="ticket_id"
+            style={{ width: `${colWidths.ticket_id}px`, minWidth: `${colWidths.ticket_id}px` }}
+            className="px-3 py-2 text-teal-600 cursor-pointer whitespace-nowrap truncate hover:underline hover:text-teal-800 text-sm font-normal border-b border-slate-200"
+            onClick={() => router.push(`/tickets/${ticket.id}`)}
+            title={ticket.ticket_id}
+          >
+            {ticket.ticket_id}
+          </td>
+        );
+
+      case "request_code":
+        return (
+          <td
+            key="request_code"
+            style={{ width: `${colWidths.request_code}px`, minWidth: `${colWidths.request_code}px` }}
+            className="px-3 py-2 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+          >
+            {(() => {
+              const reqCode = getTicketRequestCode(ticket as any);
+              if (!reqCode) return <span className="text-slate-400">—</span>;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/requests?search=${reqCode}`);
+                  }}
+                  className="inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold hover:bg-blue-100 hover:text-blue-800 transition cursor-pointer"
+                  title={`Xem chi tiết yêu cầu: ${reqCode}`}
+                >
+                  <span>{reqCode}</span>
+                </button>
+              );
+            })()}
+          </td>
+        );
+
+      case "title":
+        return (
+          <td
+            key="title"
+            style={{ width: `${colWidths.title}px`, minWidth: `${colWidths.title}px` }}
+            className="px-3 py-2 text-slate-800 font-normal truncate whitespace-nowrap text-sm border-b border-slate-200"
+            title={ticket.title}
+          >
+            {ticket.title}
+          </td>
+        );
+
+      case "customer_name":
+        return (
+          <td
+            key="customer_name"
+            style={{ width: `${colWidths.customer_name}px`, minWidth: `${colWidths.customer_name}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.customer_name || ""}
+          >
+            {ticket.customer_name || "—"}
+          </td>
+        );
+
+      case "creator_name":
+        return (
+          <td
+            key="creator_name"
+            style={{ width: `${colWidths.creator_name}px`, minWidth: `${colWidths.creator_name}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.creator_name || ""}
+          >
+            {ticket.creator_name || "—"}
+          </td>
+        );
+
+      case "created_at":
+        return (
+          <td
+            key="created_at"
+            style={{ width: `${colWidths.created_at}px`, minWidth: `${colWidths.created_at}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+            title={ticket.created_at || ticket.created_time || ""}
+          >
+            {formatDateTime(ticket.created_at || ticket.created_time, true)}
+          </td>
+        );
+
+      case "start_time":
+        return (
+          <td
+            key="start_time"
+            style={{ width: `${colWidths.start_time}px`, minWidth: `${colWidths.start_time}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+            title={ticket.start_time || ticket.startTime || ""}
+          >
+            {formatDateTime(ticket.start_time || ticket.startTime)}
+          </td>
+        );
+
+      case "resolve_time":
+        return (
+          <td
+            key="resolve_time"
+            style={{ width: `${colWidths.resolve_time}px`, minWidth: `${colWidths.resolve_time}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+            title={getTicketResolveTime(ticket) || ""}
+          >
+            {formatDateTime(getTicketResolveTime(ticket))}
+          </td>
+        );
+
+      case "duration":
+        return (
+          <td
+            key="duration"
+            style={{ width: `${colWidths.duration}px`, minWidth: `${colWidths.duration}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200"
+          >
+            {formatDuration(ticket)}
+          </td>
+        );
+
+      case "paused_time":
+        return (
+          <td
+            key="paused_time"
+            style={{ width: `${colWidths.paused_time}px`, minWidth: `${colWidths.paused_time}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+            title={getTicketPausedTime(ticket) || ""}
+          >
+            {formatDateTime(getTicketPausedTime(ticket))}
+          </td>
+        );
+
+      case "resumed_time":
+        return (
+          <td
+            key="resumed_time"
+            style={{ width: `${colWidths.resumed_time}px`, minWidth: `${colWidths.resumed_time}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+            title={getTicketResumedTime(ticket) || ""}
+          >
+            {formatDateTime(getTicketResumedTime(ticket))}
+          </td>
+        );
+
+      case "pause_duration":
+        return (
+          <td
+            key="pause_duration"
+            style={{ width: `${colWidths.pause_duration}px`, minWidth: `${colWidths.pause_duration}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200"
+          >
+            {formatPauseDuration(ticket)}
+          </td>
+        );
+
+      case "work_duration":
+        return (
+          <td
+            key="work_duration"
+            style={{ width: `${colWidths.work_duration}px`, minWidth: `${colWidths.work_duration}px` }}
+            className="px-3 py-2 whitespace-nowrap text-sm font-medium border-b border-slate-200"
+            title="Thời gian làm việc = Duration - Pause duration"
+          >
+            <span className="text-teal-700 font-semibold">{formatWorkDuration(ticket)}</span>
+          </td>
+        );
+
+      case "sla_time":
+        return (
+          <td
+            key="sla_time"
+            style={{ width: `${colWidths.sla_time}px`, minWidth: `${colWidths.sla_time}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200"
+          >
+            <div className="flex flex-col min-w-0" title={slaInfo.deadlineLabel !== "—" ? `Hạn xử lý SLA: ${slaInfo.deadlineLabel}` : undefined}>
+              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 inline-block w-fit">
+                {slaInfo.durationLabel}
+              </span>
+              {slaInfo.deadlineLabel !== "—" && (
+                <span className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5 truncate">
+                  Hạn: {slaInfo.deadlineLabel}
+                </span>
+              )}
+            </div>
+          </td>
+        );
+
+      case "contract_no":
+        return (
+          <td
+            key="contract_no"
+            style={{ width: `${colWidths.contract_no}px`, minWidth: `${colWidths.contract_no}px` }}
+            className="px-3 py-2 text-slate-500 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.contract_no || ""}
+          >
+            {ticket.contract_no || "—"}
+          </td>
+        );
+
+      case "tt_type":
+        return (
+          <td
+            key="tt_type"
+            style={{ width: `${colWidths.tt_type}px`, minWidth: `${colWidths.tt_type}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.tt_type || ""}
+          >
+            {ticket.tt_type || "—"}
+          </td>
+        );
+
+      case "contract_scope":
+        return (
+          <td
+            key="contract_scope"
+            style={{ width: `${colWidths.contract_scope}px`, minWidth: `${colWidths.contract_scope}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.contract_scope || ""}
+          >
+            {ticket.contract_scope || "—"}
+          </td>
+        );
+
+      case "category":
+        return (
+          <td
+            key="category"
+            style={{ width: `${colWidths.category}px`, minWidth: `${colWidths.category}px` }}
+            className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.category || ""}
+          >
+            {ticket.category || "—"}
+          </td>
+        );
+
+      case "priority":
+        return (
+          <td
+            key="priority"
+            style={{ width: `${colWidths.priority}px`, minWidth: `${colWidths.priority}px` }}
+            className="px-3 py-2 whitespace-nowrap border-b border-slate-200"
+          >
+            {renderPriorityBadge(ticket.priority)}
+          </td>
+        );
+
+      case "tt_status":
+        return (
+          <td
+            key="tt_status"
+            style={{ width: `${colWidths.tt_status}px`, minWidth: `${colWidths.tt_status}px` }}
+            className="px-3 py-2 whitespace-nowrap border-b border-slate-200"
+          >
+            {renderStatusBadge(ticket.tt_status)}
+          </td>
+        );
+
+      case "sla_status":
+        return (
+          <td
+            key="sla_status"
+            style={{ width: `${colWidths.sla_status}px`, minWidth: `${colWidths.sla_status}px` }}
+            className="px-3 py-2 whitespace-nowrap border-b border-slate-200"
+          >
+            {renderSlaStatusBadge(slaInfo.status)}
+          </td>
+        );
+
+      case "assigned":
+        return (
+          <td
+            key="assigned"
+            style={{ width: `${colWidths.assigned}px`, minWidth: `${colWidths.assigned}px` }}
+            className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={ticket.assigned || ""}
+          >
+            {ticket.assigned || "—"}
+          </td>
+        );
+
+      case "updated_at":
+        return (
+          <td
+            key="updated_at"
+            style={{ width: `${colWidths.updated_at}px`, minWidth: `${colWidths.updated_at}px` }}
+            className="px-3 py-2 text-slate-500 whitespace-nowrap text-sm font-normal border-b border-slate-200"
+          >
+            {timeAgo(ticket.created_time || ticket.start_time || ticket.created_at)}
+          </td>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <MainLayout>
       {/* Header Block Banner */}
@@ -1090,6 +1498,60 @@ export default function TicketsPage() {
         </div>
       )}
 
+      {/* Table Toolbar & Column Template Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5 px-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Template Dropdown */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 font-medium shadow-2xs">
+            <Layout size={13} className="text-teal-600" />
+            <span className="text-slate-500">Mẫu hiển thị:</span>
+            <select
+              value={activeTemplateId}
+              onChange={(e) => handleSelectTemplate(e.target.value)}
+              className="bg-transparent font-semibold text-slate-800 outline-none cursor-pointer hover:text-teal-700"
+            >
+              <optgroup label="Mẫu hệ thống">
+                {SYSTEM_TEMPLATES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </optgroup>
+              {templates.some(t => !t.isSystem) && (
+                <optgroup label="Mẫu tùy chỉnh của bạn">
+                  {templates.filter(t => !t.isSystem).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          {/* Column Settings Button */}
+          <button
+            type="button"
+            onClick={() => setIsConfigModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-teal-500 text-slate-700 hover:text-teal-700 rounded-xl text-xs font-semibold shadow-2xs transition cursor-pointer"
+          >
+            <SlidersHorizontal size={13} className="text-slate-400" />
+            <span>Tùy chỉnh cột ({Object.values(visibleColumns).filter(Boolean).length}/{DEFAULT_COLUMN_ORDER.length})</span>
+          </button>
+
+          {/* Reset to Default */}
+          <button
+            type="button"
+            onClick={handleResetToDefault}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer border border-transparent hover:border-slate-200"
+            title="Khôi phục thứ tự, độ rộng và hiển thị về mặc định ban đầu"
+          >
+            <RotateCcw size={12} />
+            <span>Trả về default</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-500 hidden sm:block">
+          💡 <span className="font-medium text-slate-600">Kéo thả tiêu đề</span> để đổi vị trí • <span className="font-medium text-slate-600">Kéo viền phải</span> để chỉnh kích thước
+        </div>
+      </div>
+
       {/* Redesigned Table Card with Column Resizing & Vertical Grid Borders */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-220px)] min-h-[300px]">
@@ -1117,385 +1579,53 @@ export default function TicketsPage() {
                   />
                 </th>
 
-                {/* Ticket ID */}
-                {visibleColumns.ticket_id && (
-                  <th 
-                    style={{ width: `${colWidths.ticket_id}px`, minWidth: `${colWidths.ticket_id}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Ticket ID</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("ticket_id", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
+                {/* Dynamic Draggable & Resizable Column Headers */}
+                {columnOrder.map((colKey) => {
+                  if (!visibleColumns[colKey]) return null;
+                  const label = COLUMN_LABELS[colKey] || colKey;
+                  const isDragging = draggedColKey === colKey;
+                  const isDragOver = dragOverColKey === colKey;
 
-                {/* Request Code (Mã yêu cầu) */}
-                {visibleColumns.request_code && (
-                  <th 
-                    style={{ width: `${colWidths.request_code}px`, minWidth: `${colWidths.request_code}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Mã yêu cầu</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("request_code", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
+                  return (
+                    <th
+                      key={colKey}
+                      draggable
+                      onDragStart={(e) => handleHeaderDragStart(e, colKey)}
+                      onDragOver={(e) => handleHeaderDragOver(e, colKey)}
+                      onDrop={(e) => handleHeaderDrop(e, colKey)}
+                      onDragEnd={() => { setDraggedColKey(null); setDragOverColKey(null); }}
+                      style={{ width: `${colWidths[colKey] || 120}px`, minWidth: `${colWidths[colKey] || 120}px` }}
+                      className={`relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none cursor-grab active:cursor-grabbing transition-colors ${
+                        isDragging ? "opacity-30 bg-teal-50" : ""
+                      } ${isDragOver ? "bg-teal-100 border-l-2 border-l-teal-600 shadow-inner" : ""}`}
+                      title="Kéo thả để đổi thứ tự cột • Kéo viền phải để chỉnh kích thước"
+                    >
+                      <div className="flex items-center justify-between gap-1 pr-1.5">
+                        <span className="truncate">{label}</span>
+                        <GripVertical size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                      </div>
+                      <div
+                        draggable={false}
+                        onMouseDown={(e) => handleMouseDown(colKey, e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                      />
+                    </th>
+                  );
+                })}
 
-                {/* Title */}
-                {visibleColumns.title && (
-                  <th 
-                    style={{ width: `${colWidths.title}px`, minWidth: `${colWidths.title}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Tiêu đề</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("title", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Customer Name */}
-                {visibleColumns.customer_name && (
-                  <th 
-                    style={{ width: `${colWidths.customer_name}px`, minWidth: `${colWidths.customer_name}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Khách hàng</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("customer_name", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Creator Name (Người tạo) */}
-                {visibleColumns.creator_name && (
-                  <th 
-                    style={{ width: `${colWidths.creator_name}px`, minWidth: `${colWidths.creator_name}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Người tạo</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("creator_name", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Created At (Thời gian tạo) */}
-                {visibleColumns.created_at && (
-                  <th 
-                    style={{ width: `${colWidths.created_at}px`, minWidth: `${colWidths.created_at}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Thời gian tạo</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("created_at", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Start Time */}
-                {visibleColumns.start_time && (
-                  <th 
-                    style={{ width: `${colWidths.start_time}px`, minWidth: `${colWidths.start_time}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Start time</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("start_time", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Resolve Time */}
-                {visibleColumns.resolve_time && (
-                  <th 
-                    style={{ width: `${colWidths.resolve_time}px`, minWidth: `${colWidths.resolve_time}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Resolve time</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("resolve_time", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Duration */}
-                {visibleColumns.duration && (
-                  <th 
-                    style={{ width: `${colWidths.duration}px`, minWidth: `${colWidths.duration}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Duration</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("duration", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Paused Time */}
-                {visibleColumns.paused_time && (
-                  <th 
-                    style={{ width: `${colWidths.paused_time}px`, minWidth: `${colWidths.paused_time}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Paused time</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("paused_time", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Resumed Time */}
-                {visibleColumns.resumed_time && (
-                  <th 
-                    style={{ width: `${colWidths.resumed_time}px`, minWidth: `${colWidths.resumed_time}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Resumed time</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("resumed_time", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Pause Duration */}
-                {visibleColumns.pause_duration && (
-                  <th 
-                    style={{ width: `${colWidths.pause_duration}px`, minWidth: `${colWidths.pause_duration}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Pause duration</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("pause_duration", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Work Duration */}
-                {visibleColumns.work_duration && (
-                  <th 
-                    style={{ width: `${colWidths.work_duration}px`, minWidth: `${colWidths.work_duration}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                    title="Work duration = Duration - Pause duration"
-                  >
-                    <span className="truncate">Work duration</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("work_duration", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* SLA Time */}
-                {visibleColumns.sla_time && (
-                  <th 
-                    style={{ width: `${colWidths.sla_time}px`, minWidth: `${colWidths.sla_time}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">SLA time</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("sla_time", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Contract No */}
-                {visibleColumns.contract_no && (
-                  <th 
-                    style={{ width: `${colWidths.contract_no}px`, minWidth: `${colWidths.contract_no}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Contract No</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("contract_no", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* TT Type */}
-                {visibleColumns.tt_type && (
-                  <th 
-                    style={{ width: `${colWidths.tt_type}px`, minWidth: `${colWidths.tt_type}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">TT Type</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("tt_type", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Contract Scope */}
-                {visibleColumns.contract_scope && (
-                  <th 
-                    style={{ width: `${colWidths.contract_scope}px`, minWidth: `${colWidths.contract_scope}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Contract Scope</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("contract_scope", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Category */}
-                {visibleColumns.category && (
-                  <th 
-                    style={{ width: `${colWidths.category}px`, minWidth: `${colWidths.category}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Category</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("category", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Priority */}
-                {visibleColumns.priority && (
-                  <th 
-                    style={{ width: `${colWidths.priority}px`, minWidth: `${colWidths.priority}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Priority</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("priority", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* TT Status */}
-                {visibleColumns.tt_status && (
-                  <th 
-                    style={{ width: `${colWidths.tt_status}px`, minWidth: `${colWidths.tt_status}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">TT Status</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("tt_status", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* SLA Status */}
-                {visibleColumns.sla_status && (
-                  <th 
-                    style={{ width: `${colWidths.sla_status}px`, minWidth: `${colWidths.sla_status}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">SLA Status</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("sla_status", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Assigned (Người xử lý) */}
-                {visibleColumns.assigned && (
-                  <th 
-                    style={{ width: `${colWidths.assigned}px`, minWidth: `${colWidths.assigned}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Người xử lý</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("assigned", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Updated At (Cập nhật) */}
-                {visibleColumns.updated_at && (
-                  <th 
-                    style={{ width: `${colWidths.updated_at}px`, minWidth: `${colWidths.updated_at}px` }}
-                    className="relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none"
-                  >
-                    <span className="truncate">Cập nhật</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("updated_at", e)}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
-                    />
-                  </th>
-                )}
-
-                {/* Actions / Settings Header */}
+                {/* Actions / Column Settings Header */}
                 <th 
                   style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }}
                   className="px-2 py-2.5 text-center whitespace-nowrap relative sticky top-0 z-20 bg-slate-50 border-b border-slate-200" 
-                  ref={columnRef}
                 >
                   <button 
-                    onClick={() => setColumnDropdownOpen(o => !o)}
-                    className="p-1 hover:bg-slate-100 rounded-lg transition"
-                    title="Cấu hình hiển thị cột"
+                    type="button"
+                    onClick={() => setIsConfigModalOpen(true)}
+                    className="p-1 hover:bg-slate-200/70 text-slate-500 hover:text-teal-700 rounded-lg transition cursor-pointer"
+                    title="Cấu hình hiển thị cột & Template"
                   >
-                    <Settings size={14} className="mx-auto text-slate-500" />
+                    <Settings size={15} className="mx-auto" />
                   </button>
-
-                  {columnDropdownOpen && (
-                    <div className="absolute top-full right-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-3 min-w-[220px] text-left space-y-1 normal-case font-normal">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Cột hiển thị</span>
-                      <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {Object.entries({
-                          ticket_id: "Ticket ID",
-                          request_code: "Mã yêu cầu",
-                          title: "Tiêu đề",
-                          customer_name: "Khách hàng",
-                          creator_name: "Người tạo",
-                          created_at: "Thời gian tạo",
-                          start_time: "Start time",
-                          resolve_time: "Resolve time",
-                          duration: "Duration",
-                          paused_time: "Paused time",
-                          resumed_time: "Resumed time",
-                          pause_duration: "Pause duration",
-                          work_duration: "Work duration",
-                          sla_time: "SLA time",
-                          contract_no: "Contract No",
-                          tt_type: "TT Type",
-                          contract_scope: "Contract Scope",
-                          category: "Category",
-                          priority: "Priority",
-                          tt_status: "TT Status",
-                          sla_status: "SLA Status",
-                          assigned: "Người xử lý",
-                          updated_at: "Cập nhật",
-                        }).map(([key, label]) => (
-                          <label key={key} className="flex items-center gap-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded px-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={visibleColumns[key as keyof typeof visibleColumns]}
-                              onChange={() => toggleColumn(key as keyof typeof visibleColumns)}
-                              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
-                            />
-                            <span>{label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </th>
               </tr>
             </thead>
@@ -1522,242 +1652,58 @@ export default function TicketsPage() {
                 paginatedTickets.map((ticket, index) => {
                   const slaInfo = getTicketSlaInfo(ticket);
                   return (
-                  <tr key={ticket.id || index} className="hover:bg-slate-50/70 transition text-sm font-normal divide-x divide-slate-200">
-                    {/* Checkbox */}
-                    <td className="px-3 py-2 text-center whitespace-nowrap border-b border-slate-200">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedRowIds.includes(ticket.id || ticket.ticket_id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          const targetId = ticket.id || ticket.ticket_id;
-                          setSelectedRowIds((prev) =>
-                            prev.includes(targetId) ? prev.filter((id) => id !== targetId) : [...prev, targetId]
-                          );
-                        }}
-                        className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
-                      />
-                    </td>
-
-                    {/* Ticket ID */}
-                    {visibleColumns.ticket_id && (
-                      <td
-                        className="px-3 py-2 text-teal-600 cursor-pointer whitespace-nowrap truncate hover:underline hover:text-teal-800 text-sm font-normal border-b border-slate-200"
-                        onClick={() => router.push(`/tickets/${ticket.id}`)}
-                        title={ticket.ticket_id}
-                      >
-                        {ticket.ticket_id}
+                    <tr key={ticket.id || index} className="hover:bg-slate-50/70 transition text-sm font-normal divide-x divide-slate-200">
+                      {/* Checkbox */}
+                      <td style={{ width: `${colWidths.select}px`, minWidth: `${colWidths.select}px` }} className="px-3 py-2 text-center whitespace-nowrap border-b border-slate-200">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedRowIds.includes(ticket.id || ticket.ticket_id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const targetId = ticket.id || ticket.ticket_id;
+                            setSelectedRowIds((prev) =>
+                              prev.includes(targetId) ? prev.filter((id) => id !== targetId) : [...prev, targetId]
+                            );
+                          }}
+                          className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+                        />
                       </td>
-                    )}
 
-                    {/* Request Code (Mã yêu cầu) */}
-                    {visibleColumns.request_code && (
-                      <td className="px-3 py-2 whitespace-nowrap text-sm font-normal border-b border-slate-200">
-                        {(() => {
-                          const reqCode = getTicketRequestCode(ticket as any);
-                          if (!reqCode) return <span className="text-slate-400">—</span>;
-                          return (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/requests?search=${reqCode}`);
-                              }}
-                              className="inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold hover:bg-blue-100 hover:text-blue-800 transition cursor-pointer"
-                              title={`Xem chi tiết yêu cầu: ${reqCode}`}
-                            >
-                              <span>{reqCode}</span>
-                            </button>
-                          );
-                        })()}
-                      </td>
-                    )}
+                      {/* Dynamic Columns */}
+                      {columnOrder.map((colKey) => {
+                        if (!visibleColumns[colKey]) return null;
+                        return renderTableCell(colKey, ticket, slaInfo);
+                      })}
 
-                    {/* Title */}
-                    {visibleColumns.title && (
-                      <td className="px-3 py-2 text-slate-800 font-normal truncate whitespace-nowrap text-sm border-b border-slate-200" title={ticket.title}>
-                        {ticket.title}
-                      </td>
-                    )}
-
-                    {/* Customer Name */}
-                    {visibleColumns.customer_name && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.customer_name || ""}>
-                        {ticket.customer_name || "—"}
-                      </td>
-                    )}
-
-                    {/* Creator Name (Người tạo) */}
-                    {visibleColumns.creator_name && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.creator_name || ""}>
-                        {ticket.creator_name || "—"}
-                      </td>
-                    )}
-
-                    {/* Created At (Thời gian tạo) */}
-                    {visibleColumns.created_at && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={ticket.created_at || ticket.created_time || ""}>
-                        {formatDateTime(ticket.created_at || ticket.created_time, true)}
-                      </td>
-                    )}
-
-                    {/* Start Time */}
-                    {visibleColumns.start_time && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={ticket.start_time || ticket.startTime || ""}>
-                        {formatDateTime(ticket.start_time || ticket.startTime)}
-                      </td>
-                    )}
-
-                    {/* Resolve Time */}
-                    {visibleColumns.resolve_time && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketResolveTime(ticket) || ""}>
-                        {formatDateTime(getTicketResolveTime(ticket))}
-                      </td>
-                    )}
-
-                    {/* Duration */}
-                    {visibleColumns.duration && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
-                        {formatDuration(ticket)}
-                      </td>
-                    )}
-
-                    {/* Paused Time */}
-                    {visibleColumns.paused_time && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketPausedTime(ticket) || ""}>
-                        {formatDateTime(getTicketPausedTime(ticket))}
-                      </td>
-                    )}
-
-                    {/* Resumed Time */}
-                    {visibleColumns.resumed_time && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap text-sm font-normal border-b border-slate-200" title={getTicketResumedTime(ticket) || ""}>
-                        {formatDateTime(getTicketResumedTime(ticket))}
-                      </td>
-                    )}
-
-                    {/* Pause Duration */}
-                    {visibleColumns.pause_duration && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
-                        {formatPauseDuration(ticket)}
-                      </td>
-                    )}
-
-                    {/* Work Duration */}
-                    {visibleColumns.work_duration && (
-                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium border-b border-slate-200" title="Thời gian làm việc = Duration - Pause duration">
-                        <span className="text-teal-700 font-semibold">{formatWorkDuration(ticket)}</span>
-                      </td>
-                    )}
-
-                    {/* SLA Time */}
-                    {visibleColumns.sla_time && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap text-sm font-medium border-b border-slate-200">
-                        <div className="flex flex-col min-w-0" title={slaInfo.deadlineLabel !== "—" ? `Hạn xử lý SLA: ${slaInfo.deadlineLabel}` : undefined}>
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 inline-block w-fit">
-                            {slaInfo.durationLabel}
-                          </span>
-                          {slaInfo.deadlineLabel !== "—" && (
-                            <span className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5 truncate">
-                              Hạn: {slaInfo.deadlineLabel}
-                            </span>
-                          )}
+                      {/* Actions */}
+                      <td style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }} className="px-2 py-2 whitespace-nowrap border-b border-slate-200">
+                        <div className="flex items-center justify-center gap-1 text-slate-400">
+                          <button
+                            className="hover:text-teal-600 transition p-1.5 rounded-lg hover:bg-teal-50"
+                            title="Chỉnh sửa"
+                            onClick={() => router.push(`/tickets/${ticket.id}`)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTicket(ticket);
+                            }}
+                            disabled={deletingTicketId === (ticket.id || ticket.ticket_id)}
+                            className={`hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-50 cursor-pointer ${
+                              deletingTicketId === (ticket.id || ticket.ticket_id) ? "opacity-40 pointer-events-none text-red-300" : ""
+                            }`}
+                            title="Xóa ticket"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                          <button className="hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100" title="Thêm">
+                            <MoreVertical size={13} />
+                          </button>
                         </div>
                       </td>
-                    )}
-
-                    {/* Contract No */}
-                    {visibleColumns.contract_no && (
-                      <td className="px-3 py-2 text-slate-500 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.contract_no || ""}>
-                        {ticket.contract_no || "—"}
-                      </td>
-                    )}
-
-                    {/* TT Type */}
-                    {visibleColumns.tt_type && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.tt_type || ""}>
-                        {ticket.tt_type || "—"}
-                      </td>
-                    )}
-
-                    {/* Contract Scope */}
-                    {visibleColumns.contract_scope && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.contract_scope || ""}>
-                        {ticket.contract_scope || "—"}
-                      </td>
-                    )}
-
-                    {/* Category */}
-                    {visibleColumns.category && (
-                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.category || ""}>
-                        {ticket.category || "—"}
-                      </td>
-                    )}
-
-                    {/* Priority */}
-                    {visibleColumns.priority && (
-                      <td className="px-3 py-2 whitespace-nowrap border-b border-slate-200">
-                        {renderPriorityBadge(ticket.priority)}
-                      </td>
-                    )}
-
-                    {/* TT Status */}
-                    {visibleColumns.tt_status && (
-                      <td className="px-3 py-2 whitespace-nowrap border-b border-slate-200">
-                        {renderStatusBadge(ticket.tt_status)}
-                      </td>
-                    )}
-
-                    {/* SLA Status */}
-                    {visibleColumns.sla_status && (
-                      <td className="px-3 py-2 whitespace-nowrap border-b border-slate-200">
-                        {renderSlaStatusBadge(slaInfo.status)}
-                      </td>
-                    )}
-
-                    {/* Assigned */}
-                    {visibleColumns.assigned && (
-                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200" title={ticket.assigned || ""}>
-                        {ticket.assigned || "—"}
-                      </td>
-                    )}
-
-                    {/* Updated At */}
-                    {visibleColumns.updated_at && (
-                      <td className="px-3 py-2 text-slate-500 whitespace-nowrap text-sm font-normal border-b border-slate-200">
-                        {timeAgo(ticket.created_time || ticket.start_time || ticket.created_at)}
-                      </td>
-                    )}
-
-                    {/* Actions */}
-                    <td className="px-2 py-2 whitespace-nowrap border-b border-slate-200">
-                      <div className="flex items-center justify-center gap-1 text-slate-400">
-                        <button
-                          className="hover:text-teal-600 transition p-1.5 rounded-lg hover:bg-teal-50"
-                          title="Chỉnh sửa"
-                          onClick={() => router.push(`/tickets/${ticket.id}`)}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTicket(ticket);
-                          }}
-                          disabled={deletingTicketId === (ticket.id || ticket.ticket_id)}
-                          className={`hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-50 cursor-pointer ${
-                            deletingTicketId === (ticket.id || ticket.ticket_id) ? "opacity-40 pointer-events-none text-red-300" : ""
-                          }`}
-                          title="Xóa ticket"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                        <button className="hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100" title="Thêm">
-                          <MoreVertical size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    </tr>
                   );
                 })
               )}
@@ -1844,6 +1790,33 @@ export default function TicketsPage() {
           onSuccess={handleOnSuccess}
         />
       )}
+
+      {/* Column Customization & Templates Modal */}
+      <ColumnConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        columnOrder={columnOrder}
+        setColumnOrder={(order) => {
+          setColumnOrder(order);
+          saveActiveConfig({ order });
+        }}
+        visibleColumns={visibleColumns}
+        setVisibleColumns={(vis) => {
+          setVisibleColumns(vis);
+          saveActiveConfig({ visible: typeof vis === "function" ? vis(visibleColumns) : vis });
+        }}
+        colWidths={colWidths}
+        setColWidths={(widths) => {
+          setColWidths(widths);
+          saveActiveConfig({ widths: typeof widths === "function" ? widths(colWidths) : widths });
+        }}
+        templates={templates}
+        activeTemplateId={activeTemplateId}
+        onApplyTemplate={handleApplyTemplate}
+        onSaveNewTemplate={handleSaveNewTemplate}
+        onDeleteTemplate={handleDeleteTemplate}
+        onResetDefault={handleResetToDefault}
+      />
     </MainLayout>
   );
 }
