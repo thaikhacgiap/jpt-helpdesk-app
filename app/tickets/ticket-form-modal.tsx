@@ -652,8 +652,9 @@ function ProcessPanel({
       alert("Vui lòng lưu thông tin ticket trước để có mã ticket tạo yêu cầu!");
       return;
     }
-    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request, chuyển trang và mở form trên cùng tab
-    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&ttTitle=${encodeURIComponent(ticketTitle || "")}`;
+    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request, chuyển trang và mở form trên cùng tab với 1-time token
+    const token = Date.now().toString();
+    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&ttTitle=${encodeURIComponent(ticketTitle || "")}&token=${token}`;
     window.location.href = url;
   };
 

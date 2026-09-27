@@ -131,6 +131,7 @@ export default function RequestsPage() {
         const ticketIdParam = params.get("ticketId") || params.get("ticketCode") || "";
         const ttTitleParam = params.get("ttTitle") || "";
         const titleParam = params.get("title") || "";
+        const tokenParam = params.get("token") || params.get("t") || "";
 
         let hasParams = false;
 
@@ -167,39 +168,53 @@ export default function RequestsPage() {
         if (createParam === "task" && ticketIdParam) {
           hasParams = true;
           setActiveTab("task");
-          const nowLocal = getLocalDateTimeString();
-          const currentUser = getCurrentUser();
-          const defaultRequester = currentUser?.name || "";
 
-          setEditingRequest(null);
-          setFormData({
-            code: "",
-            title: titleParam || "", // Không chèn tiêu đề TT vào tiêu đề request!
-            type: "Yêu cầu công việc",
-            taskCategory: "Mã ticket",
-            taskRefCode: ticketIdParam,
-            taskRefTitle: ttTitleParam,
-            soKy: "",
-            requestTime: nowLocal,
-            deadlineTime: "",
-            actualCompleteTime: "",
-            description: "",
-            requester: defaultRequester,
-            assignee: "",
-            follower: "",
-            startTime: nowLocal,
-            receiveTime: "",
-            completeTime: "",
-            status: "New",
-            customerId: "",
-            customerName: "",
-            projectId: "",
-            projectName: "",
-            contractLink: "",
-            attachedFiles: []
-          });
-          setError("");
-          setIsModalOpen(true);
+          // Kiểm tra xem token hoặc mã ticket này đã được xử lý (mở 1 lần) hay chưa
+          const tokenKey = tokenParam ? `task_token_${tokenParam}` : `task_ticket_${ticketIdParam}`;
+          const isConsumed = sessionStorage.getItem(tokenKey);
+
+          if (!isConsumed) {
+            // Đánh dấu đã dùng token này ngay lập tức để không bao giờ tự động mở lại khi back / đổi trang
+            sessionStorage.setItem(tokenKey, "1");
+            sessionStorage.setItem(`task_ticket_${ticketIdParam}`, "1");
+
+            const nowLocal = getLocalDateTimeString();
+            const currentUser = getCurrentUser();
+            const defaultRequester = currentUser?.name || "";
+
+            setEditingRequest(null);
+            setFormData({
+              code: "",
+              title: titleParam || "", // Không chèn tiêu đề TT vào tiêu đề request!
+              type: "Yêu cầu công việc",
+              taskCategory: "Mã ticket",
+              taskRefCode: ticketIdParam,
+              taskRefTitle: ttTitleParam,
+              soKy: "",
+              requestTime: nowLocal,
+              deadlineTime: "",
+              actualCompleteTime: "",
+              description: "",
+              requester: defaultRequester,
+              assignee: "",
+              follower: "",
+              startTime: nowLocal,
+              receiveTime: "",
+              completeTime: "",
+              status: "New",
+              customerId: "",
+              customerName: "",
+              projectId: "",
+              projectName: "",
+              contractLink: "",
+              attachedFiles: []
+            });
+            setError("");
+            setIsModalOpen(true);
+          } else {
+            // Đã mở hoặc hủy trước đó, giữ modal đóng
+            setIsModalOpen(false);
+          }
         } else if (!createParam) {
           // Khi người dùng bấm vào Yêu cầu từ sidebar hoặc điều hướng bình thường, đảm bảo modal luôn đóng
           setIsModalOpen(false);
@@ -208,7 +223,13 @@ export default function RequestsPage() {
 
         if (hasParams) {
           // Clean URL parameter so the filter does not persist across page transitions
-          window.history.replaceState({}, document.title, window.location.pathname);
+          const cleanPath = tabParam === "task" ? "/requests?tab=task" : (tabParam ? `/requests?tab=${tabParam}` : window.location.pathname);
+          window.history.replaceState({}, document.title, cleanPath);
+          try {
+            router.replace(cleanPath);
+          } catch {
+            // Ignore if router is busy
+          }
         }
       }
     };
@@ -218,7 +239,7 @@ export default function RequestsPage() {
     return () => {
       window.removeEventListener("popstate", handleUrlSearch);
     };
-  }, []);
+  }, [router]);
 
   // Lắng nghe sự kiện click từ Sidebar để đảm bảo reset về bảng quản lý và đóng mọi modal tạo/sửa yêu cầu
   useEffect(() => {
@@ -230,7 +251,12 @@ export default function RequestsPage() {
       setSearchQuery("");
       setError("");
       if (typeof window !== "undefined") {
-        window.history.replaceState({}, document.title, window.location.pathname);
+        window.history.replaceState({}, document.title, "/requests");
+        try {
+          router.replace("/requests");
+        } catch {
+          // Ignore
+        }
       }
     };
 
@@ -238,7 +264,31 @@ export default function RequestsPage() {
     return () => {
       window.removeEventListener("sidebar-navigate-requests", handleSidebarNavigate);
     };
-  }, []);
+  }, [router]);
+
+  const handleCloseTaskModal = () => {
+    setIsModalOpen(false);
+    setEditingRequest(null);
+    setError("");
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tokenParam = params.get("token") || params.get("t");
+      const ticketIdParam = params.get("ticketId") || params.get("ticketCode") || "";
+      if (tokenParam) {
+        sessionStorage.setItem(`task_token_${tokenParam}`, "1");
+      }
+      if (ticketIdParam) {
+        sessionStorage.setItem(`task_ticket_${ticketIdParam}`, "1");
+      }
+      const cleanPath = activeTab ? `/requests?tab=${activeTab}` : "/requests";
+      window.history.replaceState({}, document.title, cleanPath);
+      try {
+        router.replace(cleanPath);
+      } catch {
+        // Ignore
+      }
+    }
+  };
 
   // Load contracts when selected customer changes
   useEffect(() => {
@@ -848,6 +898,15 @@ export default function RequestsPage() {
       }
       setIsModalOpen(false);
       refreshRequests();
+      if (typeof window !== "undefined") {
+        const cleanPath = activeTab ? `/requests?tab=${activeTab}` : "/requests";
+        window.history.replaceState({}, document.title, cleanPath);
+        try {
+          router.replace(cleanPath);
+        } catch {
+          // Ignore
+        }
+      }
     } catch (err) {
       setError("Không thể lưu yêu cầu: " + String(err));
     }
@@ -1852,7 +1911,7 @@ export default function RequestsPage() {
                 </div>
               </div>
               <button 
-                onClick={() => setIsModalOpen(false)} 
+                onClick={handleCloseTaskModal} 
                 className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
               >
                 <X size={20} />
@@ -2506,7 +2565,7 @@ export default function RequestsPage() {
 
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={handleCloseTaskModal}
                     className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer"
                   >
                     Hủy
