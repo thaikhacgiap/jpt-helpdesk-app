@@ -10,6 +10,12 @@ export interface RequestTask {
   startTime: string;  // Thời gian bắt đầu
   receiveTime?: string; // Thời gian tiếp nhận
   completeTime?: string; // Thời gian hoàn thành
+  requestTime?: string; // Thời gian yêu cầu (tự động điền khi tạo task)
+  deadlineTime?: string; // Thời gian yêu cầu hoàn thành
+  actualCompleteTime?: string; // Thời gian hoàn thành thực tế
+  taskCategory?: string; // 'Mã ticket' | 'Mã dự án' | 'Mã bảo trì' | 'Yêu cầu khác'
+  taskRefCode?: string; // Mã ticket / Mã dự án / Mã bảo trì liên kết
+  soKy?: string | number; // Số kỳ (khi chọn Mã bảo trì)
   status: 'New' | 'In Progress' | 'Completed' | 'Rejected' | 'On Hold'; // Tình trạng
   customerId?: string; // ID khách hàng liên kết
   customerName?: string; // Tên khách hàng
@@ -111,7 +117,11 @@ export function createRequest(formData: Omit<RequestTask, 'id' | 'code'> & { cod
     + String(today.getMonth() + 1).padStart(2, '0')
     + String(today.getDate()).padStart(2, '0');
 
-  const prefix = formData.type === 'Yêu cầu công việc' ? `TR-${dateStr}-` : `SR-${dateStr}-`;
+  const isTask = formData.type === 'Yêu cầu công việc' || 
+                 Boolean(formData.code && formData.code.startsWith('TR-')) ||
+                 Boolean(formData.taskCategory && ['Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.taskCategory)) ||
+                 ['Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.type || '');
+  const prefix = isTask ? `TR-${dateStr}-` : `SR-${dateStr}-`;
   
   // Find highest sequence number for today with this prefix
   const todayRequests = requests.filter(r => r.code && r.code.startsWith(prefix));
@@ -127,10 +137,11 @@ export function createRequest(formData: Omit<RequestTask, 'id' | 'code'> & { cod
   });
   
   const nextSeq = maxSeq + 1;
-  const code = formData.code || `${prefix}${String(nextSeq).padStart(3, '0')}`;
+  const code = formData.code?.trim() ? formData.code.trim() : `${prefix}${String(nextSeq).padStart(3, '0')}`;
   
   const newRequest: RequestTask = {
     ...formData,
+    type: isTask ? 'Yêu cầu công việc' : formData.type,
     id: `req-${Date.now()}`,
     code,
   };

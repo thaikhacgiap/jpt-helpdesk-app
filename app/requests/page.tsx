@@ -77,6 +77,12 @@ export default function RequestsPage() {
     code: "",
     title: "",
     type: "Triển khai dịch vụ" as RequestTask["type"],
+    taskCategory: "Mã ticket", // 'Mã ticket' | 'Mã dự án' | 'Mã bảo trì' | 'Yêu cầu khác'
+    taskRefCode: "",
+    soKy: "",
+    requestTime: "",
+    deadlineTime: "",
+    actualCompleteTime: "",
     description: "",
     requester: "",
     assignee: "",
@@ -428,15 +434,26 @@ export default function RequestsPage() {
 
   const handleCreateOpen = (defaultType?: RequestTask["type"]) => {
     setEditingRequest(null);
+    const nowLocal = getLocalDateTimeString();
+    const currentUser = getCurrentUser();
+    const matchedStaff = staffList.find(s => s.ten_nhan_su === currentUser?.name || s.email === currentUser?.email);
+    const defaultRequester = matchedStaff?.ten_nhan_su || currentUser?.name || "";
+
     setFormData({
       code: "",
       title: "",
       type: defaultType || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
+      taskCategory: "Mã ticket",
+      taskRefCode: "",
+      soKy: "",
+      requestTime: nowLocal,
+      deadlineTime: "",
+      actualCompleteTime: "",
       description: "",
-      requester: "",
+      requester: defaultRequester,
       assignee: "",
       follower: "",
-      startTime: new Date().toISOString().split('T')[0],
+      startTime: nowLocal,
       receiveTime: "",
       completeTime: "",
       status: "New",
@@ -453,17 +470,29 @@ export default function RequestsPage() {
 
   const handleEditOpen = (req: RequestTask) => {
     setEditingRequest(req);
+    const parseLocalTime = (val?: string) => {
+      if (!val) return "";
+      if (val.length === 16 && val.includes("T")) return val;
+      return getLocalDateTimeString(val);
+    };
+
     setFormData({
       code: req.code || "",
       title: req.title || "",
       type: req.type || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
+      taskCategory: req.taskCategory || "Mã ticket",
+      taskRefCode: req.taskRefCode || "",
+      soKy: req.soKy !== undefined ? String(req.soKy) : "",
+      requestTime: parseLocalTime(req.requestTime) || (req.startTime ? parseLocalTime(req.startTime) : ""),
+      deadlineTime: parseLocalTime(req.deadlineTime),
+      actualCompleteTime: parseLocalTime(req.actualCompleteTime || req.completeTime),
       description: req.description || "",
       requester: req.requester || "",
       assignee: req.assignee || "",
       follower: req.follower || "",
-      startTime: req.startTime || "",
-      receiveTime: req.receiveTime || "",
-      completeTime: req.completeTime || "",
+      startTime: parseLocalTime(req.startTime) || req.startTime || "",
+      receiveTime: parseLocalTime(req.receiveTime),
+      completeTime: parseLocalTime(req.completeTime || req.actualCompleteTime),
       status: req.status || "New",
       customerId: req.customerId || "",
       customerName: req.customerName || "",
@@ -667,18 +696,29 @@ export default function RequestsPage() {
       return;
     }
 
+    const isTask = activeTab === "task" || 
+                   (editingRequest && editingRequest.type === "Yêu cầu công việc") || 
+                   formData.type === "Yêu cầu công việc" || 
+                   Boolean(formData.code && formData.code.startsWith("TR-"));
+
     try {
       if (editingRequest) {
         updateRequest(editingRequest.id, {
           title: formData.title,
-          type: formData.type,
+          type: isTask ? "Yêu cầu công việc" : formData.type,
+          taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
+          taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
+          soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
+          requestTime: isTask ? (formData.requestTime || undefined) : undefined,
+          deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
+          actualCompleteTime: isTask ? (formData.actualCompleteTime || undefined) : undefined,
           description: formData.description,
           requester: formData.requester,
           assignee: formData.assignee,
           follower: formData.follower,
           startTime: formData.startTime,
           receiveTime: formData.receiveTime || undefined,
-          completeTime: formData.completeTime || undefined,
+          completeTime: formData.actualCompleteTime || formData.completeTime || undefined,
           status: formData.status,
           customerId: formData.customerId || undefined,
           customerName: formData.customerName || undefined,
@@ -689,16 +729,22 @@ export default function RequestsPage() {
         });
       } else {
         createRequest({
-          code: formData.code,
+          code: formData.code?.trim() || undefined,
           title: formData.title,
-          type: formData.type,
+          type: isTask ? "Yêu cầu công việc" : formData.type,
+          taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
+          taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
+          soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
+          requestTime: isTask ? (formData.requestTime || undefined) : undefined,
+          deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
+          actualCompleteTime: isTask ? (formData.actualCompleteTime || undefined) : undefined,
           description: formData.description,
           requester: formData.requester,
           assignee: formData.assignee,
           follower: formData.follower,
           startTime: formData.startTime,
           receiveTime: formData.receiveTime || undefined,
-          completeTime: formData.completeTime || undefined,
+          completeTime: formData.actualCompleteTime || formData.completeTime || undefined,
           status: formData.status || "New",
           customerId: formData.customerId || undefined,
           customerName: formData.customerName || undefined,
@@ -868,8 +914,13 @@ export default function RequestsPage() {
     t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && isPendingStatus(t.tt_status)
   ).length;
 
+  const isTaskRequestItem = (req: RequestTask) => 
+    req.type === "Yêu cầu công việc" || 
+    Boolean(req.code && req.code.startsWith("TR-")) ||
+    Boolean(req.taskCategory);
+
   // 2. FILTER & SPLIT FOR SERVICE REQUESTS (Tab 2)
-  const serviceRequests = requests.filter(req => req.type !== "Yêu cầu công việc");
+  const serviceRequests = requests.filter(req => !isTaskRequestItem(req));
   const filteredServiceRequests = serviceRequests.filter(req => {
     const term = searchQuery.toLowerCase().trim();
     const matchesSearch = 
@@ -895,13 +946,15 @@ export default function RequestsPage() {
   ).length;
 
   // 3. FILTER & SPLIT FOR TASK REQUESTS (Tab 3)
-  const taskRequests = requests.filter(req => req.type === "Yêu cầu công việc");
+  const taskRequests = requests.filter(req => isTaskRequestItem(req));
   const filteredTaskRequests = taskRequests.filter(req => {
     const term = searchQuery.toLowerCase().trim();
     const matchesSearch = 
       !term ||
       req.title.toLowerCase().includes(term) || 
       req.code.toLowerCase().includes(term) ||
+      (req.taskCategory || "").toLowerCase().includes(term) ||
+      (req.taskRefCode || "").toLowerCase().includes(term) ||
       (req.description || "").toLowerCase().includes(term) ||
       (req.requester || "").toLowerCase().includes(term) ||
       (req.assignee || "").toLowerCase().includes(term);
@@ -1221,8 +1274,18 @@ export default function RequestsPage() {
                       <p className="text-slate-800 text-sm font-normal truncate max-w-[400px]" title={req.description || req.title}>
                         {req.title}
                       </p>
-                      {(req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
+                      {(req.taskRefCode || req.soKy || req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
                         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                          {req.taskRefCode && (
+                            <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-medium font-mono text-[10px]" title={`Mã liên kết: ${req.taskRefCode}`}>
+                              🔗 {req.taskRefCode}
+                            </span>
+                          )}
+                          {req.soKy && (
+                            <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-medium text-[10px]">
+                              Số kỳ: {req.soKy}
+                            </span>
+                          )}
                           {req.customerName && (
                             <span className="text-blue-600 font-medium truncate max-w-[130px]" title={req.customerName}>🏢 {req.customerName}</span>
                           )}
@@ -1250,8 +1313,8 @@ export default function RequestsPage() {
                     </td>
 
                     <td className="px-4 py-1 text-left">
-                      <span className={`px-2.5 py-0.5 rounded text-sm font-normal border ${getTypeColor(req.type)}`}>
-                        {req.type}
+                      <span className={`px-2.5 py-0.5 rounded text-sm font-normal border ${getTypeColor(req.taskCategory || req.type)}`}>
+                        {req.taskCategory || req.type}
                       </span>
                     </td>
 
@@ -1283,12 +1346,12 @@ export default function RequestsPage() {
                       {req.follower || "—"}
                     </td>
 
-                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left">
-                      {formatDate(req.receiveTime || req.startTime)}
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left" title={req.requestTime ? `Thời gian yêu cầu: ${formatDate(req.requestTime)}` : undefined}>
+                      {formatDate(req.startTime || req.requestTime || req.receiveTime)}
                     </td>
 
-                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left">
-                      {formatDate(req.completeTime)}
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left" title={req.deadlineTime ? `Hạn yêu cầu: ${formatDate(req.deadlineTime)}` : undefined}>
+                      {formatDate(req.actualCompleteTime || req.completeTime)}
                     </td>
 
                     <td className="px-4 py-1 text-center">
@@ -1678,312 +1741,612 @@ export default function RequestsPage() {
               )}
 
               {/* 2-Column Responsive Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                {/* Cột Trái (lg:col-span-6): Thông tin phân loại, thực hiện & tài liệu */}
-                <div className="lg:col-span-6 space-y-3.5">
-                  {/* Row 1: Code & Request Type */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Mã <span className="text-slate-400 font-normal">(Tự sinh)</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="code"
-                        value={formData.code}
-                        onChange={handleInputChange}
-                        placeholder={activeTab === "task" ? "TR-..." : "SR-..."}
-                        disabled={!!editingRequest}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
-                      />
-                    </div>
+              {(() => {
+                const isTaskForm = activeTab === "task" || 
+                                   (editingRequest && editingRequest.type === "Yêu cầu công việc") || 
+                                   formData.type === "Yêu cầu công việc" || 
+                                   Boolean(formData.code && formData.code.startsWith("TR-"));
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Loại yêu cầu <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="type"
-                        value={formData.type}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium text-slate-800"
-                      >
-                        {activeTab === "task" ? (
-                          <option value="Yêu cầu công việc">Yêu cầu công việc</option>
-                        ) : (
-                          <>
-                            <option value="Triển khai dịch vụ">Triển khai dịch vụ</option>
-                            <option value="Xem xét hồ sơ">Xem xét hồ sơ</option>
-                            <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
-                            <option value="Yêu cầu hỗ trợ kỹ thuật">Hỗ trợ kỹ thuật</option>
-                            <option value="Yêu cầu tư vấn">Tư vấn</option>
-                            <option value="Yêu cầu">Chung</option>
-                          </>
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    {/* Cột Trái (lg:col-span-6): Thông tin phân loại, thực hiện & tài liệu */}
+                    {isTaskForm ? (
+                      /* === FORM TẠO / SỬA TASK CHO CÁ NHÂN === */
+                      <div className="lg:col-span-6 space-y-3.5">
+                        {/* "Mã Yêu Cầu" (Tự động, không cần hiển thị trong form khi tạo yêu cầu. Khi sửa hiển thị chỉ đọc) */}
+                        {editingRequest && (
+                          <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-xl flex items-center justify-between text-xs">
+                            <span className="font-semibold text-blue-900 uppercase tracking-wide">Mã yêu cầu (Chỉ đọc)</span>
+                            <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-0.5 rounded border border-blue-200">{formData.code}</span>
+                          </div>
                         )}
-                      </select>
-                    </div>
-                  </div>
 
-                  {/* Row 2: Khách hàng & Dự án */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Khách hàng liên quan
-                      </label>
-                      <CustomerSearchSelect
-                        value={formData.customerId}
-                        onChange={(cid, cust) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            customerId: cid,
-                            customerName: cust ? cust.name : ""
-                          }));
-                        }}
-                        customers={dbCustomers}
-                        placeholder="-- Chọn khách hàng --"
-                        size="sm"
-                        allowClear={true}
-                      />
-                    </div>
+                        {/* "Loại yêu cầu" ("Mã ticket", "Mã dự án", "Mã bảo trì", "Yêu cầu khác") */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Loại yêu cầu <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="taskCategory"
+                              value={formData.taskCategory || "Mã ticket"}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormData(prev => ({
+                                  ...prev,
+                                  taskCategory: val,
+                                  ...(val !== "Mã bảo trì" ? { soKy: "" } : {})
+                                }));
+                              }}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium text-slate-800"
+                            >
+                              <option value="Mã ticket">Mã ticket</option>
+                              <option value="Mã dự án">Mã dự án</option>
+                              <option value="Mã bảo trì">Mã bảo trì</option>
+                              <option value="Yêu cầu khác">Yêu cầu khác</option>
+                            </select>
+                          </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Dự án liên quan
-                      </label>
-                      <select
-                        name="projectId"
-                        value={formData.projectId}
-                        onChange={(e) => {
-                          const pid = e.target.value;
-                          const proj = projects.find(p => p.id === pid);
-                          setFormData(prev => {
-                            const next = {
-                              ...prev,
-                              projectId: pid,
-                              projectName: proj ? proj.name : ""
-                            };
-                            // Auto-match customer if not chosen
-                            if (proj?.customerId && !prev.customerId) {
-                              next.customerId = proj.customerId;
-                              next.customerName = proj.customer || "";
-                            }
-                            return next;
-                          });
-                        }}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chọn dự án (tùy chọn) --</option>
-                        {projects
-                          .filter(p => !formData.customerId || p.customerId === formData.customerId || (formData.customerName && p.customer?.toLowerCase() === formData.customerName.toLowerCase()))
-                          .map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.code ? `${p.code} - ` : ""}{p.name} {p.customer ? `(${p.customer})` : ""}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
+                          {/* Trường điền mã liên kết tương ứng theo loại yêu cầu */}
+                          {formData.taskCategory === "Mã ticket" && (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Mã ticket liên kết
+                              </label>
+                              <input
+                                type="text"
+                                name="taskRefCode"
+                                list="tickets-datalist"
+                                value={formData.taskRefCode}
+                                onChange={handleInputChange}
+                                placeholder="Chọn hoặc nhập mã ticket..."
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
+                              />
+                              <datalist id="tickets-datalist">
+                                {customerTickets.map((t) => (
+                                  <option key={t.id} value={t.ticket_id}>
+                                    {t.ticket_id} - {t.title}
+                                  </option>
+                                ))}
+                              </datalist>
+                            </div>
+                          )}
 
-                  {/* Row 3: Thời gian bắt đầu (hoặc Tình trạng) & Người yêu cầu */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    {editingRequest ? (
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Tình trạng <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="status"
-                          value={formData.status}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
-                        >
-                          <option value="New">Chờ tiếp nhận</option>
-                          <option value="In Progress">Đang xử lý</option>
-                          <option value="Completed">Hoàn thành</option>
-                          <option value="Rejected">Hủy bỏ / Từ chối</option>
-                          <option value="On Hold">Tạm dừng</option>
-                        </select>
+                          {formData.taskCategory === "Mã dự án" && (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Dự án liên kết
+                              </label>
+                              <select
+                                name="taskRefCode"
+                                value={formData.taskRefCode}
+                                onChange={(e) => {
+                                  const pid = e.target.value;
+                                  const proj = projects.find(p => p.id === pid || p.code === pid);
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    taskRefCode: pid,
+                                    projectId: proj?.id || pid,
+                                    projectName: proj?.name || ""
+                                  }));
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                              >
+                                <option value="">-- Chọn dự án --</option>
+                                {projects.map((p) => (
+                                  <option key={p.id} value={p.code || p.id}>
+                                    {p.code ? `${p.code} - ` : ""}{p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {formData.taskCategory === "Mã bảo trì" && (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Mã bảo trì
+                              </label>
+                              <input
+                                type="text"
+                                name="taskRefCode"
+                                value={formData.taskRefCode}
+                                onChange={handleInputChange}
+                                placeholder="Nhập mã hợp đồng / bảo trì..."
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
+                              />
+                            </div>
+                          )}
+
+                          {formData.taskCategory === "Yêu cầu khác" && (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Mã tham chiếu (tùy chọn)
+                              </label>
+                              <input
+                                type="text"
+                                name="taskRefCode"
+                                value={formData.taskRefCode}
+                                onChange={handleInputChange}
+                                placeholder="Mã hồ sơ / văn bản /..."
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Khi chọn mã bảo trì sẽ xuất hiện trường điền "số kỳ" */}
+                        {formData.taskCategory === "Mã bảo trì" && (
+                          <div className="text-left">
+                            <label className="block text-[11px] font-semibold text-amber-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                              <span>Số kỳ <span className="text-red-500">*</span></span>
+                              <span className="text-[10px] text-amber-600 font-normal">(VD: Kỳ 1, Kỳ 2, Quý 3/2026...)</span>
+                            </label>
+                            <input
+                              type="text"
+                              name="soKy"
+                              value={formData.soKy}
+                              onChange={handleInputChange}
+                              placeholder="Nhập số kỳ (VD: Kỳ 1, Kỳ 2...)"
+                              className="w-full px-3 py-1.5 border border-amber-300 bg-amber-50/50 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 text-xs sm:text-sm font-medium text-amber-950 transition"
+                            />
+                          </div>
+                        )}
+
+                        {/* "Thời gian yêu cầu" (tự động điền) & "Thời gian bắt đầu" */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian yêu cầu <span className="text-slate-400 font-normal">(Tự động)</span>
+                            </label>
+                            <input
+                              type="datetime-local"
+                              name="requestTime"
+                              value={formData.requestTime}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition bg-slate-50/60 text-slate-700 cursor-pointer"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian bắt đầu <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="datetime-local"
+                              name="startTime"
+                              value={formData.startTime}
+                              onChange={handleInputChange}
+                              required
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* "Thời gian yêu cầu hoàn thành" & "Thời gian hoàn thành thực tế" */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian yêu cầu hoàn thành
+                            </label>
+                            <input
+                              type="datetime-local"
+                              name="deadlineTime"
+                              value={formData.deadlineTime}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian hoàn thành thực tế
+                            </label>
+                            <input
+                              type="datetime-local"
+                              name="actualCompleteTime"
+                              value={formData.actualCompleteTime}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Người yêu cầu & Người tiếp nhận / Được giao */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người yêu cầu
+                            </label>
+                            <select
+                              name="requester"
+                              value={formData.requester}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chọn nhân sự --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người tiếp nhận / Được giao
+                            </label>
+                            <select
+                              name="assignee"
+                              value={formData.assignee}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chưa giao / Chưa nhận --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Người theo dõi & (Tình trạng nếu editing) */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người theo dõi
+                            </label>
+                            <select
+                              name="follower"
+                              value={formData.follower}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chọn nhân sự --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {editingRequest ? (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Tình trạng <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                name="status"
+                                value={formData.status}
+                                onChange={handleInputChange}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                              >
+                                <option value="New">Chờ tiếp nhận</option>
+                                <option value="In Progress">Đang xử lý</option>
+                                <option value="Completed">Hoàn thành</option>
+                                <option value="Rejected">Hủy bỏ / Từ chối</option>
+                                <option value="On Hold">Tạm dừng</option>
+                              </select>
+                            </div>
+                          ) : <div />}
+                        </div>
+
+                        {/* Tài liệu đính kèm */}
+                        <div className="text-left pt-1">
+                          <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                            Tài liệu đính kèm
+                          </label>
+                          <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                            <AttachmentUploader
+                              files={formData.attachedFiles || []}
+                              onChange={(files) => setFormData(prev => ({ ...prev, attachedFiles: files }))}
+                              module="requests"
+                              maxFiles={5}
+                            />
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian bắt đầu <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          name="startTime"
-                          value={formData.startTime}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
-                        />
+                      /* === FORM YÊU CẦU DỊCH VỤ NỘI BỘ === */
+                      <div className="lg:col-span-6 space-y-3.5">
+                        {/* Row 1: Code & Request Type */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Mã <span className="text-slate-400 font-normal">(Tự sinh)</span>
+                            </label>
+                            <input
+                              type="text"
+                              name="code"
+                              value={formData.code}
+                              onChange={handleInputChange}
+                              placeholder="SR-..."
+                              disabled={!!editingRequest}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition font-mono uppercase disabled:bg-slate-50 disabled:text-slate-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Loại yêu cầu <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="type"
+                              value={formData.type}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium text-slate-800"
+                            >
+                              <option value="Triển khai dịch vụ">Triển khai dịch vụ</option>
+                              <option value="Xem xét hồ sơ">Xem xét hồ sơ</option>
+                              <option value="Yêu cầu triển khai">Yêu cầu triển khai</option>
+                              <option value="Yêu cầu hỗ trợ kỹ thuật">Hỗ trợ kỹ thuật</option>
+                              <option value="Yêu cầu tư vấn">Tư vấn</option>
+                              <option value="Yêu cầu">Chung</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Khách hàng & Dự án */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Khách hàng liên quan
+                            </label>
+                            <CustomerSearchSelect
+                              value={formData.customerId}
+                              onChange={(cid, cust) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  customerId: cid,
+                                  customerName: cust ? cust.name : ""
+                                }));
+                              }}
+                              customers={dbCustomers}
+                              placeholder="-- Chọn khách hàng --"
+                              size="sm"
+                              allowClear={true}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Dự án liên quan
+                            </label>
+                            <select
+                              name="projectId"
+                              value={formData.projectId}
+                              onChange={(e) => {
+                                const pid = e.target.value;
+                                const proj = projects.find(p => p.id === pid);
+                                setFormData(prev => {
+                                  const next = {
+                                    ...prev,
+                                    projectId: pid,
+                                    projectName: proj ? proj.name : ""
+                                  };
+                                  // Auto-match customer if not chosen
+                                  if (proj?.customerId && !prev.customerId) {
+                                    next.customerId = proj.customerId;
+                                    next.customerName = proj.customer || "";
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chọn dự án (tùy chọn) --</option>
+                              {projects
+                                .filter(p => !formData.customerId || p.customerId === formData.customerId || (formData.customerName && p.customer?.toLowerCase() === formData.customerName.toLowerCase()))
+                                .map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.code ? `${p.code} - ` : ""}{p.name} {p.customer ? `(${p.customer})` : ""}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Row 3: Thời gian bắt đầu (hoặc Tình trạng) & Người yêu cầu */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          {editingRequest ? (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Tình trạng <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                name="status"
+                                value={formData.status}
+                                onChange={handleInputChange}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                              >
+                                <option value="New">Chờ tiếp nhận</option>
+                                <option value="In Progress">Đang xử lý</option>
+                                <option value="Completed">Hoàn thành</option>
+                                <option value="Rejected">Hủy bỏ / Từ chối</option>
+                                <option value="On Hold">Tạm dừng</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                Thời gian bắt đầu <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="date"
+                                name="startTime"
+                                value={formData.startTime}
+                                onChange={handleInputChange}
+                                required
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                              />
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người yêu cầu
+                            </label>
+                            <select
+                              name="requester"
+                              value={formData.requester}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chọn nhân sự --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Row 4: Người tiếp nhận / Được giao & Người theo dõi */}
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người tiếp nhận / Được giao
+                            </label>
+                            <select
+                              name="assignee"
+                              value={formData.assignee}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chưa giao / Chưa nhận --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Người theo dõi
+                            </label>
+                            <select
+                              name="follower"
+                              value={formData.follower}
+                              onChange={handleInputChange}
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
+                            >
+                              <option value="">-- Chọn nhân sự --</option>
+                              {staffList.map((s) => (
+                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Row 5: Link lưu trữ hợp đồng */}
+                        <div className="text-left">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+                              Link lưu trữ hợp đồng
+                            </label>
+                            {formData.contractLink && (
+                              <a
+                                href={formData.contractLink.startsWith("http") ? formData.contractLink : `https://${formData.contractLink}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition"
+                              >
+                                <ExternalLink size={11} /> Mở liên kết
+                              </a>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <LinkIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              name="contractLink"
+                              value={formData.contractLink}
+                              onChange={handleInputChange}
+                              placeholder="https://drive.google.com/... hoặc đường dẫn lưu hợp đồng"
+                              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition text-slate-700"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 6: Attach Phiếu yêu cầu triển khai */}
+                        <div className="text-left pt-1">
+                          <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                            Phiếu yêu cầu triển khai / Tài liệu đính kèm
+                          </label>
+                          <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                            <AttachmentUploader
+                              files={formData.attachedFiles || []}
+                              onChange={(files) => setFormData(prev => ({ ...prev, attachedFiles: files }))}
+                              module="requests"
+                              maxFiles={5}
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Người yêu cầu
-                      </label>
-                      <select
-                        name="requester"
-                        value={formData.requester}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chọn nhân sự --</option>
-                        {staffList.map((s) => (
-                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                    {/* Cột Phải (lg:col-span-6): Tên công việc / Yêu cầu & Mô tả yêu cầu (GIỮ NGUYÊN) */}
+                    <div className="lg:col-span-6 flex flex-col h-full text-left space-y-3.5">
+                      {/* Tên công việc / Yêu cầu * */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                          Tên công việc / Yêu cầu <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="title"
+                          value={formData.title}
+                          onChange={handleInputChange}
+                          placeholder="Nhập tên tóm tắt yêu cầu (VD: Triển khai dịch vụ máy chủ ảo)..."
+                          required
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition shadow-2xs"
+                        />
+                      </div>
 
-                  {/* Row 4: Người tiếp nhận / Được giao & Người theo dõi */}
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Người tiếp nhận / Được giao
-                      </label>
-                      <select
-                        name="assignee"
-                        value={formData.assignee}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chưa giao / Chưa nhận --</option>
-                        {staffList.map((s) => (
-                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                        ))}
-                      </select>
-                    </div>
+                      {/* Mô tả yêu cầu */}
+                      <div className="flex-1 flex flex-col min-h-[220px]">
+                        <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                          Mô tả yêu cầu
+                        </label>
+                        <textarea
+                          name="description"
+                          value={formData.description}
+                          onChange={handleInputChange}
+                          placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ, kế hoạch phối hợp..."
+                          className="w-full flex-1 min-h-[200px] p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Người theo dõi
-                      </label>
-                      <select
-                        name="follower"
-                        value={formData.follower}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chọn nhân sự --</option>
-                        {staffList.map((s) => (
-                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                      {/* Row 5: Receive & Complete Time (nếu editing Service request) */}
+                      {editingRequest && !isTaskForm && (
+                        <div className="grid grid-cols-2 gap-2.5 text-left pt-1">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian tiếp nhận
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={formData.receiveTime || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, receiveTime: e.target.value }))}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
+                            />
+                          </div>
 
-                  {/* Row 5: Link lưu trữ hợp đồng */}
-                  <div className="text-left">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
-                        Link lưu trữ hợp đồng
-                      </label>
-                      {formData.contractLink && (
-                        <a
-                          href={formData.contractLink.startsWith("http") ? formData.contractLink : `https://${formData.contractLink}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition"
-                        >
-                          <ExternalLink size={11} /> Mở liên kết
-                        </a>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              Thời gian hoàn thành
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={formData.completeTime || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, completeTime: e.target.value }))}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
+                            />
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <div className="relative">
-                      <LinkIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        name="contractLink"
-                        value={formData.contractLink}
-                        onChange={handleInputChange}
-                        placeholder="https://drive.google.com/... hoặc đường dẫn lưu hợp đồng"
-                        className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition text-slate-700"
-                      />
-                    </div>
                   </div>
-
-                  {/* Row 6: Attach Phiếu yêu cầu triển khai */}
-                  <div className="text-left pt-1">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Phiếu yêu cầu triển khai / Tài liệu đính kèm
-                    </label>
-                    <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
-                      <AttachmentUploader
-                        files={formData.attachedFiles || []}
-                        onChange={(files) => setFormData(prev => ({ ...prev, attachedFiles: files }))}
-                        module="requests"
-                        maxFiles={5}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cột Phải (lg:col-span-6): Tên công việc / Yêu cầu & Mô tả yêu cầu */}
-                <div className="lg:col-span-6 flex flex-col h-full text-left space-y-3.5">
-                  {/* Tên công việc / Yêu cầu * (ĐƯỢC ĐƯA LÊN PHÍA TRÊN PHẦN MÔ TẢ YÊU CẦU) */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
-                      Tên công việc / Yêu cầu <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="title"
-                      value={formData.title}
-                      onChange={handleInputChange}
-                      placeholder="Nhập tên tóm tắt yêu cầu (VD: Triển khai dịch vụ máy chủ ảo)..."
-                      required
-                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition shadow-2xs"
-                    />
-                  </div>
-
-                  {/* Mô tả yêu cầu */}
-                  <div className="flex-1 flex flex-col min-h-[220px]">
-                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
-                      Mô tả yêu cầu
-                    </label>
-                    <textarea
-                      name="description"
-                      value={formData.description}
-                      onChange={handleInputChange}
-                      placeholder="Mô tả cụ thể nội dung yêu cầu, mục tiêu cần hỗ trợ, kế hoạch phối hợp..."
-                      className="w-full flex-1 min-h-[200px] p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
-                    />
-                  </div>
-
-                  {/* Row 5: Receive & Complete Time (nếu editing) */}
-                  {editingRequest && (
-                    <div className="grid grid-cols-2 gap-2.5 text-left pt-1">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian tiếp nhận
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={formData.receiveTime || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, receiveTime: e.target.value }))}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian hoàn thành
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={formData.completeTime || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, completeTime: e.target.value }))}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Buttons Footer */}
               <div className="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-slate-100 shrink-0">
