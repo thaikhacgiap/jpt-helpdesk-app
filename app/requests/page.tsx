@@ -828,12 +828,44 @@ export default function RequestsPage() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const pendingCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status === "New" || t.tt_status === "Chờ tiếp nhận");
-  const processedCustomerTickets = filteredCustomerTickets.filter(t => t.tt_status !== "New" && t.tt_status !== "Chờ tiếp nhận");
+  // Helper status checkers
+  const isPendingStatus = (st?: string) => {
+    if (!st) return true;
+    const s = st.toLowerCase().trim();
+    return s === "new" || s === "chờ tiếp nhận";
+  };
+
+  const isCompletedStatus = (st?: string) => {
+    if (!st) return false;
+    const s = st.toLowerCase().trim();
+    return (
+      s === "completed" ||
+      s === "resolved" ||
+      s === "closed" ||
+      s === "hoàn thành" ||
+      s === "đã đóng" ||
+      s === "rejected" ||
+      s === "cancel" ||
+      s === "cancelled" ||
+      s === "hủy bỏ" ||
+      s === "hủy"
+    );
+  };
+
+  const isInProgressStatus = (st?: string) => {
+    if (!st) return false;
+    return !isPendingStatus(st) && !isCompletedStatus(st);
+  };
+
+  type TableVariant = "pending" | "in_progress" | "completed";
+
+  const pendingCustomerTickets = filteredCustomerTickets.filter(t => isPendingStatus(t.tt_status));
+  const inProgressCustomerTickets = filteredCustomerTickets.filter(t => isInProgressStatus(t.tt_status));
+  const completedCustomerTickets = filteredCustomerTickets.filter(t => isCompletedStatus(t.tt_status));
 
   // Pending counts for tab alert badges
   const totalPendingCustomerCount = customerTickets.filter(
-    t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && (t.tt_status === "New" || t.tt_status === "Chờ tiếp nhận")
+    t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && isPendingStatus(t.tt_status)
   ).length;
 
   // 2. FILTER & SPLIT FOR SERVICE REQUESTS (Tab 2)
@@ -854,11 +886,12 @@ export default function RequestsPage() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const pendingServiceRequests = filteredServiceRequests.filter(r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận");
-  const processedServiceRequests = filteredServiceRequests.filter(r => r.status !== "New" && (r.status as string) !== "Chờ tiếp nhận");
+  const pendingServiceRequests = filteredServiceRequests.filter(r => isPendingStatus(r.status));
+  const inProgressServiceRequests = filteredServiceRequests.filter(r => isInProgressStatus(r.status));
+  const completedServiceRequests = filteredServiceRequests.filter(r => isCompletedStatus(r.status));
 
   const totalPendingServiceCount = serviceRequests.filter(
-    r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận"
+    r => isPendingStatus(r.status)
   ).length;
 
   // 3. FILTER & SPLIT FOR TASK REQUESTS (Tab 3)
@@ -878,22 +911,35 @@ export default function RequestsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const pendingTaskRequests = filteredTaskRequests.filter(r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận");
-  const processedTaskRequests = filteredTaskRequests.filter(r => r.status !== "New" && (r.status as string) !== "Chờ tiếp nhận");
+  const pendingTaskRequests = filteredTaskRequests.filter(r => isPendingStatus(r.status));
+  const inProgressTaskRequests = filteredTaskRequests.filter(r => isInProgressStatus(r.status));
+  const completedTaskRequests = filteredTaskRequests.filter(r => isCompletedStatus(r.status));
 
   const totalPendingTaskCount = taskRequests.filter(
-    r => r.status === "New" || (r.status as string) === "Chờ tiếp nhận"
+    r => isPendingStatus(r.status)
   ).length;
 
   // 3. RENDER CUSTOMER TICKETS TABLE (Tab 1)
-  const renderCustomerTicketsTable = (title: string, list: ServiceTicket[], emptyMsg: string, isPending: boolean) => {
+  const renderCustomerTicketsTable = (
+    title: string, 
+    list: ServiceTicket[], 
+    emptyMsg: string, 
+    variant: TableVariant | boolean
+  ) => {
+    const isPending = variant === "pending" || variant === true;
+    const isInProgress = variant === "in_progress";
+    const isCompleted = variant === "completed";
+
+    const dotColor = isPending ? 'bg-blue-500 animate-pulse' : isInProgress ? 'bg-amber-500' : 'bg-emerald-500';
+    const badgeColor = isPending ? 'bg-blue-100 text-blue-700' : isInProgress ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+
     return (
-      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[250px] shrink-0' : 'flex-1'}`}>
-        <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200 flex justify-between items-center shrink-0">
-          <h3 className="text-sm font-normal text-slate-700 tracking-wide uppercase flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${isPending ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
+      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[230px] shrink-0' : 'h-full flex-1'}`}>
+        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0">
+          <h3 className="text-xs font-semibold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${dotColor}`} />
             <span>{title}</span>
-            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-sm font-normal ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${badgeColor}`}>
               {list.length}
             </span>
           </h3>
@@ -1103,14 +1149,26 @@ export default function RequestsPage() {
   };
 
   // 4. RENDER INTERNAL TASKS TABLE (Tab 2 & 3)
-  const renderInternalTasksTable = (title: string, list: RequestTask[], emptyMsg: string, isPending: boolean) => {
+  const renderInternalTasksTable = (
+    title: string, 
+    list: RequestTask[], 
+    emptyMsg: string, 
+    variant: TableVariant | boolean
+  ) => {
+    const isPending = variant === "pending" || variant === true;
+    const isInProgress = variant === "in_progress";
+    const isCompleted = variant === "completed";
+
+    const dotColor = isPending ? 'bg-blue-500 animate-pulse' : isInProgress ? 'bg-amber-500' : 'bg-emerald-500';
+    const badgeColor = isPending ? 'bg-blue-100 text-blue-700' : isInProgress ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+
     return (
-      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[250px] shrink-0' : 'flex-1'}`}>
-        <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200 flex justify-between items-center shrink-0">
-          <h3 className="text-sm font-normal text-slate-700 tracking-wide uppercase flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${isPending ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
+      <div className={`bg-white rounded-xl border border-slate-200/60 shadow-xs overflow-hidden flex flex-col min-h-0 ${isPending ? 'h-[230px] shrink-0' : 'h-full flex-1'}`}>
+        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0">
+          <h3 className="text-xs font-semibold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${dotColor}`} />
             <span>{title}</span>
-            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-sm font-normal ${isPending ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${badgeColor}`}>
               {list.length}
             </span>
           </h3>
@@ -1509,14 +1567,23 @@ export default function RequestsPage() {
                 "Yêu cầu chờ tiếp nhận từ khách hàng", 
                 pendingCustomerTickets, 
                 "Không có yêu cầu mới nào từ khách hàng đang chờ tiếp nhận.", 
-                true
+                "pending"
               )}
-              {renderCustomerTicketsTable(
-                "Yêu cầu khách hàng đang xử lý và hoàn thành", 
-                processedCustomerTickets, 
-                "Không có yêu cầu khách hàng nào đang trong quá trình xử lý hoặc hoàn thành.", 
-                false
-              )}
+              {/* Bảng phía dưới chia thành 2 bảng riêng biệt: Trái (Đang xử lý) & Phải (Đã xử lý xong) */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0 overflow-hidden">
+                {renderCustomerTicketsTable(
+                  "Yêu cầu khách hàng đang xử lý", 
+                  inProgressCustomerTickets, 
+                  "Không có yêu cầu khách hàng nào đang trong quá trình xử lý.", 
+                  "in_progress"
+                )}
+                {renderCustomerTicketsTable(
+                  "Yêu cầu khách hàng đã xử lý xong", 
+                  completedCustomerTickets, 
+                  "Không có yêu cầu khách hàng nào đã hoàn thành.", 
+                  "completed"
+                )}
+              </div>
             </>
           ) : activeTab === "service" ? (
             <>
@@ -1524,14 +1591,23 @@ export default function RequestsPage() {
                 "Yêu cầu thực hiện dịch vụ chờ tiếp nhận", 
                 pendingServiceRequests, 
                 "Hiện tại không có yêu cầu dịch vụ nào đang chờ tiếp nhận.", 
-                true
+                "pending"
               )}
-              {renderInternalTasksTable(
-                "Yêu cầu thực hiện dịch vụ đang xử lý và hoàn thành", 
-                processedServiceRequests, 
-                "Hiện tại không có yêu cầu dịch vụ nào đang được xử lý hoặc đã hoàn thành.", 
-                false
-              )}
+              {/* Bảng phía dưới chia thành 2 bảng riêng biệt: Trái (Đang xử lý) & Phải (Đã xử lý xong) */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0 overflow-hidden">
+                {renderInternalTasksTable(
+                  "Yêu cầu thực hiện dịch vụ đang xử lý", 
+                  inProgressServiceRequests, 
+                  "Hiện tại không có yêu cầu dịch vụ nào đang được xử lý.", 
+                  "in_progress"
+                )}
+                {renderInternalTasksTable(
+                  "Yêu cầu thực hiện dịch vụ đã xử lý xong", 
+                  completedServiceRequests, 
+                  "Hiện tại không có yêu cầu dịch vụ nào đã hoàn thành.", 
+                  "completed"
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -1539,14 +1615,23 @@ export default function RequestsPage() {
                 "Yêu cầu công việc cá nhân chờ tiếp nhận", 
                 pendingTaskRequests, 
                 "Hiện tại không có yêu cầu công việc cá nhân nào đang chờ tiếp nhận.", 
-                true
+                "pending"
               )}
-              {renderInternalTasksTable(
-                "Yêu cầu công việc cá nhân đang xử lý và hoàn thành", 
-                processedTaskRequests, 
-                "Hiện tại không có yêu cầu công việc cá nhân nào đang được xử lý hoặc đã hoàn thành.", 
-                false
-              )}
+              {/* Bảng phía dưới chia thành 2 bảng riêng biệt: Trái (Đang xử lý) & Phải (Đã xử lý xong) */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0 overflow-hidden">
+                {renderInternalTasksTable(
+                  "Yêu cầu công việc cá nhân đang xử lý", 
+                  inProgressTaskRequests, 
+                  "Hiện tại không có yêu cầu công việc cá nhân nào đang được xử lý.", 
+                  "in_progress"
+                )}
+                {renderInternalTasksTable(
+                  "Yêu cầu công việc cá nhân đã xử lý xong", 
+                  completedTaskRequests, 
+                  "Hiện tại không có yêu cầu công việc cá nhân nào đã hoàn thành.", 
+                  "completed"
+                )}
+              </div>
             </>
           )}
         </div>
