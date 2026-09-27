@@ -652,8 +652,8 @@ function ProcessPanel({
       alert("Vui lòng lưu thông tin ticket trước để có mã ticket tạo yêu cầu!");
       return;
     }
-    const titleToUse = ticketTitle ? `Xử lý ${ticketId}: ${ticketTitle}` : `Xử lý Ticket ${ticketId}`;
-    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&title=${encodeURIComponent(titleToUse)}`;
+    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request
+    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&ttTitle=${encodeURIComponent(ticketTitle || "")}`;
     window.open(url, "_blank");
   };
 

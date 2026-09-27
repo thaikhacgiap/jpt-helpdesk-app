@@ -14,7 +14,8 @@ export interface RequestTask {
   deadlineTime?: string; // Thời gian yêu cầu hoàn thành
   actualCompleteTime?: string; // Thời gian hoàn thành thực tế
   taskCategory?: string; // 'Mã ticket' | 'Mã dự án' | 'Mã bảo trì' | 'Yêu cầu khác'
-  taskRefCode?: string; // Mã ticket / Mã dự án / Mã bảo trì liên kết
+  taskRefCode?: string; // Mã ticket (TT ID) / Mã dự án / Mã bảo trì liên kết
+  taskRefTitle?: string; // Tiêu đề Trouble Ticket (TT title) liên kết
   soKy?: string | number; // Số kỳ (khi chọn Mã bảo trì)
   status: 'New' | 'In Progress' | 'Completed' | 'Rejected' | 'On Hold'; // Tình trạng
   customerId?: string; // ID khách hàng liên kết

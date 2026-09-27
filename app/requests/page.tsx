@@ -79,6 +79,7 @@ export default function RequestsPage() {
     type: "Triển khai dịch vụ" as RequestTask["type"],
     taskCategory: "Mã ticket", // 'Mã ticket' | 'Mã dự án' | 'Mã bảo trì' | 'Yêu cầu khác'
     taskRefCode: "",
+    taskRefTitle: "",
     soKy: "",
     requestTime: "",
     deadlineTime: "",
@@ -128,6 +129,7 @@ export default function RequestsPage() {
         const tabParam = params.get("tab");
         const createParam = params.get("create");
         const ticketIdParam = params.get("ticketId") || params.get("ticketCode") || "";
+        const ttTitleParam = params.get("ttTitle") || "";
         const titleParam = params.get("title") || "";
 
         let hasParams = false;
@@ -172,10 +174,11 @@ export default function RequestsPage() {
           setEditingRequest(null);
           setFormData({
             code: "",
-            title: titleParam || (ticketIdParam ? `Xử lý Ticket ${ticketIdParam}` : ""),
+            title: titleParam || "", // Không chèn tiêu đề TT vào tiêu đề request!
             type: "Yêu cầu công việc",
             taskCategory: "Mã ticket",
             taskRefCode: ticketIdParam,
+            taskRefTitle: ttTitleParam,
             soKy: "",
             requestTime: nowLocal,
             deadlineTime: "",
@@ -184,7 +187,7 @@ export default function RequestsPage() {
             requester: defaultRequester,
             assignee: "",
             follower: "",
-            startTime: nowLocal,
+            startTime: nowLocal, // Thời gian tạo (tự điền, không được chỉnh sửa)
             receiveTime: "",
             completeTime: "",
             status: "New",
@@ -507,6 +510,7 @@ export default function RequestsPage() {
       type: defaultType || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
       taskCategory: "Mã ticket",
       taskRefCode: "",
+      taskRefTitle: "",
       soKy: "",
       requestTime: nowLocal,
       deadlineTime: "",
@@ -544,6 +548,7 @@ export default function RequestsPage() {
       type: req.type || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
       taskCategory: req.taskCategory || "Mã ticket",
       taskRefCode: req.taskRefCode || "",
+      taskRefTitle: req.taskRefTitle || "",
       soKy: req.soKy !== undefined ? String(req.soKy) : "",
       requestTime: parseLocalTime(req.requestTime) || (req.startTime ? parseLocalTime(req.startTime) : ""),
       deadlineTime: parseLocalTime(req.deadlineTime),
@@ -754,8 +759,7 @@ export default function RequestsPage() {
       return;
     }
     if (!formData.startTime) {
-      setError("Vui lòng chọn thời gian bắt đầu.");
-      return;
+      formData.startTime = getLocalDateTimeString();
     }
 
     const isTask = activeTab === "task" || 
@@ -770,6 +774,7 @@ export default function RequestsPage() {
           type: isTask ? "Yêu cầu công việc" : formData.type,
           taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
           taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
+          taskRefTitle: isTask ? (formData.taskRefTitle || "") : undefined,
           soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
           requestTime: isTask ? (formData.requestTime || undefined) : undefined,
           deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
@@ -796,6 +801,7 @@ export default function RequestsPage() {
           type: isTask ? "Yêu cầu công việc" : formData.type,
           taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
           taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
+          taskRefTitle: isTask ? (formData.taskRefTitle || "") : undefined,
           soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
           requestTime: isTask ? (formData.requestTime || undefined) : undefined,
           deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
@@ -804,7 +810,7 @@ export default function RequestsPage() {
           requester: formData.requester,
           assignee: formData.assignee,
           follower: formData.follower,
-          startTime: formData.startTime,
+          startTime: formData.startTime || getLocalDateTimeString(),
           receiveTime: formData.receiveTime || undefined,
           completeTime: formData.actualCompleteTime || formData.completeTime || undefined,
           status: formData.status || "New",
@@ -1295,12 +1301,16 @@ export default function RequestsPage() {
               <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
                 <th className="px-6 py-1.5 w-40 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
                 <th className="px-4 py-1.5 w-28 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tình trạng</th>
-                <th className="px-4 py-1.5 min-w-[300px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tên công việc / Yêu cầu</th>
+                <th className="px-4 py-1.5 min-w-[300px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                  {activeTab === "task" ? "Tiêu đề Request" : "Tên công việc / Yêu cầu"}
+                </th>
                 <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
                 <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người yêu cầu</th>
                 <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người tiếp nhận</th>
                 <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người theo dõi</th>
-                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian tiếp nhận</th>
+                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                  {activeTab === "task" ? "Thời gian tạo" : "Thời gian tiếp nhận"}
+                </th>
                 <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian hoàn thành</th>
                 <th className="px-4 py-1.5 text-center w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
               </tr>
@@ -1333,14 +1343,19 @@ export default function RequestsPage() {
                     </td>
 
                     <td className="px-4 py-1 text-left">
-                      <p className="text-slate-800 text-sm font-normal truncate max-w-[400px]" title={req.description || req.title}>
+                      <p className="text-slate-800 text-sm font-medium truncate max-w-[400px]" title={req.description || req.title}>
                         {req.title}
                       </p>
-                      {(req.taskRefCode || req.soKy || req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                      {(req.taskRefCode || req.taskRefTitle || req.soKy || req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
                           {req.taskRefCode && (
-                            <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-medium font-mono text-[10px]" title={`Mã liên kết: ${req.taskRefCode}`}>
-                              🔗 {req.taskRefCode}
+                            <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-semibold font-mono text-[10px]" title={`TT ID: ${req.taskRefCode}`}>
+                              TT ID: {req.taskRefCode}
+                            </span>
+                          )}
+                          {req.taskRefTitle && (
+                            <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-normal text-[10px] max-w-[220px] truncate" title={`TT Title: ${req.taskRefTitle}`}>
+                              TT Title: {req.taskRefTitle}
                             </span>
                           )}
                           {req.soKy && (
@@ -1852,26 +1867,52 @@ export default function RequestsPage() {
 
                           {/* Trường điền mã liên kết tương ứng theo loại yêu cầu */}
                           {formData.taskCategory === "Mã ticket" && (
-                            <div>
-                              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                                Mã ticket liên kết
-                              </label>
-                              <input
-                                type="text"
-                                name="taskRefCode"
-                                list="tickets-datalist"
-                                value={formData.taskRefCode}
-                                onChange={handleInputChange}
-                                placeholder="Chọn hoặc nhập mã ticket..."
-                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
-                              />
-                              <datalist id="tickets-datalist">
-                                {customerTickets.map((t) => (
-                                  <option key={t.id} value={t.ticket_id}>
-                                    {t.ticket_id} - {t.title}
-                                  </option>
-                                ))}
-                              </datalist>
+                            <div className="space-y-2.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                    TT ID (Mã Ticket)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="taskRefCode"
+                                    list="tickets-datalist"
+                                    value={formData.taskRefCode}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const matchedTicket = customerTickets.find(t => t.ticket_id === val || t.id === val);
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        taskRefCode: val,
+                                        taskRefTitle: matchedTicket ? matchedTicket.title : prev.taskRefTitle
+                                      }));
+                                    }}
+                                    placeholder="Chọn hoặc nhập TT ID..."
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
+                                  />
+                                  <datalist id="tickets-datalist">
+                                    {customerTickets.map((t) => (
+                                      <option key={t.id} value={t.ticket_id}>
+                                        {t.ticket_id} - {t.title}
+                                      </option>
+                                    ))}
+                                  </datalist>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                                    TT Title (Tiêu đề TT)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="taskRefTitle"
+                                    value={formData.taskRefTitle}
+                                    onChange={handleInputChange}
+                                    placeholder="Tiêu đề Trouble Ticket..."
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition bg-slate-50/50"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           )}
 
@@ -1956,7 +1997,7 @@ export default function RequestsPage() {
                           </div>
                         )}
 
-                        {/* "Thời gian yêu cầu" (tự động điền) & "Thời gian bắt đầu" */}
+                        {/* "Thời gian yêu cầu" (tự động điền) & "Thời gian tạo" (tự động điền, không được chỉnh sửa) */}
                         <div className="grid grid-cols-2 gap-3 text-left">
                           <div>
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -1972,16 +2013,18 @@ export default function RequestsPage() {
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                              Thời gian bắt đầu <span className="text-red-500">*</span>
+                            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1 flex items-center justify-between">
+                              <span>Thời gian tạo <span className="text-red-500">*</span></span>
+                              <span className="text-[10px] text-slate-400 font-normal">(Tự động, không chỉnh sửa)</span>
                             </label>
                             <input
                               type="datetime-local"
                               name="startTime"
-                              value={formData.startTime}
-                              onChange={handleInputChange}
-                              required
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition cursor-pointer"
+                              value={formData.startTime || getLocalDateTimeString()}
+                              readOnly
+                              disabled
+                              tabIndex={-1}
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-slate-100/90 text-slate-600 rounded-lg outline-none text-xs sm:text-sm cursor-not-allowed select-none"
                             />
                           </div>
                         </div>
@@ -2347,17 +2390,22 @@ export default function RequestsPage() {
 
                     {/* Cột Phải (lg:col-span-6): Tên công việc / Yêu cầu & Mô tả yêu cầu (GIỮ NGUYÊN) */}
                     <div className="lg:col-span-6 flex flex-col h-full text-left space-y-3.5">
-                      {/* Tên công việc / Yêu cầu * */}
+                      {/* Tên công việc / Tiêu đề Request * */}
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1">
-                          Tên công việc / Yêu cầu <span className="text-red-500">*</span>
+                        <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wide mb-1 flex items-center justify-between">
+                          <span>
+                            {isTaskForm ? "Tiêu đề Request" : "Tên công việc / Yêu cầu"} <span className="text-red-500">*</span>
+                          </span>
+                          {isTaskForm && (
+                            <span className="text-[10px] text-slate-400 font-normal">(Độc lập với TT Title)</span>
+                          )}
                         </label>
                         <input
                           type="text"
                           name="title"
                           value={formData.title}
                           onChange={handleInputChange}
-                          placeholder="Nhập tên tóm tắt yêu cầu (VD: Triển khai dịch vụ máy chủ ảo)..."
+                          placeholder={isTaskForm ? "Nhập tiêu đề request (VD: Khảo sát và cấu hình thiết bị)..." : "Nhập tên tóm tắt yêu cầu (VD: Triển khai dịch vụ máy chủ ảo)..."}
                           required
                           className="w-full px-3.5 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition shadow-2xs"
                         />
