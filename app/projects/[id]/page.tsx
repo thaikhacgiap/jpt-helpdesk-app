@@ -27,6 +27,7 @@ import {
   ProjectSowItem
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import {
   ArrowLeft,
   Calendar,
@@ -1631,43 +1632,16 @@ export default function ProjectDetailPage() {
                                   })()}
                                 </div>
                               ) : (
-                                <div className="relative group/assignee">
-                                  <div className="w-full min-h-[28px] px-2 py-1 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 cursor-pointer flex flex-wrap gap-1 items-center">
-                                    {task.assignee
-                                      ? task.assignee.split(',').map(n => n.trim()).filter(Boolean).map(n => (
-                                          <span key={n} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-[9px] font-semibold">
-                                            {n}
-                                            <button type="button" onClick={() => {
-                                              const cur = task.assignee.split(',').map(x => x.trim()).filter(x => x && x !== n);
-                                              handleTempTaskChange(idx, 'assignee', cur.join(', '));
-                                            }} className="hover:text-red-500 cursor-pointer">×</button>
-                                          </span>
-                                        ))
-                                      : <span className="text-slate-400">Chọn...</span>
-                                    }
-                                  </div>
-                                  {/* Dropdown on hover */}
-                                  <div className="hidden group-hover/assignee:block absolute top-full left-0 z-20 mt-0.5 bg-white border border-slate-200 rounded-xl shadow-lg min-w-[140px] max-h-40 overflow-y-auto">
-                                    {staffList.map(s => {
-                                      const curNames = task.assignee ? task.assignee.split(',').map(n => n.trim()).filter(Boolean) : [];
-                                      const checked = curNames.includes(s.ten_nhan_su);
-                                      return (
-                                        <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-50 cursor-pointer">
-                                          <input type="checkbox" checked={checked}
-                                            onChange={(e) => {
-                                              const updated = e.target.checked
-                                                ? [...curNames, s.ten_nhan_su]
-                                                : curNames.filter(n => n !== s.ten_nhan_su);
-                                              handleTempTaskChange(idx, 'assignee', updated.join(', '));
-                                            }}
-                                            className="w-3 h-3 rounded"
-                                          />
-                                          <span className="text-xs text-slate-700">{s.ten_nhan_su}</span>
-                                        </label>
-                                      );
-                                    })}
-                                    {staffList.length === 0 && <p className="px-3 py-2 text-[10px] text-slate-400">Không có nhân sự</p>}
-                                  </div>
+                                <div className="w-full min-w-[150px]">
+                                  <StaffSearchSelect
+                                    mode="multiple"
+                                    size="sm"
+                                    staffList={staffList}
+                                    value={task.assignee || ''}
+                                    outputFormat="string"
+                                    onChange={(val) => handleTempTaskChange(idx, 'assignee', val as string)}
+                                    placeholder="Chọn nhân sự..."
+                                  />
                                 </div>
                               )}
                             </td>
@@ -2299,19 +2273,18 @@ export default function ProjectDetailPage() {
             {/* Add diary entry input */}
             <form onSubmit={handleDiarySubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 space-y-3">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-600">Tác giả:</span>
-                <select
-                  value={diaryForm.author}
-                  onChange={(e) => setDiaryForm(prev => ({ ...prev, author: e.target.value }))}
-                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none"
-                >
-                  {staffList.map((s) => (
-                    <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                  ))}
-                  <option value="John D.">John D.</option>
-                  <option value="Mike R.">Mike R.</option>
-                  <option value="Jane S.">Jane S.</option>
-                </select>
+                <span className="text-xs font-semibold text-slate-600 shrink-0">Tác giả:</span>
+                <div className="w-56 shrink-0">
+                  <StaffSearchSelect
+                    mode="single"
+                    size="sm"
+                    staffList={staffList}
+                    value={diaryForm.author}
+                    onChange={(val) => setDiaryForm(prev => ({ ...prev, author: val as string }))}
+                    placeholder="Chọn tác giả..."
+                    allowClear={false}
+                  />
+                </div>
 
                 <span className="text-xs font-semibold text-slate-600 ml-3">Chủ đề:</span>
                 <select
@@ -2456,50 +2429,16 @@ export default function ProjectDetailPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Người đảm nhận (chọn nhiều)</label>
-                {/* Selected tags */}
-                {taskAssignees.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1.5">
-                    {taskAssignees.map(name => (
-                      <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-[10px] font-semibold">
-                        {name}
-                        <button type="button" onClick={() => setTaskAssignees(prev => prev.filter(n => n !== name))} className="hover:text-red-500 cursor-pointer font-bold">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {/* Checkbox list */}
-                <div className="max-h-28 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                  {staffList.length > 0 ? staffList.map(s => (
-                    <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={taskAssignees.includes(s.ten_nhan_su)}
-                        onChange={(e) => {
-                          if (e.target.checked) setTaskAssignees(prev => [...prev, s.ten_nhan_su]);
-                          else setTaskAssignees(prev => prev.filter(n => n !== s.ten_nhan_su));
-                        }}
-                        className="w-3.5 h-3.5 rounded text-blue-600"
-                      />
-                      <span className="text-xs text-slate-700">{s.ten_nhan_su}</span>
-                    </label>
-                  )) : (
-                    <p className="px-3 py-2 text-xs text-slate-400 italic">Chưa có nhân sự. Nhập tên thủ công bên dưới.</p>
-                  )}
-                </div>
-                {/* Manual input fallback */}
-                <input
-                  type="text"
-                  placeholder="Hoặc nhập tên thủ công, nhấn Enter..."
-                  className="mt-1.5 w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const val = (e.target as HTMLInputElement).value.trim();
-                      if (val && !taskAssignees.includes(val)) setTaskAssignees(prev => [...prev, val]);
-                      (e.target as HTMLInputElement).value = '';
-                    }
-                  }}
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Người đảm nhận (chọn nhiều có tìm kiếm)</label>
+                <StaffSearchSelect
+                  mode="multiple"
+                  outputFormat="array"
+                  value={taskAssignees}
+                  onChange={(val) => setTaskAssignees(Array.isArray(val) ? val : [val].filter(Boolean))}
+                  staffList={staffList}
+                  placeholder="-- Tìm kiếm và chọn người đảm nhận --"
+                  colorClass="bg-blue-50 text-blue-700 border border-blue-200"
+                  size="sm"
                 />
               </div>
 

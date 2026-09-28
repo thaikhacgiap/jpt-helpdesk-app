@@ -9,6 +9,7 @@ import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
 import { DateTimePicker } from "@/components/common/datetime-picker";
 import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 
 interface NewTicketModalProps {
   isOpen: boolean;
@@ -558,26 +559,34 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
           {/* ─ Creator ─ */}
           <div>
             <label className={labelCls}>Người tạo</label>
-            <select name="creatorName" value={formData.creatorName} onChange={handleChange} className={inputCls}>
-              {STAFF_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <StaffSearchSelect
+              value={formData.creatorName}
+              onChange={(v) => setFormData((p) => ({ ...p, creatorName: v }))}
+              placeholder="Chọn người tạo..."
+            />
           </div>
 
           {/* ─ Assigned + Following ─ */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Assigned To <span className="text-red-500 normal-case">*</span></label>
-              <MultiStaffSelect
-                label="nhân viên xử lý" value={formData.assigned}
-                onChange={(v) => setFormData((p) => ({ ...p, assigned: v }))}
+              <StaffSearchSelect
+                mode="multiple"
+                outputFormat="array"
+                value={formData.assigned}
+                onChange={(v) => setFormData((p) => ({ ...p, assigned: Array.isArray(v) ? v : [v].filter(Boolean) }))}
+                placeholder="Chọn nhân viên xử lý..."
                 colorClass="bg-blue-100 text-blue-700"
               />
             </div>
             <div>
-              <label className={labelCls}>Following</label>
-              <MultiStaffSelect
-                label="người theo dõi" value={formData.following}
-                onChange={(v) => setFormData((p) => ({ ...p, following: v }))}
+              <label className={labelCls}>Following (Người theo dõi)</label>
+              <StaffSearchSelect
+                mode="multiple"
+                outputFormat="array"
+                value={formData.following}
+                onChange={(v) => setFormData((p) => ({ ...p, following: Array.isArray(v) ? v : [v].filter(Boolean) }))}
+                placeholder="Chọn người theo dõi..."
                 colorClass="bg-purple-100 text-purple-700"
               />
             </div>

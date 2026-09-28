@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import AttachmentUploader from "@/components/common/attachment-uploader";
 import DateTimePicker from "@/components/common/datetime-picker";
 import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import { AttachedFile } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
 
@@ -1616,118 +1617,15 @@ function MultiSelectNhanSu({
   value: string[]; onChange: (val: string[]) => void;
   disabled: boolean; placeholder?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [nhanSuList, setNhanSuList] = useState<NhanSu[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetchNhanSu()
-      .then(setNhanSuList)
-      .finally(() => setLoading(false));
-  }, [open]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleToggle = (name: string) => {
-    if (value.includes(name)) {
-      onChange(value.filter((n) => n !== name));
-    } else {
-      onChange([...value, name]);
-    }
-  };
-
-  const filtered = nhanSuList.filter((ns) =>
-    ns.ten_nhan_su.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const displayLabel = value.length > 0 ? value.join(", ") : placeholder;
-
   return (
-    <div className="relative w-full min-w-0" ref={ref}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setRect(r);
-          setOpen(!open);
-        }}
-        className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl text-xs bg-white text-slate-700 h-10 transition select-none shadow-2xs cursor-pointer min-w-0
-          ${disabled ? "bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 hover:border-[#0099cc] focus:border-[#0099cc]"}
-          ${open && !disabled ? "border-[#0099cc] ring-1 ring-[#0099cc]/10" : ""}`}
-      >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <User size={13} className="text-slate-400 shrink-0" />
-          <span className="truncate text-slate-800 font-semibold block text-left w-full">{displayLabel}</span>
-        </div>
-        <ChevronDown size={13} className="text-slate-400 shrink-0 ml-2" />
-      </button>
-
-      {open && !disabled && rect && (
-        <div
-          style={{
-            position: "fixed",
-            top: rect.bottom + 2,
-            left: rect.left,
-            width: rect.width,
-            zIndex: 9999,
-          }}
-          className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-64"
-        >
-          <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50 shrink-0">
-            <Search size={12} className="text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm kiếm..."
-              className="w-full bg-transparent border-0 outline-none text-xs text-slate-700"
-            />
-          </div>
-          <div className="overflow-y-auto flex-1 max-h-48">
-            {loading ? (
-              <div className="text-center py-4 text-xs text-slate-400">Đang tải...</div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-4 text-xs text-slate-400">Không tìm thấy kết quả</div>
-            ) : (
-              filtered.map((ns) => {
-                const isChecked = value.includes(ns.ten_nhan_su);
-                return (
-                  <button
-                    key={ns.id}
-                    type="button"
-                    onClick={() => handleToggle(ns.ten_nhan_su)}
-                    className={`w-full text-left px-3.5 py-2 flex items-center gap-2 hover:bg-[#f0faff] border-b border-slate-50 last:border-0 transition ${isChecked ? "bg-[#e6f6fc]" : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      readOnly
-                      className="rounded border-slate-300 text-[#0099cc] focus:ring-[#0099cc]"
-                    />
-                    <span className="text-xs text-slate-700 font-semibold">{ns.ten_nhan_su}</span>
-                    <span className="text-[10px] text-slate-400 ml-auto">{ns.bo_phan}</span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <StaffSearchSelect
+      mode="multiple"
+      value={value}
+      outputFormat="array"
+      onChange={(val) => onChange(val as string[])}
+      disabled={disabled}
+      placeholder={placeholder}
+    />
   );
 }
 
@@ -2663,26 +2561,19 @@ function CompletedForm({
                 <label className="text-xs font-medium text-slate-600 block">
                   Người duyệt <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={finishedData.approver || (nhanSuList[0]?.ten_nhan_su ? `${nhanSuList[0].ten_nhan_su} – ${nhanSuList[0].chuc_vu || "Giám đốc"}` : "Vũ Thanh Tùng – Giám đốc Kỹ thuật")}
-                  onChange={(e) => onFinishedDataChange({ approver: e.target.value })}
+                <StaffSearchSelect
+                  mode="single"
+                  size="sm"
+                  staffList={nhanSuList}
+                  value={finishedData.approver?.split(" – ")[0] || finishedData.approver || ""}
+                  onChange={(val) => {
+                    const ns = nhanSuList.find(s => s.ten_nhan_su === val);
+                    const formatted = ns ? `${ns.ten_nhan_su} – ${ns.chuc_vu || "Kỹ thuật"}` : (val as string);
+                    onFinishedDataChange({ approver: formatted });
+                  }}
                   disabled={!editing}
-                  className="w-full text-xs h-8.5 px-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] text-slate-800 disabled:bg-slate-50 truncate"
-                >
-                  {nhanSuList && nhanSuList.length > 0 ? (
-                    nhanSuList.map((ns) => (
-                      <option key={ns.id} value={`${ns.ten_nhan_su} – ${ns.chuc_vu || "Kỹ thuật"}`}>
-                        {ns.ten_nhan_su} – {ns.chuc_vu || "Kỹ thuật"}
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="Vũ Thanh Tùng – Giám đốc Kỹ thuật">Vũ Thanh Tùng – Giám đốc Kỹ thuật</option>
-                      <option value="Lê Quốc Bảo – Trưởng nhóm Network">Lê Quốc Bảo – Trưởng nhóm Network</option>
-                      <option value="Trần Minh Anh – Support Lead">Trần Minh Anh – Support Lead</option>
-                    </>
-                  )}
-                </select>
+                  placeholder="Chọn người duyệt..."
+                />
               </div>
 
               <div className="col-span-5 space-y-1">

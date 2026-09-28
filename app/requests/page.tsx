@@ -14,6 +14,7 @@ import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServiceTicket, ServiceTicket } from "@/lib/portal-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import { fetchProjects, Project } from "@/lib/project-operations";
 import AttachmentUploader from "@/components/common/attachment-uploader";
@@ -2138,17 +2139,13 @@ export default function RequestsPage() {
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                               Người yêu cầu
                             </label>
-                            <select
-                              name="requester"
+                            <StaffSearchSelect
                               value={formData.requester}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chọn nhân sự --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, requester: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chọn người yêu cầu --"
+                              size="sm"
+                            />
                           </div>
                         </div>
 
@@ -2158,34 +2155,28 @@ export default function RequestsPage() {
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                               Người tiếp nhận / Được giao
                             </label>
-                            <select
-                              name="assignee"
+                            <StaffSearchSelect
                               value={formData.assignee}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chưa giao / Chưa nhận --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, assignee: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chưa giao / Chưa nhận --"
+                              size="sm"
+                            />
                           </div>
 
                           <div>
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                              Người theo dõi
+                              Người theo dõi (chọn nhiều)
                             </label>
-                            <select
-                              name="follower"
+                            <StaffSearchSelect
+                              mode="multiple"
                               value={formData.follower}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chọn nhân sự --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, follower: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chọn người theo dõi --"
+                              colorClass="bg-purple-50 text-purple-700 border border-purple-200"
+                              size="sm"
+                            />
                           </div>
                         </div>
 
@@ -2365,17 +2356,13 @@ export default function RequestsPage() {
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                               Người yêu cầu
                             </label>
-                            <select
-                              name="requester"
+                            <StaffSearchSelect
                               value={formData.requester}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chọn nhân sự --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, requester: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chọn người yêu cầu --"
+                              size="sm"
+                            />
                           </div>
                         </div>
 
@@ -2385,34 +2372,28 @@ export default function RequestsPage() {
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                               Người tiếp nhận / Được giao
                             </label>
-                            <select
-                              name="assignee"
+                            <StaffSearchSelect
                               value={formData.assignee}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chưa giao / Chưa nhận --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, assignee: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chưa giao / Chưa nhận --"
+                              size="sm"
+                            />
                           </div>
 
                           <div>
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                              Người theo dõi
+                              Người theo dõi (chọn nhiều)
                             </label>
-                            <select
-                              name="follower"
+                            <StaffSearchSelect
+                              mode="multiple"
                               value={formData.follower}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                            >
-                              <option value="">-- Chọn nhân sự --</option>
-                              {staffList.map((s) => (
-                                <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setFormData(prev => ({ ...prev, follower: val }))}
+                              staffList={staffList}
+                              placeholder="-- Chọn người theo dõi --"
+                              colorClass="bg-purple-50 text-purple-700 border border-purple-200"
+                              size="sm"
+                            />
                           </div>
                         </div>
 
@@ -2795,17 +2776,13 @@ export default function RequestsPage() {
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Người tiếp nhận
                       </label>
-                      <select
-                        name="assigned"
+                      <StaffSearchSelect
                         value={customerFormData.assigned}
-                        onChange={handleCustomerInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                      >
-                        <option value="">-- Chưa nhận --</option>
-                        {staffList.map((s) => (
-                          <option key={s.id} value={s.ten_nhan_su}>{s.ten_nhan_su}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setCustomerFormData(prev => ({ ...prev, assigned: val }))}
+                        staffList={staffList}
+                        placeholder="-- Chưa nhận --"
+                        size="sm"
+                      />
                     </div>
                   </div>
 

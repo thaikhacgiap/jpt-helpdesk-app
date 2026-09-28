@@ -18,6 +18,7 @@ import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchContacts, Contact } from "@/lib/contact-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import { 
   Plus, 
   Search, 
@@ -796,21 +797,15 @@ export default function UsersPage() {
                     <span className="text-[11px] text-blue-600 font-medium">Tự động khớp họ tên & phòng ban</span>
                   </div>
 
-                  <select
+                  <StaffSearchSelect
+                    mode="single"
+                    valueKey="email"
+                    staffList={internalEmployeesWithEmail}
                     value={selectedSourceEmail}
-                    onChange={(e) => handleSelectNhanSuEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-blue-200 rounded-lg text-xs bg-white text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
-                  >
-                    <option value="">-- Chọn nhân sự từ danh sách ({internalEmployeesWithEmail.length} nhân sự có email) --</option>
-                    {internalEmployeesWithEmail.map(ns => {
-                      const isRegistered = registeredEmailsSet.has(ns.email.toLowerCase().trim());
-                      return (
-                        <option key={ns.id} value={ns.email}>
-                          {ns.ten_nhan_su} — {ns.email} ({ns.bo_phan || "Nhân sự"}) {isRegistered ? "[Đã có tài khoản]" : ""}
-                        </option>
-                      );
-                    })}
-                  </select>
+                    onChange={(val) => handleSelectNhanSuEmail(val as string)}
+                    placeholder={`-- Chọn nhân sự từ danh sách (${internalEmployeesWithEmail.length} nhân sự có email) --`}
+                    allowClear={true}
+                  />
 
                   {matchedSourceInfo && (
                     <div className="flex items-center gap-1.5 text-xs text-blue-800 bg-blue-100/70 px-2.5 py-1.5 rounded-lg font-medium">

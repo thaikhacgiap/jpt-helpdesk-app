@@ -15,6 +15,7 @@ import {
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
 import { fetchOpportunitiesByCustomer, Opportunity } from "@/lib/opportunity-operations";
 import { 
@@ -875,19 +876,12 @@ export default function ProjectsPage() {
                   <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
                     Chủ nhiệm dự án (PM)
                   </label>
-                  <select
-                    name="manager"
+                  <StaffSearchSelect
                     value={formData.manager}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                  >
-                    <option value="">-- Chọn quản trị viên --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.ten_nhan_su}>
-                        {s.ten_nhan_su} ({s.bo_phan || "Nhân sự"})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setFormData(prev => ({ ...prev, manager: val }))}
+                    staffList={staffList}
+                    placeholder="-- Tìm và chọn chủ nhiệm dự án (PM) --"
+                  />
                 </div>
 
                 <div>

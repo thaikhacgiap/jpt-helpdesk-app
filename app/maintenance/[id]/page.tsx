@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import MainLayout from "@/components/layout/main-layout";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 import { 
   ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X, Check,
   CheckCircle2, Clock, RotateCcw, AlertTriangle, Play, HelpCircle,
@@ -1569,26 +1570,18 @@ export default function MaintenanceDetailPage() {
                 </div>
               )}
 
-              {/* Assignees (Multi-select) */}
+              {/* Assignees (Multi-select with Search) */}
               {showAssigneeAndStatusFields && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Người thực hiện</label>
-                  <select
-                    multiple
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Người thực hiện (chọn nhiều có tìm kiếm)</label>
+                  <StaffSearchSelect
+                    mode="multiple"
+                    outputFormat="array"
                     value={form.assignees}
-                    onChange={e => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value);
-                      handleAssigneeChange(selected);
-                    }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white min-h-[80px]"
-                  >
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.ten_nhan_su}>
-                        {s.ten_nhan_su}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-[10px] text-slate-400 mt-1 block">Giữ Ctrl (hoặc Cmd) để chọn nhiều người.</span>
+                    onChange={selected => handleAssigneeChange(Array.isArray(selected) ? selected : [selected].filter(Boolean))}
+                    staffList={staffList}
+                    placeholder="-- Tìm kiếm và chọn người thực hiện --"
+                  />
                 </div>
               )}
 
