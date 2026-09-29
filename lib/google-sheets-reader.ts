@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export interface FetchSheetOptions {
   spreadsheetId: string;
   sheetName: string;
@@ -122,11 +124,45 @@ export async function fetchGoogleSheetRows(options: FetchSheetOptions): Promise<
 
   let token = userAccessToken?.trim() || "";
 
-  // 1. Nếu có token hoặc refresh token, thử gọi Sheets API v4
-  if (token || userRefreshToken?.trim()) {
+  let effectiveRefreshToken =
+    userRefreshToken?.trim() ||
+    process.env.GOOGLE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+    "";
+  let effectiveClientId =
+    userClientId?.trim() ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_CLIENT_ID ||
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+    "";
+  let effectiveClientSecret =
+    userClientSecret?.trim() ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    "";
+
+  // If credentials are not in request or env, attempt to load from Supabase system_settings
+  if (!effectiveRefreshToken) {
     try {
-      if (!token && userRefreshToken?.trim()) {
-        token = await refreshUserAccessToken(userRefreshToken.trim(), userClientId, userClientSecret);
+      const { data } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "storage_config")
+        .maybeSingle();
+
+      if (data?.setting_value) {
+        effectiveRefreshToken = data.setting_value.drive_refresh_token || "";
+        effectiveClientId = effectiveClientId || data.setting_value.drive_client_id || "";
+        effectiveClientSecret = effectiveClientSecret || data.setting_value.drive_client_secret || "";
+      }
+    } catch {}
+  }
+
+  // 1. Nếu có token hoặc refresh token, thử gọi Sheets API v4
+  if (token || effectiveRefreshToken) {
+    try {
+      if (!token && effectiveRefreshToken) {
+        token = await refreshUserAccessToken(effectiveRefreshToken, effectiveClientId, effectiveClientSecret);
       }
 
       let sheetsRes = await fetch(
@@ -134,9 +170,9 @@ export async function fetchGoogleSheetRows(options: FetchSheetOptions): Promise<
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (sheetsRes.status === 401 && userRefreshToken?.trim()) {
+      if (sheetsRes.status === 401 && effectiveRefreshToken) {
         try {
-          token = await refreshUserAccessToken(userRefreshToken.trim(), userClientId, userClientSecret);
+          token = await refreshUserAccessToken(effectiveRefreshToken, effectiveClientId, effectiveClientSecret);
           sheetsRes = await fetch(
             `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A1:AZ5000`,
             { headers: { Authorization: `Bearer ${token}` } }

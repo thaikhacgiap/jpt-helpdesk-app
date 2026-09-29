@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { Readable } from "stream";
+import { supabase } from "@/lib/supabase";
 
 export interface DriveAuthParams {
   clientId?: string;
@@ -15,19 +16,46 @@ export interface DriveAuthParams {
  * 1. OAuth2 Refresh Token (Dedicated Google Email Account - Preferred & Easy)
  * 2. Service Account (JWT)
  */
-function getDriveClient(params?: DriveAuthParams) {
+async function getDriveClient(params?: DriveAuthParams) {
   // Option 1: Dedicated Email Account via OAuth2 Refresh Token
-  const clientId = (params?.clientId && params.clientId.trim() !== "")
+  let clientId = (params?.clientId && params.clientId.trim() !== "")
     ? params.clientId.trim()
-    : process.env.GOOGLE_CLIENT_ID;
+    : (process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID);
 
-  const clientSecret = (params?.clientSecret && params.clientSecret.trim() !== "")
+  let clientSecret = (params?.clientSecret && params.clientSecret.trim() !== "")
     ? params.clientSecret.trim()
-    : process.env.GOOGLE_CLIENT_SECRET;
+    : (process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_DRIVE_CLIENT_SECRET);
 
-  const refreshToken = (params?.refreshToken && params.refreshToken.trim() !== "")
+  let refreshToken = (params?.refreshToken && params.refreshToken.trim() !== "")
     ? params.refreshToken.trim()
-    : process.env.GOOGLE_REFRESH_TOKEN;
+    : (process.env.GOOGLE_REFRESH_TOKEN || process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+
+  let clientEmail = (params?.clientEmail && params.clientEmail.trim() !== "")
+    ? params.clientEmail.trim()
+    : process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+
+  let privateKey = (params?.privateKey && params.privateKey.trim() !== "")
+    ? params.privateKey.trim()
+    : process.env.GOOGLE_PRIVATE_KEY;
+
+  // Fallback to Supabase system_settings if credentials are not in request or env
+  if ((!clientId || !clientSecret || !refreshToken) && (!clientEmail || !privateKey)) {
+    try {
+      const { data } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "storage_config")
+        .maybeSingle();
+
+      if (data?.setting_value) {
+        clientId = clientId || data.setting_value.drive_client_id;
+        clientSecret = clientSecret || data.setting_value.drive_client_secret;
+        refreshToken = refreshToken || data.setting_value.drive_refresh_token;
+        clientEmail = clientEmail || data.setting_value.drive_client_email;
+        privateKey = privateKey || data.setting_value.drive_private_key;
+      }
+    } catch {}
+  }
 
   if (clientId && clientSecret && refreshToken) {
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
@@ -40,14 +68,6 @@ function getDriveClient(params?: DriveAuthParams) {
   }
 
   // Option 2: Service Account (JWT)
-  const clientEmail = (params?.clientEmail && params.clientEmail.trim() !== "")
-    ? params.clientEmail.trim()
-    : process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-
-  let privateKey = (params?.privateKey && params.privateKey.trim() !== "")
-    ? params.privateKey.trim()
-    : process.env.GOOGLE_PRIVATE_KEY;
-
   if (clientEmail && privateKey) {
     if (privateKey.includes("\\n")) {
       privateKey = privateKey.replace(/\\n/g, "\n");
@@ -78,7 +98,7 @@ export async function POST(request: Request) {
       const body = await request.json();
       if (body.action === "test") {
         const folderId = body.folderId || "root";
-        const driveObj = getDriveClient({
+        const driveObj = await getDriveClient({
           clientId: body.clientId,
           clientSecret: body.clientSecret,
           refreshToken: body.refreshToken,
@@ -137,7 +157,7 @@ export async function POST(request: Request) {
       const folderId = (formData.get("folderId") as string) || "root";
       const moduleName = (formData.get("module") as string) || "tickets";
 
-      const driveObj = getDriveClient({
+      const driveObj = await getDriveClient({
         clientId: (formData.get("clientId") as string) || undefined,
         clientSecret: (formData.get("clientSecret") as string) || undefined,
         refreshToken: (formData.get("refreshToken") as string) || undefined,
