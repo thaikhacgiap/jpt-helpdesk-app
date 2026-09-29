@@ -1143,14 +1143,12 @@ export function addDeletedProjectId(id: string) {
 }
 
 export function getStoredProjects(): Project[] {
-  if (!isClient()) return DEFAULT_PROJECTS;
+  if (!isClient()) return [];
   const stored = localStorage.getItem('jpt_projects');
   const deletedIds = getDeletedProjectIds();
 
   if (!stored) {
-    const initial = DEFAULT_PROJECTS.filter(p => !deletedIds.has(p.id));
-    localStorage.setItem('jpt_projects', JSON.stringify(initial));
-    return initial;
+    return [];
   }
   try {
     const list: Project[] = JSON.parse(stored);
@@ -1161,7 +1159,7 @@ export function getStoredProjects(): Project[] {
     return filtered;
   } catch (e) {
     console.error("Error parsing stored projects", e);
-    return DEFAULT_PROJECTS.filter(p => !deletedIds.has(p.id));
+    return [];
   }
 }
 
@@ -1258,7 +1256,7 @@ export async function syncProjectsToSupabase(): Promise<{ success: boolean; mess
   }
 }
 
-// ─── Fetch Projects (Automatic Bidirectional Sync with Supabase) ───────
+// ─── Fetch Projects (Automatic Sync from Supabase - Single Source of Truth) ───────
 export async function fetchProjects(): Promise<Project[]> {
   const deletedIds = getDeletedProjectIds();
 
@@ -1269,8 +1267,8 @@ export async function fetchProjects(): Promise<Project[]> {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        // If Supabase returned any projects that were deleted locally, ensure they get deleted from Supabase
+      if (!error && data !== null) {
+        // If Supabase returned any projects that were deleted locally, ensure they are removed from Supabase
         const deletedInDb = data.filter(r => deletedIds.has(r.id));
         if (deletedInDb.length > 0) {
           deletedInDb.forEach(r => {
@@ -1279,35 +1277,11 @@ export async function fetchProjects(): Promise<Project[]> {
         }
 
         const validDbRows = data.filter(r => !deletedIds.has(r.id));
-        const localList = getStoredProjects().filter(p => !deletedIds.has(p.id));
-        const hasSeeded = localStorage.getItem('jpt_projects_seeded') === 'true';
+        const dbProjects = validDbRows.map(fromDbProject);
 
-        if (validDbRows.length === 0 && localList.length > 0 && !hasSeeded) {
-          // 1. First time initial seed only
-          localStorage.setItem('jpt_projects_seeded', 'true');
-          const dbPayloads = localList.map(toDbProject);
-          supabase.from('projects').upsert(dbPayloads, { onConflict: 'id' }).then(({ error: seedErr }) => {
-            if (seedErr) console.warn("Auto-sync projects warning:", seedErr.message);
-          });
-          return localList;
-        } else if (validDbRows.length > 0 || hasSeeded) {
-          localStorage.setItem('jpt_projects_seeded', 'true');
-          const dbProjects = validDbRows.map(fromDbProject);
-          const dbIdSet = new Set(dbProjects.map(p => p.id));
-          const unSyncedLocals = localList.filter(p => !dbIdSet.has(p.id) && !deletedIds.has(p.id));
-
-          if (unSyncedLocals.length > 0) {
-            // Automatically push unsynced local projects to Supabase in the background
-            const payloads = unSyncedLocals.map(toDbProject);
-            supabase.from('projects').upsert(payloads, { onConflict: 'id' }).then(({ error: syncErr }) => {
-              if (syncErr) console.warn("Auto-sync unsynced local projects warning:", syncErr.message);
-            });
-            dbProjects.push(...unSyncedLocals);
-          }
-
-          setStoredProjects(dbProjects);
-          return dbProjects;
-        }
+        // Update local cache directly from Supabase
+        setStoredProjects(dbProjects);
+        return dbProjects;
       } else if (error) {
         console.warn("Supabase projects table notice:", error.message);
       }
@@ -1386,7 +1360,7 @@ export async function fetchProjectById(id: string): Promise<Project | undefined>
   return getProjectById(id);
 }
 
-export function createProject(formData: Omit<Project, 'id' | 'progress' | 'plan' | 'timeline' | 'documents' | 'diary'>): Project {
+export async function createProject(formData: Omit<Project, 'id' | 'progress' | 'plan' | 'timeline' | 'documents' | 'diary'>): Promise<Project> {
   const projects = getStoredProjects();
   
   // Auto-generate code if empty
@@ -1423,8 +1397,12 @@ export function createProject(formData: Omit<Project, 'id' | 'progress' | 'plan'
   projects.unshift(newProject);
   setStoredProjects(projects);
 
-  // Background sync to Supabase
-  saveProjectToSupabase(newProject).catch(err => console.warn("Supabase background create error:", err));
+  // Directly await sync to Supabase
+  try {
+    await saveProjectToSupabase(newProject);
+  } catch (err) {
+    console.warn("Supabase create project error:", err);
+  }
 
   return newProject;
 }
@@ -1454,14 +1432,14 @@ export async function deleteProject(id: string): Promise<boolean> {
   const filtered = projects.filter(p => p.id !== id);
   setStoredProjects(filtered);
 
-  // Background/direct sync delete with Supabase
+  // Directly await delete from Supabase
   try {
-    await deleteProjectFromSupabase(id);
+    const res = await deleteProjectFromSupabase(id);
+    return res.success;
   } catch (err) {
-    console.warn("Supabase background delete error:", err);
+    console.warn("Supabase delete error:", err);
+    return false;
   }
-
-  return true;
 }
 
 // Plan / Task Operations

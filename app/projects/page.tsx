@@ -204,7 +204,7 @@ export default function ProjectsPage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -226,7 +226,7 @@ export default function ProjectsPage() {
     }
 
     try {
-      createProject(formData);
+      await createProject(formData);
       setIsModalOpen(false);
       refreshProjects();
     } catch (err) {
