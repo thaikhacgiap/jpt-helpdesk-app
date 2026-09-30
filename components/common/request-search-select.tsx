@@ -71,7 +71,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
 
   // 2. Fetch from LocalStorage / Internal requests
   try {
-    const internalList = fetchRequests();
+    const internalList = await fetchRequests();
     internalList.forEach((r) => {
       const code = r.code || r.id;
       if (!seenCodes.has(code.toUpperCase())) {

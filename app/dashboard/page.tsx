@@ -42,7 +42,7 @@ export default function DashboardPage() {
         const projData = await fetchProjects();
         setProjects(projData || []);
 
-        const reqData = fetchRequests();
+        const reqData = await fetchRequests();
         setRequests(reqData || []);
 
         const nsData = await fetchNhanSu();

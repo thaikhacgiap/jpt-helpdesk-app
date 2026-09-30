@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import { 
   fetchRequests, 
+  getStoredRequests,
   createRequest, 
   updateRequest, 
   deleteRequest, 
-  RequestTask 
+  RequestTask,
+  ticketRowToRequest,
+  getDeletedRequestIds,
+  addDeletedRequestId
 } from "@/lib/request-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServiceTicket, ServiceTicket } from "@/lib/portal-operations";
@@ -477,38 +481,13 @@ export default function RequestsPage() {
   };
 
   useEffect(() => {
-    // Migrate old YC- codes to SR-/TR- in local storage
-    const stored = localStorage.getItem('jpt_requests');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as RequestTask[];
-        let changed = false;
-        const migrated = parsed.map(r => {
-          if (r.code && r.code.startsWith("YC-")) {
-            changed = true;
-            const prefix = r.type === "Yêu cầu công việc" ? "TR" : "SR";
-            const datePart = r.startTime ? r.startTime.replace(/-/g, "") : "20260720";
-            const seqPart = r.code.split('-').pop() || "001";
-            return {
-              ...r,
-              code: `${prefix}-${datePart}-${seqPart}`
-            };
-          }
-          return r;
-        });
-        if (changed) {
-          localStorage.setItem('jpt_requests', JSON.stringify(migrated));
-          setRequests(migrated);
-        } else {
-          setRequests(parsed);
-        }
-      } catch(e) {
-        console.error(e);
-        setRequests(fetchRequests());
-      }
-    } else {
-      setRequests(fetchRequests());
+    // Initial render from local cache
+    const initialRequests = getStoredRequests();
+    if (initialRequests.length > 0) {
+      setRequests(initialRequests);
     }
+    // Fetch from Supabase as single source of truth
+    fetchRequests().then(setRequests).catch(err => console.error("Error loading requests:", err));
 
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
     fetchContracts().then(setAllContracts).catch(err => console.error("Error loading all contracts:", err));
@@ -523,7 +502,7 @@ export default function RequestsPage() {
     };
   }, []);
 
-  // Realtime subscription for customer portal tickets
+  // Realtime subscription for requests (Service requests, Task requests, Customer portal tickets)
   useEffect(() => {
     const channel = supabase
       .channel("requests-tickets-realtime")
@@ -535,13 +514,46 @@ export default function RequestsPage() {
           table: "tickets",
         },
         (payload) => {
-          const newTicket = payload.new as ServiceTicket;
-          const oldTicket = payload.old as ServiceTicket;
+          const newTicket = payload.new as any;
+          const oldTicket = payload.old as any;
           const ticketId = (newTicket?.ticket_id || oldTicket?.ticket_id || "");
           
-          // Only react if the ticket starts with TH- or CR- (customer portal requests)
-          if (!ticketId.startsWith("TH-") && !ticketId.startsWith("CR-")) return;
+          const isSRorTR = ticketId.startsWith("SR-") || ticketId.startsWith("TR-");
+          const isPortal = ticketId.startsWith("TH-") || ticketId.startsWith("CR-");
 
+          if (!isSRorTR && !isPortal) return;
+
+          // 1. Handle Service Requests (SR-) and Task Requests (TR-)
+          if (isSRorTR) {
+            const deletedIds = getDeletedRequestIds();
+            if (payload.eventType === "INSERT") {
+              if (newTicket && !deletedIds.has(newTicket.id) && !deletedIds.has(newTicket.ticket_id)) {
+                const reqItem = ticketRowToRequest(newTicket);
+                setRequests((prev) => {
+                  if (prev.some(r => r.id === reqItem.id || r.code === reqItem.code)) {
+                    return prev.map(r => (r.id === reqItem.id || r.code === reqItem.code) ? reqItem : r);
+                  }
+                  return [reqItem, ...prev];
+                });
+              }
+            } else if (payload.eventType === "UPDATE") {
+              if (newTicket) {
+                const reqItem = ticketRowToRequest(newTicket);
+                setRequests((prev) =>
+                  prev.map((r) => (r.id === reqItem.id || r.code === reqItem.code ? reqItem : r))
+                );
+              }
+            } else if (payload.eventType === "DELETE") {
+              const delId = oldTicket?.id;
+              const delCode = oldTicket?.ticket_id;
+              if (delId) addDeletedRequestId(delId);
+              if (delCode) addDeletedRequestId(delCode);
+              setRequests((prev) => prev.filter((r) => r.id !== delId && r.code !== delCode));
+            }
+            return;
+          }
+
+          // 2. Handle Customer Portal tickets (TH- or CR-)
           if (payload.eventType === "INSERT") {
             setCustomerTickets((prev) => [newTicket, ...prev]);
           } else if (payload.eventType === "UPDATE") {
@@ -560,8 +572,14 @@ export default function RequestsPage() {
     };
   }, []);
 
-  const refreshRequests = () => {
-    setRequests(fetchRequests());
+  const refreshRequests = async () => {
+    try {
+      const data = await fetchRequests();
+      setRequests(data);
+    } catch (err) {
+      console.error("Error refreshing requests:", err);
+      setRequests(getStoredRequests());
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -699,24 +717,24 @@ export default function RequestsPage() {
     window.location.href = `/tickets/create?customerId=${customerFormData.customerId}&title=${encodeURIComponent(customerFormData.title)}&description=${encodeURIComponent(customerFormData.description)}&priority=${customerFormData.priority}&category=${customerFormData.category}&requestTicketId=${editingCustomerTicket.ticket_id}&requestDbId=${editingCustomerTicket.id}`;
   };
 
-  const handleInternalReceive = (req: RequestTask) => {
+  const handleInternalReceive = async (req: RequestTask) => {
     try {
       const currentUser = getCurrentUser();
       const receiver = currentUser?.name || "Kỹ thuật viên";
       const receiveTime = new Date().toISOString();
-      updateRequest(req.id, {
+      await updateRequest(req.id, {
         status: "In Progress",
         assignee: receiver,
         receiveTime: receiveTime
       });
-      refreshRequests();
+      await refreshRequests();
     } catch (err) {
       console.error("Error receiving internal request:", err);
       alert("Lỗi khi tiếp nhận yêu cầu: " + String(err));
     }
   };
 
-  const handleModalInternalReceive = () => {
+  const handleModalInternalReceive = async () => {
     const currentUser = getCurrentUser();
     const receiverName = currentUser?.name || "Kỹ thuật viên";
     const nowIso = new Date().toISOString();
@@ -730,12 +748,12 @@ export default function RequestsPage() {
     }));
 
     if (editingRequest) {
-      updateRequest(editingRequest.id, {
+      await updateRequest(editingRequest.id, {
         status: "In Progress",
         assignee: receiverName,
         receiveTime: formData.receiveTime || nowIso
       });
-      refreshRequests();
+      await refreshRequests();
     }
   };
 
@@ -814,10 +832,10 @@ export default function RequestsPage() {
       }
 
       if (window.confirm(`Bạn có chắc chắn muốn xóa yêu cầu "${req.code}" này?`)) {
-        deleteRequest(req.id);
+        await deleteRequest(req.id, req.code);
         setIsModalOpen(false);
         setEditingRequest(null);
-        refreshRequests();
+        await refreshRequests();
       }
     } catch (err) {
       console.error("Error deleting request:", err);
@@ -825,7 +843,7 @@ export default function RequestsPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -844,7 +862,7 @@ export default function RequestsPage() {
 
     try {
       if (editingRequest) {
-        updateRequest(editingRequest.id, {
+        await updateRequest(editingRequest.id, {
           title: formData.title,
           type: isTask ? "Yêu cầu công việc" : formData.type,
           taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
@@ -870,7 +888,7 @@ export default function RequestsPage() {
           attachedFiles: formData.attachedFiles || []
         });
       } else {
-        createRequest({
+        await createRequest({
           code: formData.code?.trim() || undefined,
           title: formData.title,
           type: isTask ? "Yêu cầu công việc" : formData.type,
@@ -898,7 +916,7 @@ export default function RequestsPage() {
         });
       }
       setIsModalOpen(false);
-      refreshRequests();
+      await refreshRequests();
       if (typeof window !== "undefined") {
         const cleanPath = activeTab ? `/requests?tab=${activeTab}` : "/requests";
         window.history.replaceState({}, document.title, cleanPath);

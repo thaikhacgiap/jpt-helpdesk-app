@@ -59,8 +59,8 @@ export default function Sidebar() {
         }
 
         // 2. Internal Service requests & Task requests
-        const localRequests = fetchRequests();
-        const pendingInternal = localRequests.filter(
+        const localRequests = await fetchRequests();
+        const pendingInternal = (localRequests || []).filter(
           (r) => r.status === 'New' || (r.status as string) === 'Chờ tiếp nhận'
         ).length;
 
