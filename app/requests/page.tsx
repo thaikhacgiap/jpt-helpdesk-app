@@ -2623,7 +2623,7 @@ export default function RequestsPage() {
 
               {/* 2-Column Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3.5">
-                {/* Left Column: Khách hàng, Hợp đồng, Loại/Danh mục, Thời gian, Người yêu cầu/tiếp nhận, Trạng thái */}
+                {/* Left Column: Khách hàng, Loại/Danh mục, Dịch vụ bị ảnh hưởng, Người yêu cầu, Thời gian bắt đầu/hoàn thành */}
                 <div className="space-y-2.5">
                   {/* 1. Customer Selection */}
                   <div className="text-left">
@@ -2640,51 +2640,7 @@ export default function RequestsPage() {
                     />
                   </div>
 
-                  {/* 2. Chọn hợp đồng */}
-                  <div className="text-left">
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                      Chọn hợp đồng
-                    </label>
-                    <select
-                      name="contract_no"
-                      value={customerFormData.contract_no}
-                      onChange={handleCustomerInputChange}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
-                    >
-                      <option value="">-- Không liên kết hợp đồng --</option>
-                      {customerContracts.map((c) => (
-                        <option key={c.id} value={c.contract_no || c.code}>
-                          {c.name} ({c.contract_no || c.code})
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Contract Description Display */}
-                    {(() => {
-                      const selectedContract = customerContracts.find(
-                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                             (c.code && c.code === customerFormData.contract_no) ||
-                             (c.name && c.name === customerFormData.contract_no)
-                      ) || allContracts.find(
-                        c => (c.contract_no && c.contract_no === customerFormData.contract_no) ||
-                             (c.code && c.code === customerFormData.contract_no) ||
-                             (c.name && c.name === customerFormData.contract_no)
-                      );
-                      
-                      if (!selectedContract?.description) return null;
-                      return (
-                        <div className="mt-1.5 p-2 bg-blue-50/80 border border-blue-200/60 rounded-lg text-xs text-slate-700 flex items-start gap-2 max-h-16 overflow-y-auto animate-fade-in">
-                          <FileText size={14} className="text-blue-600 shrink-0 mt-0.5" />
-                          <div className="leading-tight text-[11px]">
-                            <span className="font-semibold text-blue-900 mr-1">Mô tả hợp đồng:</span>
-                            <span className="text-slate-700 whitespace-pre-line">{selectedContract.description}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* 3. Type and Category */}
+                  {/* 2. Type and Category */}
                   <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -2730,7 +2686,7 @@ export default function RequestsPage() {
                     </div>
                   </div>
 
-                  {/* Dịch vụ bị ảnh hưởng */}
+                  {/* 3. Dịch vụ bị ảnh hưởng */}
                   <div className="text-left">
                     <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                       Dịch vụ bị ảnh hưởng
@@ -2745,21 +2701,23 @@ export default function RequestsPage() {
                     />
                   </div>
 
-                  {/* 4. Thời gian tiếp nhận & Thời gian bắt đầu dịch vụ/sự cố */}
-                  <div className="grid grid-cols-2 gap-2.5 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Thời gian tiếp nhận
-                      </label>
-                      <input
-                        type="datetime-local"
-                        name="receive_time"
-                        value={customerFormData.receive_time || ""}
-                        onChange={handleCustomerInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
-                      />
-                    </div>
+                  {/* 4. Người yêu cầu */}
+                  <div className="text-left">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                      Người yêu cầu
+                    </label>
+                    <input
+                      type="text"
+                      name="requester"
+                      value={customerFormData.requester}
+                      onChange={handleCustomerInputChange}
+                      placeholder="Nhập tên người yêu cầu..."
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
+                    />
+                  </div>
 
+                  {/* 5. Thời gian bắt đầu DV/sự cố & Thời gian hoàn thành */}
+                  <div className="grid grid-cols-2 gap-2.5 text-left">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                         Thời gian bắt đầu DV/sự cố
@@ -2771,57 +2729,6 @@ export default function RequestsPage() {
                         onChange={handleCustomerInputChange}
                         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
                       />
-                    </div>
-                  </div>
-
-                  {/* 5. Người yêu cầu & Người tiếp nhận */}
-                  <div className="grid grid-cols-2 gap-2.5 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Người yêu cầu
-                      </label>
-                      <input
-                        type="text"
-                        name="requester"
-                        value={customerFormData.requester}
-                        onChange={handleCustomerInputChange}
-                        placeholder="Nhập tên người yêu cầu..."
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Người tiếp nhận
-                      </label>
-                      <StaffSearchSelect
-                        value={customerFormData.assigned}
-                        onChange={(val) => setCustomerFormData(prev => ({ ...prev, assigned: val }))}
-                        staffList={staffList}
-                        placeholder="-- Chưa nhận --"
-                        size="sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 6. Trạng thái & Thời gian hoàn thành */}
-                  <div className="grid grid-cols-2 gap-2.5 text-left">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                        Trạng thái <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="tt_status"
-                        value={customerFormData.tt_status}
-                        onChange={handleCustomerInputChange}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
-                      >
-                        <option value="New">Chờ tiếp nhận</option>
-                        <option value="In Progress">Đang xử lý</option>
-                        <option value="On Hold">Tạm dừng</option>
-                        <option value="Resolved">Hoàn thành</option>
-                        <option value="Rejected">Hủy bỏ</option>
-                      </select>
                     </div>
 
                     <div>
@@ -2846,14 +2753,14 @@ export default function RequestsPage() {
                     <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                       Tiêu đề yêu cầu <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       name="title"
                       value={customerFormData.title}
                       onChange={handleCustomerInputChange}
                       placeholder="Nhập tên tóm tắt sự cố hoặc yêu cầu..."
                       required
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
                     />
                   </div>
 
@@ -2867,7 +2774,7 @@ export default function RequestsPage() {
                       value={customerFormData.description}
                       onChange={handleCustomerInputChange}
                       placeholder="Mô tả cụ thể nội dung sự cố, thông tin máy chủ, mã lỗi, hoặc các hướng dẫn chi tiết..."
-                      className="w-full flex-1 min-h-[250px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
+                      className="w-full flex-1 min-h-[200px] p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm transition resize-none leading-relaxed"
                     />
                   </div>
                 </div>
