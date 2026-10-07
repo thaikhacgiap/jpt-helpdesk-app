@@ -3531,13 +3531,13 @@ function TroubleshootForm({
               </div>
 
               <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-xs">
-                <table className="w-full border-collapse text-xs">
+                <table className="w-full min-w-[750px] border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
                       <th className="p-2.5 text-center font-semibold w-12 border-r border-slate-200">STT</th>
-                      <th className="p-2.5 text-left font-semibold w-1/3 border-r border-slate-200">Lý do</th>
-                      <th className="p-2.5 text-center font-semibold w-40 border-r border-slate-200">Start Time</th>
-                      <th className="p-2.5 text-center font-semibold w-40 border-r border-slate-200">Stop Time</th>
+                      <th className="p-2.5 text-left font-semibold border-r border-slate-200">Lý do</th>
+                      <th className="p-2.5 text-center font-semibold w-56 min-w-[210px] border-r border-slate-200">Start Time</th>
+                      <th className="p-2.5 text-center font-semibold w-56 min-w-[210px] border-r border-slate-200">Stop Time</th>
                       <th className="p-2.5 text-center font-semibold w-24">Duration</th>
                       {editing && <th className="p-2.5 text-center font-semibold w-12 border-l border-slate-200">Xóa</th>}
                     </tr>
@@ -3560,7 +3560,7 @@ function TroubleshootForm({
                                 value={row.reason}
                                 onChange={(e) => handleHoldRowChange(idx, "reason", e.target.value)}
                                 placeholder="Nhập lý do tạm dừng..."
-                                className="w-full bg-transparent border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-amber-500 p-1.5 rounded focus:border-amber-500 focus:bg-white"
+                                className="w-full bg-white border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-amber-500 p-2 rounded-lg focus:border-amber-500"
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 block truncate" title={row.reason}>{row.reason || "—"}</span>
@@ -3572,6 +3572,7 @@ function TroubleshootForm({
                                 value={row.startTime}
                                 onChange={(v) => handleHoldRowChange(idx, "startTime", v)}
                                 placeholder="Bắt đầu tạm dừng..."
+                                className="min-h-[36px] py-1 px-2.5 text-xs"
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 font-mono">{row.startTime ? formatDateWithTime(row.startTime) : "—"}</span>
@@ -3583,6 +3584,7 @@ function TroubleshootForm({
                                 value={row.stopTime}
                                 onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
                                 placeholder="Kết thúc tạm dừng..."
+                                className="min-h-[36px] py-1 px-2.5 text-xs"
                               />
                             ) : (
                               <span className="px-1.5 text-slate-800 font-mono">

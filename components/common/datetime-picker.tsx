@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, Clock, ChevronLeft, ChevronRight, X, Check, RotateCcw } from "lucide-react";
 
 export interface DateTimePickerProps {
@@ -102,8 +103,66 @@ export function DateTimePicker({
   label,
 }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [dropdownCoords, setDropdownCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    openUpwards: boolean;
+  } | null>(null);
+
   const isInteractive = !disabled && !readOnly;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Update popup fixed coordinates relative to viewport
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const popupWidth = Math.min(330, window.innerWidth - 20);
+    const popupHeight = 390;
+    const margin = 4;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpwards = spaceBelow < popupHeight && spaceAbove > spaceBelow;
+
+    let top = openUpwards
+      ? Math.max(10, rect.top - popupHeight - margin)
+      : Math.min(window.innerHeight - popupHeight - 10, rect.bottom + margin);
+
+    let left = rect.left;
+    if (left + popupWidth > window.innerWidth - 10) {
+      left = Math.max(10, rect.right - popupWidth);
+      if (left + popupWidth > window.innerWidth - 10) {
+        left = window.innerWidth - popupWidth - 10;
+      }
+    }
+    if (left < 10) left = 10;
+
+    setDropdownCoords({ top, left, width: popupWidth, openUpwards });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+
+    return () => {
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+    };
+  }, [isOpen]);
 
   // Parsed current date
   const parsedDate = parseDateTimeInput(value);
@@ -128,10 +187,14 @@ export function DateTimePicker({
     }
   }, [value]);
 
-  // Click outside to close
+  // Click outside to close (handles portaled popup)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        popupRef.current && !popupRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -286,7 +349,10 @@ export function DateTimePicker({
       {/* Input Display Field */}
       <div
         onClick={() => {
-          if (isInteractive) setIsOpen((o) => !o);
+          if (isInteractive) {
+            if (!isOpen) updatePosition();
+            setIsOpen((o) => !o);
+          }
         }}
         className={`w-full min-h-[40px] px-3 py-2 bg-white border rounded-xl flex items-center justify-between gap-2 transition cursor-pointer shadow-2xs ${
           isOpen ? "border-teal-500 ring-2 ring-teal-500/20" : "border-slate-200 hover:border-slate-300"
@@ -300,6 +366,19 @@ export function DateTimePicker({
             type="text"
             value={textInput}
             onChange={handleTextChange}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isInteractive && !isOpen) {
+                updatePosition();
+                setIsOpen(true);
+              }
+            }}
+            onFocus={() => {
+              if (isInteractive && !isOpen) {
+                updatePosition();
+                setIsOpen(true);
+              }
+            }}
             placeholder={placeholder}
             disabled={!isInteractive}
             readOnly={readOnly}
@@ -323,9 +402,19 @@ export function DateTimePicker({
         </div>
       </div>
 
-      {/* Popup Calendar Dropdown */}
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 w-[310px] sm:w-[330px] animate-in fade-in slide-in-from-top-2 duration-150 text-slate-800 select-none">
+      {/* Popup Calendar Dropdown (Portaled to document.body to prevent any overflow clipping) */}
+      {isOpen && mounted && dropdownCoords && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popupRef}
+          style={{
+            position: "fixed",
+            top: dropdownCoords.top,
+            left: dropdownCoords.left,
+            width: dropdownCoords.width,
+            zIndex: 99999,
+          }}
+          className="bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 animate-in fade-in duration-150 text-slate-800 select-none"
+        >
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
             <button
@@ -473,7 +562,8 @@ export function DateTimePicker({
               <span>Xong</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
