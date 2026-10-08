@@ -54,7 +54,10 @@ import {
   Building2,
   DollarSign,
   Info,
-  Edit
+  Edit,
+  FileSpreadsheet,
+  ChevronDown,
+  Loader2
 } from "lucide-react";
 
 // Helper functions for mock SOW data
@@ -243,6 +246,9 @@ export default function ProjectDetailPage() {
   const [tempPlan, setTempPlan] = useState<ProjectTask[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const [isImportingPlan, setIsImportingPlan] = useState(false);
+  const [isExportingPlan, setIsExportingPlan] = useState(false);
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -798,49 +804,264 @@ export default function ProjectDetailPage() {
     setDragOverIndex(null);
   };
 
-  const handleExportPlan = () => {
+  // Normalization helper for dates
+  const normalizeDateInput = (val?: any): string => {
+    if (!val) return "";
+    const str = String(val).trim();
+    if (!str) return "";
+
+    // DD/MM/YYYY or DD-MM-YYYY or D/M/YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmyMatch) {
+      const d = dmyMatch[1].padStart(2, "0");
+      const m = dmyMatch[2].padStart(2, "0");
+      const y = dmyMatch[3];
+      return `${y}-${m}-${d}`;
+    }
+
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+
+    // Excel serial number (e.g. 45200)
+    const num = Number(str);
+    if (!isNaN(num) && num > 30000 && num < 60000) {
+      try {
+        const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().slice(0, 10);
+        }
+      } catch {}
+    }
+
+    // General ISO / parse
+    const parsed = Date.parse(str);
+    if (!isNaN(parsed)) {
+      const d = new Date(parsed);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().slice(0, 10);
+      }
+    }
+    return str;
+  };
+
+  // Helper to extract values by fuzzy column headers
+  const getCellVal = (row: Record<string, any>, candidateKeys: string[]): string => {
+    const keys = Object.keys(row);
+    for (const cand of candidateKeys) {
+      const normCand = cand.toLowerCase().trim().replace(/[\s_\-]+/g, "");
+      const foundKey = keys.find(k => {
+        const normK = k.toLowerCase().trim().replace(/[\s_\-]+/g, "");
+        return normK === normCand || normK.includes(normCand);
+      });
+      if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
+        const val = String(row[foundKey]).trim();
+        if (val !== "") return val;
+      }
+    }
+    return "";
+  };
+
+  // Export Plan to Excel (.xlsx)
+  const handleExportExcel = async (isTemplate: boolean = false) => {
     if (!project) return;
-    const cleanPlan = project.plan.map(({ id, ...rest }) => rest);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanPlan, null, 2));
-    const downloadAnchorElement = document.createElement('a');
-    downloadAnchorElement.setAttribute("href", dataStr);
-    downloadAnchorElement.setAttribute("download", `ke_hoach_${project.code}.json`);
-    document.body.appendChild(downloadAnchorElement);
-    downloadAnchorElement.click();
-    downloadAnchorElement.remove();
+    setIsExportingPlan(true);
+    setIsExportDropdownOpen(false);
+
+    try {
+      const res = await fetch("/api/projects/export-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectCode: project.code,
+          projectName: project.name,
+          customer: project.customer,
+          manager: project.manager,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          plan: isTemplate ? [] : project.plan,
+          isTemplate,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Không thể tạo file Excel.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.href = url;
+      downloadAnchor.download = isTemplate
+        ? "mau_ke_hoach_du_an.xlsx"
+        : `ke_hoach_${project.code || "du_an"}.xlsx`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      addDiaryEntry(project.id, {
+        author: "John D.",
+        content: isTemplate
+          ? `Tải tệp mẫu kế hoạch dự án Excel (.xlsx)`
+          : `Xuất dữ liệu kế hoạch dự án ra tệp Excel (.xlsx)`,
+        category: "Update",
+      });
+    } catch (err: any) {
+      console.error("Export Excel error:", err);
+      alert("Lỗi khi xuất file Excel: " + (err?.message || "Không xác định"));
+    } finally {
+      setIsExportingPlan(false);
+    }
+  };
+
+  // Export Plan to CSV (.csv)
+  const handleExportCsv = (isTemplate: boolean = false) => {
+    if (!project) return;
+    setIsExportDropdownOpen(false);
+
+    const headers = [
+      "STT",
+      "Công việc",
+      "Loại dòng",
+      "Thời gian bắt đầu",
+      "Thời gian kết thúc",
+      "Thời gian bắt đầu thực tế",
+      "Thời gian kết thúc thực tế",
+      "Người thực hiện",
+      "% Hoàn thành",
+      "Trạng thái",
+      "Ghi chú",
+    ];
+
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val);
+      if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return `"${str}"`;
+    };
+
+    const statusMapVi: Record<string, string> = {
+      "Todo": "Chưa thực hiện",
+      "In Progress": "Đang thực hiện",
+      "Completed": "Hoàn thành",
+    };
+
+    let rows: string[][] = [];
+
+    if (isTemplate) {
+      rows = [
+        ["1", "Phase 1: Khảo sát & Chuẩn bị", "Phase", "2026-10-01", "2026-10-07", "", "", "", "100%", "Hoàn thành", "Giai đoạn chuẩn bị"],
+        ["1.1", "Họp Kick-off và thống nhất yêu cầu", "Công việc", "2026-10-01", "2026-10-03", "2026-10-01", "2026-10-03", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã ký biên bản họp"],
+        ["1.2", "Khảo sát hiện trạng hạ tầng kỹ thuật", "Công việc", "2026-10-04", "2026-10-07", "2026-10-04", "2026-10-07", "Trần Thị B", "100%", "Hoàn thành", "Hạ tầng sẵn sàng"],
+        ["2", "Phase 2: Triển khai cài đặt hệ thống", "Phase", "2026-10-08", "2026-10-25", "", "", "", "30%", "Đang thực hiện", "Giai đoạn cài đặt chính"],
+        ["2.1", "Cài đặt phần mềm máy chủ & Database", "Công việc", "2026-10-08", "2026-10-15", "2026-10-08", "", "Lê Văn C", "60%", "Đang thực hiện", "Đang hoàn tất DB"],
+        ["2.2", "Cấu hình phân quyền & tài khoản người dùng", "Công việc", "2026-10-16", "2026-10-25", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Chờ hoàn thành máy chủ"],
+        ["3", "Phase 3: Nghiệm thu & Bàn giao", "Phase", "2026-10-26", "2026-10-31", "", "", "", "0%", "Chưa thực hiện", "Giai đoạn bàn giao"],
+        ["3.1", "Đào tạo người dùng & Chuyển giao tài liệu", "Công việc", "2026-10-26", "2026-10-28", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Chuẩn bị giáo trình"],
+        ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "Công việc", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
+      ];
+    } else {
+      rows = project.plan.map((t, idx) => {
+        const isHeader = !!t.isHeader;
+        const viStatus = statusMapVi[t.status] || t.status || "Chưa thực hiện";
+        return [
+          t.taskIndex || (isHeader ? `${idx + 1}` : `${idx + 1}.1`),
+          t.title || "",
+          isHeader ? "Phase" : "Công việc",
+          t.startDate || "",
+          t.endDate || "",
+          t.actualStartDate || "",
+          t.actualEndDate || "",
+          isHeader ? "" : (t.assignee || ""),
+          `${typeof t.progress === "number" ? t.progress : 0}%`,
+          viStatus,
+          t.notes || "",
+        ];
+      });
+    }
+
+    // UTF-8 BOM (\uFEFF) ensures Excel opens Vietnamese accents properly
+    const csvContent = "\uFEFF" + [
+      headers.map(escapeCsv).join(","),
+      ...rows.map(row => row.map(escapeCsv).join(","))
+    ].join("\r\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.href = url;
+    downloadAnchor.download = isTemplate
+      ? "mau_ke_hoach_du_an.csv"
+      : `ke_hoach_${project.code || "du_an"}.csv`;
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    window.URL.revokeObjectURL(url);
 
     addDiaryEntry(project.id, {
       author: "John D.",
-      content: `Xuất dữ liệu kế hoạch dự án ra tệp JSON`,
+      content: isTemplate
+        ? `Tải tệp mẫu kế hoạch dự án CSV (.csv)`
+        : `Xuất dữ liệu kế hoạch dự án ra tệp CSV (.csv)`,
+      category: "Update",
+    });
+  };
+
+  // Export Plan to JSON backup
+  const handleExportJson = () => {
+    if (!project) return;
+    setIsExportDropdownOpen(false);
+    const cleanPlan = project.plan.map(({ id, ...rest }) => rest);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanPlan, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `ke_hoach_${project.code}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    addDiaryEntry(project.id, {
+      author: "John D.",
+      content: `Xuất dữ liệu kế hoạch dự án ra tệp sao lưu JSON (.json)`,
       category: "Update"
     });
   };
 
   const handleImportPlanClick = () => {
-    document.getElementById('plan-import-file')?.click();
+    document.getElementById("plan-import-file")?.click();
   };
 
-  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import Plan from Excel (.xlsx, .xls), CSV (.csv) or JSON (.json)
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !project) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (Array.isArray(parsed)) {
+    const fileName = file.name.toLowerCase();
+    setIsImportingPlan(true);
+
+    try {
+      // 1. JSON parsing
+      if (fileName.endsWith(".json")) {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed) && parsed.length > 0) {
           const validated = parsed.map((t, idx) => ({
             id: `imported-task-${idx}-${Date.now()}`,
             title: t.title || "Công việc chưa đặt tên",
             phase: t.phase || "Phase 1: Chuẩn bị",
             assignee: t.assignee || "",
-            startDate: t.startDate || project.startDate,
-            endDate: t.endDate || project.endDate,
-            status: (t.status === 'Completed' || t.status === 'In Progress' || t.status === 'Todo') ? t.status : 'Todo',
-            progress: typeof t.progress === 'number' ? t.progress : (t.status === 'Completed' ? 100 : 0),
+            startDate: normalizeDateInput(t.startDate) || project.startDate,
+            endDate: normalizeDateInput(t.endDate) || project.endDate,
+            status: (t.status === "Completed" || t.status === "In Progress" || t.status === "Todo") ? t.status : "Todo",
+            progress: typeof t.progress === "number" ? t.progress : (t.status === "Completed" ? 100 : 0),
             taskIndex: t.taskIndex,
-            actualStartDate: t.actualStartDate || "",
-            actualEndDate: t.actualEndDate || "",
+            actualStartDate: normalizeDateInput(t.actualStartDate) || "",
+            actualEndDate: normalizeDateInput(t.actualEndDate) || "",
             notes: t.notes || "",
             isHeader: !!t.isHeader
           }));
@@ -854,17 +1075,133 @@ export default function ProjectDetailPage() {
               category: "Update"
             });
             refreshProjectData();
-            alert(`Đã nhập thành công ${reindexed.length} công việc kế hoạch!`);
+            alert(`Đã nhập thành công ${reindexed.length} công việc kế hoạch từ file JSON!`);
           }
+          return;
         } else {
-          alert("Lỗi: File JSON không chứa một danh sách mảng công việc hợp lệ.");
+          throw new Error("File JSON không chứa danh sách mảng công việc hợp lệ.");
         }
-      } catch (err) {
-        alert("Lỗi khi đọc file JSON: " + (err as Error).message);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+
+      // 2. Spreadsheet parsing (.xlsx, .xls, .csv) via parse-file API
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/system/parse-file", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể phân tích dữ liệu từ file.");
+      }
+
+      const rows: Record<string, any>[] = data.rows || [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error("Tệp không chứa dữ liệu hoặc bảng tính bị trống.");
+      }
+
+      const parsedTasks: ProjectTask[] = [];
+
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx];
+
+        const title = getCellVal(row, ["công việc", "tên công việc", "nội dung", "hạng mục", "task", "title", "name", "cong viec", "ten cong viec"]);
+        // Skip empty title rows or subheader repeats
+        if (!title || title.toLowerCase() === "công việc" || title.toLowerCase() === "tên công việc") continue;
+
+        const rawIndex = getCellVal(row, ["stt", "no", "số thứ tự", "index", "taskindex", "so thu tu"]);
+        const rawType = getCellVal(row, ["loại dòng", "loại", "phase", "giai đoạn", "isheader", "header", "loai dong", "loai"]);
+        const rawStart = getCellVal(row, ["thời gian bắt đầu", "ngày bắt đầu", "bắt đầu", "start date", "startdate", "start", "ngay bat dau"]);
+        const rawEnd = getCellVal(row, ["thời gian kết thúc", "ngày kết thúc", "kết thúc", "hạn chót", "end date", "enddate", "end", "deadline", "ngay ket thuc"]);
+        const rawActualStart = getCellVal(row, ["thời gian bắt đầu thực tế", "bắt đầu thực tế", "ngày bắt đầu thực tế", "actual start date", "actualstartdate", "actual start"]);
+        const rawActualEnd = getCellVal(row, ["thời gian kết thúc thực tế", "kết thúc thực tế", "ngày kết thúc thực tế", "actual end date", "actualenddate", "actual end"]);
+        const assignee = getCellVal(row, ["người thực hiện", "phụ trách", "nhân sự", "assignee", "assigned to", "owner", "nguoi thuc hien"]);
+        const rawProgress = getCellVal(row, ["% hoàn thành", "tiến độ", "% tiến độ", "phần trăm", "progress", "%", "% hoan thanh", "tien do"]);
+        const rawStatus = getCellVal(row, ["trạng thái", "status", "tình trạng", "trang thai"]);
+        const notes = getCellVal(row, ["ghi chú", "notes", "note", "comment", "mô tả", "ghi chu"]);
+
+        // Determine if this row is a phase/header
+        const normType = rawType.toLowerCase();
+        const normTitle = title.toLowerCase();
+        const isExplicitHeader = normType.includes("phase") || normType.includes("giai đoạn") || normType.includes("header") || normType === "true" || normType === "1";
+        const isTitleHeader = normTitle.startsWith("phase ") || normTitle.startsWith("giai đoạn ") || normTitle.startsWith("phần ");
+        const isNoDotIndex = rawIndex !== "" && !rawIndex.includes(".") && !rawIndex.includes(",") && !assignee && !rawActualStart;
+
+        const isHeader = isExplicitHeader || isTitleHeader || (isNoDotIndex && normType !== "công việc" && normType !== "task");
+
+        // Parse progress
+        let progress = 0;
+        if (rawProgress) {
+          const cleanProg = rawProgress.replace("%", "").trim();
+          const pNum = parseFloat(cleanProg);
+          if (!isNaN(pNum)) {
+            progress = pNum <= 1 && pNum > 0 ? Math.round(pNum * 100) : Math.min(100, Math.max(0, Math.round(pNum)));
+          }
+        }
+
+        // Parse status
+        let status: ProjectTask["status"] = "Todo";
+        const normStatus = rawStatus.toLowerCase();
+        if (normStatus.includes("hoàn thành") || normStatus.includes("completed") || normStatus.includes("done") || progress === 100) {
+          status = "Completed";
+          if (progress === 0) progress = 100;
+        } else if (
+          normStatus.includes("đang") ||
+          normStatus.includes("in progress") ||
+          normStatus.includes("tiến hành") ||
+          normStatus.includes("doing") ||
+          (progress > 0 && progress < 100)
+        ) {
+          status = "In Progress";
+        }
+
+        parsedTasks.push({
+          id: `imported-task-${idx}-${Date.now()}`,
+          title,
+          phase: isHeader ? title : "Phase",
+          assignee: isHeader ? "" : assignee,
+          startDate: normalizeDateInput(rawStart) || project.startDate,
+          endDate: normalizeDateInput(rawEnd) || project.endDate,
+          actualStartDate: normalizeDateInput(rawActualStart),
+          actualEndDate: normalizeDateInput(rawActualEnd),
+          status,
+          progress,
+          notes,
+          isHeader,
+          taskIndex: rawIndex || undefined,
+        });
+      }
+
+      if (parsedTasks.length === 0) {
+        throw new Error(
+          "Không tìm thấy cột dữ liệu hợp lệ trong file. Vui lòng đảm bảo bảng tính có cột 'Công việc' hoặc tải File mẫu để kiểm tra."
+        );
+      }
+
+      const reindexed = autoAssignTaskIndices(parsedTasks);
+      const updated = updateProjectPlan(project.id, reindexed);
+      if (updated) {
+        const phaseCount = reindexed.filter(t => t.isHeader).length;
+        const subCount = reindexed.filter(t => !t.isHeader).length;
+        addDiaryEntry(project.id, {
+          author: "John D.",
+          content: `Nhập dữ liệu kế hoạch dự án từ tệp "${file.name}" thành công (${reindexed.length} hạng mục: ${phaseCount} Phase, ${subCount} Công việc)`,
+          category: "Update"
+        });
+        refreshProjectData();
+        alert(
+          `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${subCount} Công việc con) từ file "${file.name}"!`
+        );
+      }
+    } catch (err: any) {
+      console.error("Lỗi khi nhập file kế hoạch:", err);
+      alert("Lỗi khi nhập file kế hoạch: " + (err?.message || "Không thể xử lý tệp."));
+    } finally {
+      setIsImportingPlan(false);
+      e.target.value = "";
+    }
   };
 
   // Formatting Helpers
@@ -1455,26 +1792,116 @@ export default function ProjectDetailPage() {
                     <Plus size={13} />
                     <span>Thêm Công việc</span>
                   </button>
+                  {/* Nút Nhập File (Excel / CSV / JSON) */}
                   <button
                     onClick={handleImportPlanClick}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                    title="Nhập tệp kế hoạch JSON"
+                    disabled={isImportingPlan}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                    title="Nhập tệp kế hoạch từ Excel (.xlsx, .xls), CSV (.csv) hoặc JSON"
                   >
-                    <Upload size={13} />
-                    <span>Nhập</span>
+                    {isImportingPlan ? (
+                      <Loader2 size={13} className="animate-spin text-blue-600" />
+                    ) : (
+                      <Upload size={13} />
+                    )}
+                    <span>{isImportingPlan ? "Đang nhập..." : "Nhập"}</span>
                   </button>
-                  <button
-                    onClick={handleExportPlan}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                    title="Xuất tệp kế hoạch JSON"
-                  >
-                    <Download size={13} />
-                    <span>Xuất</span>
-                  </button>
+
+                  {/* Nút Xuất File (Excel / CSV / Mẫu) kèm Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                      disabled={isExportingPlan}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                      title="Xuất kế hoạch ra Excel, CSV hoặc tải File mẫu"
+                    >
+                      {isExportingPlan ? (
+                        <Loader2 size={13} className="animate-spin text-blue-600" />
+                      ) : (
+                        <Download size={13} />
+                      )}
+                      <span>{isExportingPlan ? "Đang xuất..." : "Xuất"}</span>
+                      <ChevronDown size={11} className={`transition-transform duration-200 ${isExportDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {isExportDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsExportDropdownOpen(false)}
+                        />
+                        <div className="absolute right-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                          <div className="px-3 py-1.5 font-bold text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                            Xuất dữ liệu kế hoạch
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleExportExcel(false)}
+                            className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                          >
+                            <FileSpreadsheet size={16} className="text-emerald-600 shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800">Xuất file Excel (.xlsx)</span>
+                              <span className="text-[10px] text-slate-400">Định dạng bảng màu chuẩn đẹp</span>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExportCsv(false)}
+                            className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                          >
+                            <FileText size={16} className="text-blue-600 shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800">Xuất file CSV (.csv)</span>
+                              <span className="text-[10px] text-slate-400">Chuẩn UTF-8 mở trên mọi máy</span>
+                            </div>
+                          </button>
+
+                          <div className="px-3 py-1.5 font-bold text-[10px] text-slate-400 uppercase tracking-wider border-t border-b border-slate-100 mt-1">
+                            Tải file mẫu soạn thảo
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleExportExcel(true)}
+                            className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition cursor-pointer"
+                          >
+                            <FileSpreadsheet size={16} className="text-emerald-500 shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800">Tải file mẫu Excel (.xlsx)</span>
+                              <span className="text-[10px] text-slate-400">Có sẵn Phase & Công việc mẫu</span>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExportCsv(true)}
+                            className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                          >
+                            <FileText size={16} className="text-blue-500 shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800">Tải file mẫu CSV (.csv)</span>
+                              <span className="text-[10px] text-slate-400">Dễ mở & chỉnh sửa nhanh</span>
+                            </div>
+                          </button>
+
+                          <div className="border-t border-slate-100 mt-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleExportJson}
+                              className="w-full text-left px-3 py-1.5 flex items-center gap-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition cursor-pointer"
+                            >
+                              <Download size={13} className="text-slate-400 shrink-0" />
+                              <span className="text-[11px]">Xuất file JSON sao lưu</span>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <input
                     id="plan-import-file"
                     type="file"
-                    accept=".json"
+                    accept=".xlsx,.xls,.csv,.json"
                     onChange={handleImportFileChange}
                     className="hidden"
                   />
