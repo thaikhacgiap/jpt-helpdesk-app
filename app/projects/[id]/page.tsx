@@ -2344,55 +2344,6 @@ export default function ProjectDetailPage() {
                               >
                                 <Trash2 size={13} />
                               </button>
-                            </td>                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    value={task.progress}
-                                    onChange={(e) => handleTempTaskChange(idx, "progress", e.target.value)}
-                                    className="w-12 px-1 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-semibold text-right outline-none"
-                                  />
-                                  <span className="text-[10px] font-bold text-slate-450">%</span>
-                                </div>
-                              )}
-                            </td>
-
-                            {/* Status */}
-                            <td className="p-1 border border-slate-200">
-                              <select
-                                value={task.status}
-                                onChange={(e) => handleTempTaskChange(idx, "status", e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold outline-none text-slate-700"
-                              >
-                                <option value="Todo">Chưa thực hiện</option>
-                                <option value="In Progress">Đang thực hiện</option>
-                                <option value="Completed">Hoàn thành</option>
-                              </select>
-                            </td>
-
-                            {/* Notes */}
-                            <td className="p-1 border border-slate-200">
-                              <input
-                                type="text"
-                                value={task.notes || ""}
-                                onChange={(e) => handleTempTaskChange(idx, "notes", e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 outline-none"
-                                placeholder="Ghi chú..."
-                              />
-                            </td>
-
-                            {/* Delete Button */}
-                            <td className="p-1 border border-slate-200 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveTempTask(idx)}
-                                className="p-1 text-slate-455 hover:text-red-500 hover:bg-red-50 rounded transition cursor-pointer mx-auto block"
-                                title="Xóa hàng này"
-                              >
-                                <Trash2 size={13} />
-                              </button>
                             </td>
                           </tr>
                         );
