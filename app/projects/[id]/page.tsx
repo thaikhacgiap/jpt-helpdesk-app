@@ -882,9 +882,23 @@ export default function ProjectDetailPage() {
     const keys = Object.keys(row);
     for (const cand of candidateKeys) {
       const normCand = cand.toLowerCase().trim().replace(/[\s_\-]+/g, "");
-      const foundKey = keys.find(k => {
+
+      // 1. Exact match (ignore spaces & casing)
+      const exactKey = keys.find(k => {
+        if (k.length > 50) return false;
         const normK = k.toLowerCase().trim().replace(/[\s_\-]+/g, "");
-        return normK === normCand || normK.includes(normCand);
+        return normK === normCand;
+      });
+      if (exactKey && row[exactKey] !== undefined && row[exactKey] !== null) {
+        const val = String(row[exactKey]).trim();
+        if (val !== "") return val;
+      }
+
+      // 2. Substring match (only for short keys <= 40 chars)
+      const foundKey = keys.find(k => {
+        if (k.length > 40) return false;
+        const normK = k.toLowerCase().trim().replace(/[\s_\-]+/g, "");
+        return normK.includes(normCand);
       });
       if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
         const val = String(row[foundKey]).trim();
@@ -1148,16 +1162,33 @@ export default function ProjectDetailPage() {
       }
 
       const parsedTasks: ProjectTask[] = [];
+      let currentPhaseTitle = "Phase 1: Chuẩn bị";
 
       for (let idx = 0; idx < rows.length; idx++) {
         const row = rows[idx];
 
         const title = getCellVal(row, ["công việc", "tên công việc", "nội dung", "hạng mục", "task", "title", "name", "cong viec", "ten cong viec"]);
-        // Skip empty title rows or subheader repeats
-        if (!title || title.toLowerCase() === "công việc" || title.toLowerCase() === "tên công việc") continue;
+        if (!title) continue;
 
         // Clean tree indentation prefix if imported from formatted export
         const cleanTitle = title.replace(/^[\s\t↳\->\*\•]+/, '').trim();
+        const normClean = cleanTitle.toLowerCase();
+
+        // Skip banner / instruction / table header repeat rows
+        if (
+          !cleanTitle ||
+          normClean.startsWith("hướng dẫn") ||
+          normClean.startsWith("mẫu kế hoạch") ||
+          normClean.startsWith("lưu ý") ||
+          normClean.startsWith("chú thích") ||
+          normClean === "công việc" ||
+          normClean === "tên công việc" ||
+          normClean === "stt" ||
+          normClean === "loại dòng" ||
+          normClean === "ghi chú"
+        ) {
+          continue;
+        }
 
         const rawIndex = getCellVal(row, ["stt", "no", "số thứ tự", "index", "taskindex", "so thu tu"]);
         const rawType = getCellVal(row, ["loại dòng", "loại", "phase", "giai đoạn", "isheader", "header", "loai dong", "loai", "level"]);
@@ -1210,6 +1241,9 @@ export default function ProjectDetailPage() {
         }
 
         const isHeader = taskLevel === 'phase';
+        if (isHeader) {
+          currentPhaseTitle = cleanTitle;
+        }
 
         // Parse progress
         let progress = 0;
@@ -1228,9 +1262,18 @@ export default function ProjectDetailPage() {
           status = "Completed";
           if (progress === 0) progress = 100;
         } else if (
+          normStatus.includes("kế hoạch") ||
+          normStatus.includes("chưa") ||
+          normStatus.includes("todo") ||
+          normStatus.includes("chờ") ||
+          normStatus.includes("mới")
+        ) {
+          status = progress > 0 ? "In Progress" : "Todo";
+        } else if (
           normStatus.includes("đang") ||
           normStatus.includes("in progress") ||
           normStatus.includes("tiến hành") ||
+          normStatus.includes("triển khai") ||
           normStatus.includes("doing") ||
           (progress > 0 && progress < 100)
         ) {
@@ -1240,7 +1283,7 @@ export default function ProjectDetailPage() {
         parsedTasks.push({
           id: `imported-task-${idx}-${Date.now()}`,
           title: cleanTitle,
-          phase: isHeader ? cleanTitle : "Phase",
+          phase: isHeader ? cleanTitle : currentPhaseTitle,
           assignee: isHeader ? "" : assignee,
           startDate: normalizeDateInput(rawStart) || project.startDate,
           endDate: normalizeDateInput(rawEnd) || project.endDate,

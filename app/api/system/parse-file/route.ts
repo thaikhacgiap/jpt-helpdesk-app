@@ -3,6 +3,85 @@ import ExcelJS from "exceljs";
 
 export const dynamic = "force-dynamic";
 
+function findHeaderRowIndex(allRows: string[][]): number {
+  if (allRows.length === 0) return 0;
+
+  const KNOWN_KEYWORDS = [
+    "stt", "no", "số tt", "số thứ tự", "index",
+    "công việc", "tên công việc", "nội dung", "hạng mục", "task", "title", "name",
+    "loại dòng", "loại", "phase", "giai đoạn", "level", "cấp",
+    "thời gian bắt đầu", "ngày bắt đầu", "bắt đầu", "start date", "start",
+    "thời gian kết thúc", "ngày kết thúc", "kết thúc", "hạn chót", "end date", "end", "deadline",
+    "thời gian bắt đầu thực tế", "bắt đầu thực tế", "actual start",
+    "thời gian kết thúc thực tế", "kết thúc thực tế", "actual end",
+    "người thực hiện", "phụ trách", "nhân sự", "assignee", "owner",
+    "% hoàn thành", "tiến độ", "phần trăm", "progress", "%",
+    "trạng thái", "status", "tình trạng",
+    "ghi chú", "notes", "note", "comment", "mô tả",
+    "mã", "code", "id"
+  ];
+
+  let bestIdx = 0;
+  let bestScore = -1;
+
+  const maxScan = Math.min(allRows.length, 15);
+  for (let i = 0; i < maxScan; i++) {
+    const row = allRows[i];
+    if (!row || row.length === 0) continue;
+
+    const nonEmpty = row.map((c) => String(c || "").trim()).filter((c) => c !== "");
+    if (nonEmpty.length < 2) continue;
+
+    // Ignore merged cells banners (all cells have identical text)
+    const uniqueVals = new Set(nonEmpty.map((c) => c.toLowerCase()));
+    if (uniqueVals.size <= 1) continue;
+
+    // Ignore rows where texts are long paragraphs/instructions
+    const hasLongText = nonEmpty.some((c) => c.length > 70);
+    if (hasLongText && uniqueVals.size < 4) continue;
+
+    let score = 0;
+    for (const cell of nonEmpty) {
+      const norm = cell.toLowerCase().replace(/[\s_\-]+/g, "");
+      if (norm.includes("hướngdẫn") || norm.includes("mẫukếhoạch") || norm.includes("phânchia3cấp")) {
+        score -= 50;
+        continue;
+      }
+
+      const isKeyword = KNOWN_KEYWORDS.some((kw) => {
+        const normKw = kw.replace(/[\s_\-]+/g, "");
+        return norm === normKw || norm.startsWith(normKw);
+      });
+
+      if (isKeyword) {
+        score += 20;
+      } else if (cell.length <= 35) {
+        score += 2;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  if (bestScore > 10) {
+    return bestIdx;
+  }
+
+  // Fallback: first row with at least 2 distinct non-empty values
+  for (let i = 0; i < maxScan; i++) {
+    const nonEmpty = allRows[i].filter((c) => c.trim() !== "");
+    const uniqueVals = new Set(nonEmpty.map((c) => c.trim().toLowerCase()));
+    if (uniqueVals.size >= 2) {
+      return i;
+    }
+  }
+
+  return 0;
+}
+
 function parseCsvBuffer(buffer: Buffer): { headers: string[]; rows: any[] } {
   // Decode text (try UTF-8, strip BOM)
   let text = buffer.toString("utf-8");
@@ -71,14 +150,7 @@ function parseCsvBuffer(buffer: Buffer): { headers: string[]; rows: any[] } {
 
   if (allRows.length === 0) return { headers: [], rows: [] };
 
-  // Detect header row (first non-empty row)
-  let headerRowIdx = 0;
-  for (let i = 0; i < Math.min(allRows.length, 5); i++) {
-    if (allRows[i].filter((c) => c !== "").length >= 2) {
-      headerRowIdx = i;
-      break;
-    }
-  }
+  const headerRowIdx = findHeaderRowIndex(allRows);
 
   const rawHeaders = allRows[headerRowIdx].map((h) => h.replace(/^["']|["']$/g, "").trim());
   const headers = rawHeaders.filter((h) => h !== "");
@@ -150,14 +222,8 @@ async function parseExcelBuffer(
     return { sheets, activeSheet, headers: [], rows: [] };
   }
 
-  // Find header row (first row with at least 2 non-empty cells)
-  let headerRowIdx = 0;
-  for (let i = 0; i < Math.min(allRowValues.length, 5); i++) {
-    if (allRowValues[i].filter((c) => c !== "").length >= 2) {
-      headerRowIdx = i;
-      break;
-    }
-  }
+  // Find header row intelligently using keyword scoring and merged row detection
+  const headerRowIdx = findHeaderRowIndex(allRowValues);
 
   const rawHeaders = allRowValues[headerRowIdx].map((h) => String(h || "").trim());
   const headers = rawHeaders.filter((h) => h !== "");
