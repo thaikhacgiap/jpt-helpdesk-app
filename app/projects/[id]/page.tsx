@@ -1921,6 +1921,19 @@ export default function ProjectDetailPage() {
                   >
                     Hủy
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsHeaderHidden(!isHeaderHidden)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      isHeaderHidden
+                        ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-250"
+                    }`}
+                    title={isHeaderHidden ? "Hiện lại thông tin dự án phía trên (Unhide)" : "Ẩn thông tin dự án phía trên (Hide) để mở rộng bảng"}
+                  >
+                    {isHeaderHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                    <span>{isHeaderHidden ? "Unhide" : "Hide"}</span>
+                  </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 flex-wrap">
