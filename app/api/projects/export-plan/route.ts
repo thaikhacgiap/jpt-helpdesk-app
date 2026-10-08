@@ -74,10 +74,10 @@ export async function POST(req: NextRequest) {
     });
 
     // 1. Title Banner
-    sheet.mergeCells("A1:K1");
+    sheet.mergeCells("A1:J1");
     const titleCell = sheet.getCell("A1");
     titleCell.value = isTemplate
-      ? `MẪU KẾ HOẠCH DỰ ÁN 3 CẤP ĐỘ (PHASE - MAIN TASK - SUB TASK)`
+      ? `MẪU KẾ HOẠCH DỰ ÁN (PHASE - MAIN TASK - SUB TASK)`
       : `KẾ HOẠCH CHI TIẾT DỰ ÁN: [${projectCode}] ${projectName}`.toUpperCase();
     titleCell.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
     titleCell.fill = {
@@ -89,10 +89,10 @@ export async function POST(req: NextRequest) {
     sheet.getRow(1).height = 36;
 
     // 2. Project Metadata Banner
-    sheet.mergeCells("A2:K2");
+    sheet.mergeCells("A2:J2");
     const subTitle = sheet.getCell("A2");
     subTitle.value = isTemplate
-      ? `Hướng dẫn: Cột 'Loại dòng' phân chia 3 cấp độ: 'Phase' (Giai đoạn), 'Main task' (Công việc chính), 'Sub task' (Công việc con). Đánh số STT tương ứng (VD: 1, 1.1, 1.1.1).`
+      ? `Hướng dẫn: Đánh số STT phân cấp: 1 (Phase / Giai đoạn), 1.1 (Công việc chính), 1.1.1 (Công việc con).`
       : `Khách hàng: ${customer || "—"} | PM: ${manager || "—"} | Thời gian: ${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
     subTitle.font = { name: "Arial", size: 9.5, italic: true, color: { argb: "FF334155" } };
     subTitle.fill = {
@@ -110,7 +110,6 @@ export async function POST(req: NextRequest) {
     const headers = [
       "STT",
       "Công việc",
-      "Loại dòng",
       "Thời gian bắt đầu",
       "Thời gian kết thúc",
       "Thời gian bắt đầu thực tế",
@@ -388,7 +387,6 @@ export async function POST(req: NextRequest) {
       row.values = [
         task.taskIndex || (isPhase ? `${i + 1}` : `${i + 1}.1`),
         displayTitle,
-        levelLabel, // 'Phase' | 'Main task' | 'Sub task'
         formatDisplayDate(task.startDate),
         formatDisplayDate(task.endDate),
         formatDisplayDate(task.actualStartDate),
@@ -441,19 +439,19 @@ export async function POST(req: NextRequest) {
           right: { style: "thin", color: { argb: "FFE2E8F0" } },
         };
 
-        // Alignments
-        if (colNumber === 1 || colNumber === 3) {
+        // Alignments (10 columns: 1=STT, 2=Công việc, 3=Bắt đầu, 4=Kết thúc, 5=Bắt đầu TT, 6=Kết thúc TT, 7=Người TH, 8=% Hoàn thành, 9=Trạng thái, 10=Ghi chú)
+        if (colNumber === 1) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
         } else if (colNumber === 2) {
           cell.alignment = { vertical: "middle", horizontal: "left" };
-        } else if (colNumber === 8 || colNumber === 11) {
-          cell.alignment = { vertical: "middle", horizontal: "left" };
-        } else if (colNumber >= 4 && colNumber <= 7) {
+        } else if (colNumber >= 3 && colNumber <= 6) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
-        } else if (colNumber === 9) {
+        } else if (colNumber === 7 || colNumber === 10) {
+          cell.alignment = { vertical: "middle", horizontal: "left" };
+        } else if (colNumber === 8) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
           cell.numFmt = '0"%"';
-        } else if (colNumber === 10) {
+        } else if (colNumber === 9) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
         }
       });
@@ -464,8 +462,7 @@ export async function POST(req: NextRequest) {
     // Column widths
     sheet.columns = [
       { key: "index", width: 12 },
-      { key: "title", width: 48 },
-      { key: "type", width: 16 },
+      { key: "title", width: 50 },
       { key: "start", width: 18 },
       { key: "end", width: 18 },
       { key: "actStart", width: 22 },

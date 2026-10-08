@@ -592,17 +592,20 @@ export default function ProjectDetailPage() {
   };
 
 
-  // Helper to determine 3-level hierarchy (Phase, Main task, Sub task)
+  // Helper to determine 3-level hierarchy: 1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task
   const resolveTaskLevel = (task: ProjectTask): 'Phase' | 'Main task' | 'Sub task' => {
+    // 1. Primary rule: Determine by taskIndex (STT)
+    if (task.taskIndex) {
+      const clean = String(task.taskIndex).trim();
+      const dots = (clean.match(/\./g) || []).length;
+      if (dots >= 2) return 'Sub task';
+      if (dots === 1) return 'Main task';
+      if (dots === 0 && (/^\d+$/.test(clean) || clean.toLowerCase().includes('phase'))) return 'Phase';
+    }
+    // 2. Secondary rule: Level property
     if (task.level === 'phase' || task.isHeader) return 'Phase';
     if (task.level === 'sub') return 'Sub task';
     if (task.level === 'main') return 'Main task';
-    if (task.taskIndex) {
-      const dots = (task.taskIndex.match(/\./g) || []).length;
-      if (dots >= 2) return 'Sub task';
-      if (dots === 1) return 'Main task';
-      if (dots === 0) return 'Phase';
-    }
     return 'Main task';
   };
 
@@ -970,7 +973,6 @@ export default function ProjectDetailPage() {
     const headers = [
       "STT",
       "Công việc",
-      "Loại dòng",
       "Thời gian bắt đầu",
       "Thời gian kết thúc",
       "Thời gian bắt đầu thực tế",
@@ -1000,23 +1002,23 @@ export default function ProjectDetailPage() {
 
     if (isTemplate) {
       rows = [
-        ["1", "Phase 1: Khảo sát & Chuẩn bị", "Phase", "2026-10-01", "2026-10-07", "", "", "", "100%", "Hoàn thành", "Giai đoạn chuẩn bị"],
-        ["1.1", "Khảo sát hiện trạng & thống nhất SOW", "Main task", "2026-10-01", "2026-10-04", "2026-10-01", "2026-10-04", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã hoàn thành khảo sát"],
-        ["1.1.1", "Họp Kick-off và thống nhất yêu cầu kỹ thuật", "Sub task", "2026-10-01", "2026-10-02", "2026-10-01", "2026-10-02", "Nguyễn Văn A", "100%", "Hoàn thành", "Biên bản họp đầy đủ"],
-        ["1.1.2", "Khảo sát hạ tầng mạng và server phòng máy", "Sub task", "2026-10-03", "2026-10-04", "2026-10-03", "2026-10-04", "Trần Thị B", "100%", "Hoàn thành", "Hạ tầng đạt tiêu chuẩn"],
-        ["1.2", "Lập hồ sơ thiết kế chi tiết & Kế hoạch triển khai", "Main task", "2026-10-05", "2026-10-07", "2026-10-05", "2026-10-07", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã phê duyệt hồ sơ"],
-        ["2", "Phase 2: Triển khai cài đặt hệ thống", "Phase", "2026-10-08", "2026-10-25", "", "", "", "40%", "Đang thực hiện", "Giai đoạn cài đặt chính"],
-        ["2.1", "Cài đặt phần mềm máy chủ & Database AVDF", "Main task", "2026-10-08", "2026-10-18", "2026-10-08", "", "Lê Văn C", "75%", "Đang thực hiện", "Đang cài đặt cụm DB"],
-        ["2.1.1", "Cài đặt hệ điều hành và môi trường máy chủ", "Sub task", "2026-10-08", "2026-10-12", "2026-10-08", "2026-10-12", "Lê Văn C", "100%", "Hoàn thành", "Cấu hình OS hoàn tất"],
-        ["2.1.2", "Cấu hình phần mềm AVDF và cơ sở dữ liệu Audit", "Sub task", "2026-10-13", "2026-10-18", "2026-10-13", "", "Lê Văn C", "50%", "Đang thực hiện", "Đang kiểm tra kết nối DB"],
-        ["2.2", "Cấu hình phân quyền & kiểm thử tích hợp", "Main task", "2026-10-19", "2026-10-25", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Chờ xong cài đặt máy chủ"],
-        ["2.2.1", "Phân quyền tài khoản người dùng & Chính sách Audit", "Sub task", "2026-10-19", "2026-10-22", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Đã lập danh sách user"],
-        ["2.2.2", "Kiểm thử thu thập log và cảnh báo thời gian thực", "Sub task", "2026-10-23", "2026-10-25", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Kịch bản kiểm thử"],
-        ["3", "Phase 3: Nghiệm thu & Chuyển giao", "Phase", "2026-10-26", "2026-10-31", "", "", "", "0%", "Chưa thực hiện", "Giai đoạn bàn giao"],
-        ["3.1", "Đào tạo người dùng & Chuyển giao tài liệu", "Main task", "2026-10-26", "2026-10-28", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Slide đào tạo"],
-        ["3.1.1", "Đào tạo cán bộ quản trị hệ thống", "Sub task", "2026-10-26", "2026-10-27", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Giáo trình quản trị"],
-        ["3.1.2", "Bàn giao tài liệu kỹ thuật & Hướng dẫn vận hành", "Sub task", "2026-10-28", "2026-10-28", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Bộ tài liệu PDF"],
-        ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "Main task", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
+        ["1", "Phase 1: Khảo sát & Chuẩn bị", "2026-10-01", "2026-10-07", "", "", "", "100%", "Hoàn thành", "Giai đoạn chuẩn bị"],
+        ["1.1", "Khảo sát hiện trạng & thống nhất SOW", "2026-10-01", "2026-10-04", "2026-10-01", "2026-10-04", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã hoàn thành khảo sát"],
+        ["1.1.1", "Họp Kick-off và thống nhất yêu cầu kỹ thuật", "2026-10-01", "2026-10-02", "2026-10-01", "2026-10-02", "Nguyễn Văn A", "100%", "Hoàn thành", "Biên bản họp đầy đủ"],
+        ["1.1.2", "Khảo sát hạ tầng mạng và server phòng máy", "2026-10-03", "2026-10-04", "2026-10-03", "2026-10-04", "Trần Thị B", "100%", "Hoàn thành", "Hạ tầng đạt tiêu chuẩn"],
+        ["1.2", "Lập hồ sơ thiết kế chi tiết & Kế hoạch triển khai", "2026-10-05", "2026-10-07", "2026-10-05", "2026-10-07", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã phê duyệt hồ sơ"],
+        ["2", "Phase 2: Triển khai cài đặt hệ thống", "2026-10-08", "2026-10-25", "", "", "", "40%", "Đang thực hiện", "Giai đoạn cài đặt chính"],
+        ["2.1", "Cài đặt phần mềm máy chủ & Database AVDF", "2026-10-08", "2026-10-18", "2026-10-08", "", "Lê Văn C", "75%", "Đang thực hiện", "Đang cài đặt cụm DB"],
+        ["2.1.1", "Cài đặt hệ điều hành và môi trường máy chủ", "2026-10-08", "2026-10-12", "2026-10-08", "2026-10-12", "Lê Văn C", "100%", "Hoàn thành", "Cấu hình OS hoàn tất"],
+        ["2.1.2", "Cấu hình phần mềm AVDF và cơ sở dữ liệu Audit", "2026-10-13", "2026-10-18", "2026-10-13", "", "Lê Văn C", "50%", "Đang thực hiện", "Đang kiểm tra kết nối DB"],
+        ["2.2", "Cấu hình phân quyền & kiểm thử tích hợp", "2026-10-19", "2026-10-25", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Chờ xong cài đặt máy chủ"],
+        ["2.2.1", "Phân quyền tài khoản người dùng & Chính sách Audit", "2026-10-19", "2026-10-22", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Đã lập danh sách user"],
+        ["2.2.2", "Kiểm thử thu thập log và cảnh báo thời gian thực", "2026-10-23", "2026-10-25", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Kịch bản kiểm thử"],
+        ["3", "Phase 3: Nghiệm thu & Chuyển giao", "2026-10-26", "2026-10-31", "", "", "", "0%", "Chưa thực hiện", "Giai đoạn bàn giao"],
+        ["3.1", "Đào tạo người dùng & Chuyển giao tài liệu", "2026-10-26", "2026-10-28", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Slide đào tạo"],
+        ["3.1.1", "Đào tạo cán bộ quản trị hệ thống", "2026-10-26", "2026-10-27", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Giáo trình quản trị"],
+        ["3.1.2", "Bàn giao tài liệu kỹ thuật & Hướng dẫn vận hành", "2026-10-28", "2026-10-28", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Bộ tài liệu PDF"],
+        ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
       ];
     } else {
       rows = project.plan.map((t, idx) => {
@@ -1030,7 +1032,6 @@ export default function ProjectDetailPage() {
         return [
           t.taskIndex || (isPhase ? `${idx + 1}` : `${idx + 1}.1`),
           displayTitle,
-          levelLabel,
           t.startDate || "",
           t.endDate || "",
           t.actualStartDate || "",
@@ -1201,42 +1202,31 @@ export default function ProjectDetailPage() {
         const rawStatus = getCellVal(row, ["trạng thái", "status", "tình trạng", "trang thai"]);
         const notes = getCellVal(row, ["ghi chú", "notes", "note", "comment", "mô tả", "ghi chu"]);
 
-        // Determine 3 levels from Loại dòng or STT
-        const normType = rawType.toLowerCase().trim();
+        // Determine 3 levels primarily from STT (1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task)
         let taskLevel: TaskLevel = 'main';
 
-        if (
-          normType.includes("phase") ||
-          normType.includes("giai đoạn") ||
-          normType.includes("cấp 1") ||
-          normType === "header" ||
-          cleanTitle.toLowerCase().startsWith("phase ") ||
-          cleanTitle.toLowerCase().startsWith("giai đoạn ")
-        ) {
-          taskLevel = 'phase';
-        } else if (
-          normType.includes("sub") ||
-          normType.includes("con") ||
-          normType.includes("phụ") ||
-          normType.includes("cấp 3") ||
-          title.includes("↳") ||
-          (rawIndex && (rawIndex.match(/\./g) || []).length >= 2)
-        ) {
+        if (rawIndex) {
+          const cleanIdx = rawIndex.trim();
+          const dots = (cleanIdx.match(/\./g) || []).length;
+          if (dots >= 2) {
+            taskLevel = 'sub';
+          } else if (dots === 1) {
+            taskLevel = 'main';
+          } else if (dots === 0) {
+            taskLevel = 'phase';
+          }
+        } else if (title.includes("↳")) {
           taskLevel = 'sub';
-        } else if (
-          normType.includes("main") ||
-          normType.includes("chính") ||
-          normType.includes("cấp 2") ||
-          (rawIndex && (rawIndex.match(/\./g) || []).length === 1)
-        ) {
-          taskLevel = 'main';
-        } else {
-          // Infer from STT dots
-          if (rawIndex) {
-            const dots = (rawIndex.match(/\./g) || []).length;
-            if (dots >= 2) taskLevel = 'sub';
-            else if (dots === 1) taskLevel = 'main';
-            else if (dots === 0 && !assignee && !rawActualStart) taskLevel = 'phase';
+        } else if (cleanTitle.toLowerCase().startsWith("phase ") || cleanTitle.toLowerCase().startsWith("giai đoạn ")) {
+          taskLevel = 'phase';
+        } else if (rawType) {
+          const normType = rawType.toLowerCase().trim();
+          if (normType.includes("phase") || normType.includes("giai đoạn") || normType === "header") {
+            taskLevel = 'phase';
+          } else if (normType.includes("sub") || normType.includes("con") || normType.includes("phụ")) {
+            taskLevel = 'sub';
+          } else if (normType.includes("main") || normType.includes("chính")) {
+            taskLevel = 'main';
           }
         }
 
@@ -2057,7 +2047,6 @@ export default function ProjectDetailPage() {
                       No
                     </th>
                     <th className="py-2.5 px-3 font-bold border border-slate-200">Công việc</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 text-center w-28">Loại dòng</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian bắt đầu</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian kết thúc</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-32">Thời gian bắt đầu thực tế</th>
@@ -2073,7 +2062,7 @@ export default function ProjectDetailPage() {
                   {isEditingPlan ? (
                     tempPlan.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic">
+                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic">
                           Chưa có công việc nào. Hãy thêm Phase, Main task hoặc Sub task bằng các nút phía trên.
                         </td>
                       </tr>
@@ -2133,25 +2122,6 @@ export default function ProjectDetailPage() {
                                   />
                                 </div>
                               </div>
-                            </td>
-
-                            {/* Loại dòng Selector */}
-                            <td className="p-1 border border-slate-200 text-center w-28">
-                              <select
-                                value={isPhase ? 'phase' : (isSub ? 'sub' : 'main')}
-                                onChange={(e) => handleTaskLevelChange(idx, e.target.value as TaskLevel)}
-                                className={`w-full px-2 py-1.5 border rounded-lg text-xs font-bold outline-none cursor-pointer ${
-                                  isPhase
-                                    ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                    : isSub
-                                    ? 'bg-slate-100 text-slate-600 border-slate-300'
-                                    : 'bg-indigo-50 text-indigo-700 border-indigo-300'
-                                }`}
-                              >
-                                <option value="phase">Phase</option>
-                                <option value="main">Main task</option>
-                                <option value="sub">Sub task</option>
-                              </select>
                             </td>
 
                             {/* Start Date */}
@@ -2346,16 +2316,6 @@ export default function ProjectDetailPage() {
                               )}
                             </td>
 
-                            {/* Loại dòng Badge */}
-                            <td className="py-3 px-2 border border-slate-200 text-center">
-                              {isPhase ? (
-                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200 uppercase">Phase</span>
-                              ) : isMain ? (
-                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Main task</span>
-                              ) : (
-                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">Sub task</span>
-                              )}
-                            </td>
 
                             {/* Start Date */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
