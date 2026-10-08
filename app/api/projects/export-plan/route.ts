@@ -9,6 +9,7 @@ interface TaskItem {
   title: string;
   phase?: string;
   isHeader?: boolean;
+  level?: "phase" | "main" | "sub";
   startDate?: string;
   endDate?: string;
   actualStartDate?: string;
@@ -37,6 +38,19 @@ function formatDisplayDate(dateStr?: string): string {
   return dateStr;
 }
 
+function resolveTaskLevel(task: TaskItem): "Phase" | "Main task" | "Sub task" {
+  if (task.level === "phase" || task.isHeader) return "Phase";
+  if (task.level === "sub") return "Sub task";
+  if (task.level === "main") return "Main task";
+  if (task.taskIndex) {
+    const dots = (task.taskIndex.match(/\./g) || []).length;
+    if (dots >= 2) return "Sub task";
+    if (dots === 1) return "Main task";
+    if (dots === 0) return "Phase";
+  }
+  return "Main task";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -63,9 +77,9 @@ export async function POST(req: NextRequest) {
     sheet.mergeCells("A1:K1");
     const titleCell = sheet.getCell("A1");
     titleCell.value = isTemplate
-      ? `MẪU KẾ HOẠCH DỰ ÁN (PROJECT PLAN TEMPLATE)`
+      ? `MẪU KẾ HOẠCH DỰ ÁN 3 CẤP ĐỘ (PHASE - MAIN TASK - SUB TASK)`
       : `KẾ HOẠCH CHI TIẾT DỰ ÁN: [${projectCode}] ${projectName}`.toUpperCase();
-    titleCell.font = { name: "Arial", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
+    titleCell.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
     titleCell.fill = {
       type: "pattern",
       pattern: "solid",
@@ -78,9 +92,9 @@ export async function POST(req: NextRequest) {
     sheet.mergeCells("A2:K2");
     const subTitle = sheet.getCell("A2");
     subTitle.value = isTemplate
-      ? `Hướng dẫn: Nhập thông tin các Phase (Giai đoạn) và Công việc con tương ứng. Cột 'Loại dòng' ghi 'Phase' cho giai đoạn chính, hoặc 'Công việc' cho việc con.`
+      ? `Hướng dẫn: Cột 'Loại dòng' phân chia 3 cấp độ: 'Phase' (Giai đoạn), 'Main task' (Công việc chính), 'Sub task' (Công việc con). Đánh số STT tương ứng (VD: 1, 1.1, 1.1.1).`
       : `Khách hàng: ${customer || "—"} | PM: ${manager || "—"} | Thời gian: ${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
-    subTitle.font = { name: "Arial", size: 10, italic: true, color: { argb: "FF334155" } };
+    subTitle.font = { name: "Arial", size: 9.5, italic: true, color: { argb: "FF334155" } };
     subTitle.fill = {
       type: "pattern",
       pattern: "solid",
@@ -132,9 +146,11 @@ export async function POST(req: NextRequest) {
 
     if (isTemplate && (!tasksToExport || tasksToExport.length === 0)) {
       tasksToExport = [
+        // PHASE 1
         {
           taskIndex: "1",
           title: "Phase 1: Khảo sát & Chuẩn bị",
+          level: "phase",
           isHeader: true,
           startDate: "2026-10-01",
           endDate: "2026-10-07",
@@ -144,57 +160,118 @@ export async function POST(req: NextRequest) {
         },
         {
           taskIndex: "1.1",
-          title: "Họp Kick-off và thống nhất yêu cầu",
+          title: "Khảo sát hiện trạng & thống nhất SOW",
+          level: "main",
           isHeader: false,
           startDate: "2026-10-01",
-          endDate: "2026-10-03",
+          endDate: "2026-10-04",
           actualStartDate: "2026-10-01",
-          actualEndDate: "2026-10-03",
+          actualEndDate: "2026-10-04",
           assignee: "Nguyễn Văn A",
           progress: 100,
           status: "Completed",
-          notes: "Đã hoàn thành biên bản họp",
+          notes: "Đã hoàn thành khảo sát",
         },
         {
-          taskIndex: "1.2",
-          title: "Khảo sát hạ tầng và môi trường triển khai",
+          taskIndex: "1.1.1",
+          title: "Họp Kick-off và thống nhất yêu cầu kỹ thuật",
+          level: "sub",
           isHeader: false,
-          startDate: "2026-10-04",
-          endDate: "2026-10-07",
-          actualStartDate: "2026-10-04",
-          actualEndDate: "2026-10-07",
+          startDate: "2026-10-01",
+          endDate: "2026-10-02",
+          actualStartDate: "2026-10-01",
+          actualEndDate: "2026-10-02",
+          assignee: "Nguyễn Văn A",
+          progress: 100,
+          status: "Completed",
+          notes: "Biên bản họp đầy đủ",
+        },
+        {
+          taskIndex: "1.1.2",
+          title: "Khảo sát hạ tầng mạng và server phòng máy",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-03",
+          endDate: "2026-10-04",
+          actualStartDate: "2026-10-03",
+          actualEndDate: "2026-10-04",
           assignee: "Trần Thị B",
           progress: 100,
           status: "Completed",
           notes: "Hạ tầng đạt tiêu chuẩn",
         },
         {
+          taskIndex: "1.2",
+          title: "Lập hồ sơ thiết kế chi tiết & Kế hoạch triển khai",
+          level: "main",
+          isHeader: false,
+          startDate: "2026-10-05",
+          endDate: "2026-10-07",
+          actualStartDate: "2026-10-05",
+          actualEndDate: "2026-10-07",
+          assignee: "Nguyễn Văn A",
+          progress: 100,
+          status: "Completed",
+          notes: "Đã phê duyệt hồ sơ",
+        },
+        // PHASE 2
+        {
           taskIndex: "2",
-          title: "Phase 2: Triển khai cấu hình hệ thống",
+          title: "Phase 2: Triển khai cài đặt hệ thống",
+          level: "phase",
           isHeader: true,
           startDate: "2026-10-08",
           endDate: "2026-10-25",
-          progress: 30,
+          progress: 40,
           status: "In Progress",
           notes: "Giai đoạn cài đặt chính",
         },
         {
           taskIndex: "2.1",
-          title: "Cài đặt phần mềm máy chủ & Database",
+          title: "Cài đặt phần mềm máy chủ & Database AVDF",
+          level: "main",
           isHeader: false,
           startDate: "2026-10-08",
-          endDate: "2026-10-15",
+          endDate: "2026-10-18",
           actualStartDate: "2026-10-08",
           assignee: "Lê Văn C",
-          progress: 60,
+          progress: 75,
           status: "In Progress",
-          notes: "Đang kiểm tra cấu hình DB",
+          notes: "Đang cài đặt cụm DB",
+        },
+        {
+          taskIndex: "2.1.1",
+          title: "Cài đặt hệ điều hành và môi trường máy chủ",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-08",
+          endDate: "2026-10-12",
+          actualStartDate: "2026-10-08",
+          actualEndDate: "2026-10-12",
+          assignee: "Lê Văn C",
+          progress: 100,
+          status: "Completed",
+          notes: "Cấu hình OS hoàn tất",
+        },
+        {
+          taskIndex: "2.1.2",
+          title: "Cấu hình phần mềm AVDF và cơ sở dữ liệu Audit",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-13",
+          endDate: "2026-10-18",
+          actualStartDate: "2026-10-13",
+          assignee: "Lê Văn C",
+          progress: 50,
+          status: "In Progress",
+          notes: "Đang kiểm tra kết nối DB",
         },
         {
           taskIndex: "2.2",
-          title: "Cấu hình phân quyền và tài khoản người dùng",
+          title: "Cấu hình phân quyền & kiểm thử tích hợp",
+          level: "main",
           isHeader: false,
-          startDate: "2026-10-16",
+          startDate: "2026-10-19",
           endDate: "2026-10-25",
           assignee: "Nguyễn Văn A",
           progress: 0,
@@ -202,29 +279,81 @@ export async function POST(req: NextRequest) {
           notes: "Chờ xong cài đặt máy chủ",
         },
         {
+          taskIndex: "2.2.1",
+          title: "Phân quyền tài khoản người dùng & Chính sách Audit",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-19",
+          endDate: "2026-10-22",
+          assignee: "Nguyễn Văn A",
+          progress: 0,
+          status: "Todo",
+          notes: "Đã lập danh sách user",
+        },
+        {
+          taskIndex: "2.2.2",
+          title: "Kiểm thử thu thập log và cảnh báo thời gian thực",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-23",
+          endDate: "2026-10-25",
+          assignee: "Trần Thị B",
+          progress: 0,
+          status: "Todo",
+          notes: "Kịch bản kiểm thử",
+        },
+        // PHASE 3
+        {
           taskIndex: "3",
-          title: "Phase 3: Nghiệm thu & Bàn giao",
+          title: "Phase 3: Nghiệm thu & Chuyển giao",
+          level: "phase",
           isHeader: true,
           startDate: "2026-10-26",
           endDate: "2026-10-31",
           progress: 0,
           status: "Todo",
-          notes: "Giai đoạn nghiệm thu",
+          notes: "Giai đoạn bàn giao",
         },
         {
           taskIndex: "3.1",
           title: "Đào tạo người dùng & Chuyển giao tài liệu",
+          level: "main",
           isHeader: false,
           startDate: "2026-10-26",
           endDate: "2026-10-28",
           assignee: "Trần Thị B",
           progress: 0,
           status: "Todo",
-          notes: "Chuẩn bị slide đào tạo",
+          notes: "Slide đào tạo",
+        },
+        {
+          taskIndex: "3.1.1",
+          title: "Đào tạo cán bộ quản trị hệ thống",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-26",
+          endDate: "2026-10-27",
+          assignee: "Trần Thị B",
+          progress: 0,
+          status: "Todo",
+          notes: "Giáo trình quản trị",
+        },
+        {
+          taskIndex: "3.1.2",
+          title: "Bàn giao tài liệu kỹ thuật & Hướng dẫn vận hành",
+          level: "sub",
+          isHeader: false,
+          startDate: "2026-10-28",
+          endDate: "2026-10-28",
+          assignee: "Nguyễn Văn A",
+          progress: 0,
+          status: "Todo",
+          notes: "Bộ tài liệu PDF",
         },
         {
           taskIndex: "3.2",
           title: "Ký biên bản nghiệm thu đưa vào vận hành",
+          level: "main",
           isHeader: false,
           startDate: "2026-10-29",
           endDate: "2026-10-31",
@@ -239,50 +368,68 @@ export async function POST(req: NextRequest) {
     let currentRowIdx = 5;
     for (let i = 0; i < tasksToExport.length; i++) {
       const task = tasksToExport[i];
-      const isHeader = !!task.isHeader;
-      const row = sheet.getRow(currentRowIdx);
+      const levelLabel = resolveTaskLevel(task);
+      const isPhase = levelLabel === "Phase";
+      const isMain = levelLabel === "Main task";
+      const isSub = levelLabel === "Sub task";
 
+      const row = sheet.getRow(currentRowIdx);
       const viStatus = statusMapToVi[task.status || "Todo"] || task.status || "Chưa thực hiện";
       const progressNum = typeof task.progress === "number" ? task.progress : 0;
 
+      // Prefix indentation for title in Excel
+      let displayTitle = task.title || "";
+      if (isSub) {
+        displayTitle = `    ↳ ${displayTitle}`;
+      } else if (isMain) {
+        displayTitle = `  ${displayTitle}`;
+      }
+
       row.values = [
-        task.taskIndex || (isHeader ? `${i + 1}` : `${i + 1}.1`),
-        task.title || "",
-        isHeader ? "Phase" : "Công việc",
+        task.taskIndex || (isPhase ? `${i + 1}` : `${i + 1}.1`),
+        displayTitle,
+        levelLabel, // 'Phase' | 'Main task' | 'Sub task'
         formatDisplayDate(task.startDate),
         formatDisplayDate(task.endDate),
         formatDisplayDate(task.actualStartDate),
         formatDisplayDate(task.actualEndDate),
-        isHeader ? "" : (task.assignee || ""),
+        isPhase ? "" : (task.assignee || ""),
         progressNum,
         viStatus,
         task.notes || "",
       ];
 
-      row.height = isHeader ? 24 : 22;
+      // Row heights by level
+      row.height = isPhase ? 26 : (isMain ? 23 : 21);
 
       // Styling per cell
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.font = {
           name: "Arial",
-          size: 9.5,
-          bold: isHeader,
-          color: { argb: isHeader ? "FF0F172A" : "FF334155" },
+          size: isPhase ? 10 : 9.5,
+          bold: isPhase || isMain,
+          color: { argb: isPhase ? "FF0F172A" : (isMain ? "FF1E293B" : "FF475569") },
         };
 
-        if (isHeader) {
+        if (isPhase) {
           cell.fill = {
             type: "pattern",
             pattern: "solid",
-            fgColor: { argb: "FFE2E8F0" }, // Slate-200
+            fgColor: { argb: "FFE2E8F0" }, // Slate-200 for Phase
+          };
+        } else if (isMain) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF1F5F9" }, // Slate-100 for Main task
           };
         } else {
-          // Zebra striping
+          // Sub task zebra styling
           if (currentRowIdx % 2 === 0) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
-              fgColor: { argb: "FFF8FAFC" }, // Slate-50
+              fgColor: { argb: "FFFAFAFA" },
             };
           }
         }
@@ -297,7 +444,9 @@ export async function POST(req: NextRequest) {
         // Alignments
         if (colNumber === 1 || colNumber === 3) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
-        } else if (colNumber === 2 || colNumber === 8 || colNumber === 11) {
+        } else if (colNumber === 2) {
+          cell.alignment = { vertical: "middle", horizontal: "left" };
+        } else if (colNumber === 8 || colNumber === 11) {
           cell.alignment = { vertical: "middle", horizontal: "left" };
         } else if (colNumber >= 4 && colNumber <= 7) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
@@ -314,9 +463,9 @@ export async function POST(req: NextRequest) {
 
     // Column widths
     sheet.columns = [
-      { key: "index", width: 10 },
-      { key: "title", width: 44 },
-      { key: "type", width: 14 },
+      { key: "index", width: 12 },
+      { key: "title", width: 48 },
+      { key: "type", width: 16 },
       { key: "start", width: 18 },
       { key: "end", width: 18 },
       { key: "actStart", width: 22 },

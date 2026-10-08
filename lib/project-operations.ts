@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 
+export type TaskLevel = 'phase' | 'main' | 'sub';
+
 export interface ProjectTask {
   id: string;
   title: string;
@@ -9,12 +11,13 @@ export interface ProjectTask {
   endDate: string;
   status: 'Todo' | 'In Progress' | 'Completed';
   progress: number; // 0 - 100
-  // New fields for hierarchical excel-like plan
+  // Hierarchical excel-like plan (3 levels: Phase, Main task, Sub task)
   taskIndex?: string;
   actualStartDate?: string;
   actualEndDate?: string;
   notes?: string;
   isHeader?: boolean;
+  level?: TaskLevel;
 }
 
 export interface ProjectMilestone {

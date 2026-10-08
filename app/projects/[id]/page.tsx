@@ -21,6 +21,7 @@ import {
   subscribeToProjects,
   Project,
   ProjectTask,
+  TaskLevel,
   ProjectMilestone,
   ProjectDocument,
   ProjectDiaryEntry,
@@ -591,25 +592,61 @@ export default function ProjectDetailPage() {
   };
 
 
-  // Re-indexing logic
+  // Helper to determine 3-level hierarchy (Phase, Main task, Sub task)
+  const resolveTaskLevel = (task: ProjectTask): 'Phase' | 'Main task' | 'Sub task' => {
+    if (task.level === 'phase' || task.isHeader) return 'Phase';
+    if (task.level === 'sub') return 'Sub task';
+    if (task.level === 'main') return 'Main task';
+    if (task.taskIndex) {
+      const dots = (task.taskIndex.match(/\./g) || []).length;
+      if (dots >= 2) return 'Sub task';
+      if (dots === 1) return 'Main task';
+      if (dots === 0) return 'Phase';
+    }
+    return 'Main task';
+  };
+
+  // Re-indexing logic for 3 levels: Level 1 (1, 2), Level 2 (1.1, 1.2), Level 3 (1.1.1, 1.1.2)
   const autoAssignTaskIndices = (tasks: ProjectTask[]): ProjectTask[] => {
-    let headerCount = 0;
+    let phaseCount = 0;
+    let mainCount = 0;
     let subCount = 0;
+
     return tasks.map(task => {
-      if (task.isHeader) {
-        headerCount++;
+      const lvl = resolveTaskLevel(task);
+      if (lvl === 'Phase') {
+        phaseCount++;
+        mainCount = 0;
         subCount = 0;
         return { 
           ...task, 
-          taskIndex: `${headerCount}`,
-          phase: `Phase ${headerCount}: ${task.title}` 
+          level: 'phase' as TaskLevel,
+          isHeader: true,
+          taskIndex: `${phaseCount}`,
+          phase: `Phase ${phaseCount}: ${task.title}` 
         };
-      } else {
-        subCount++;
+      } else if (lvl === 'Main task') {
+        mainCount++;
+        subCount = 0;
+        const curPhase = phaseCount > 0 ? phaseCount : 1;
         return { 
           ...task, 
-          taskIndex: `${headerCount > 0 ? headerCount : 1}.${subCount}`,
-          phase: `Phase ${headerCount > 0 ? headerCount : 1}` 
+          level: 'main' as TaskLevel,
+          isHeader: false,
+          taskIndex: `${curPhase}.${mainCount}`,
+          phase: `Phase ${curPhase}` 
+        };
+      } else {
+        // Sub task
+        subCount++;
+        const curPhase = phaseCount > 0 ? phaseCount : 1;
+        const curMain = mainCount > 0 ? mainCount : 1;
+        return { 
+          ...task, 
+          level: 'sub' as TaskLevel,
+          isHeader: false,
+          taskIndex: `${curPhase}.${curMain}.${subCount}`,
+          phase: `Phase ${curPhase}` 
         };
       }
     });
@@ -640,7 +677,7 @@ export default function ProjectDetailPage() {
     setIsEditingPlan(false);
   };
 
-  const handleAppendTempTask = (isHeader: boolean) => {
+  const handleAppendTempTask = (level: TaskLevel = 'main') => {
     setTempPlan(prev => {
       const nextPlan = [
         ...prev,
@@ -653,7 +690,8 @@ export default function ProjectDetailPage() {
           endDate: project?.endDate || "",
           status: "Todo" as ProjectTask["status"],
           progress: 0,
-          isHeader,
+          level,
+          isHeader: level === 'phase',
           notes: ""
         }
       ];
@@ -661,31 +699,25 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const handleAddPhaseClick = () => {
+    if (!isEditingPlan) {
+      handleStartEditPlan();
+      setTimeout(() => {
+        handleAppendTempTask('phase');
+      }, 50);
+    } else {
+      handleAppendTempTask('phase');
+    }
+  };
+
   const handleAddMainTaskClick = () => {
     if (!isEditingPlan) {
       handleStartEditPlan();
       setTimeout(() => {
-        setTempPlan(prev => {
-          const nextPlan = [
-            ...(project?.plan || []),
-            {
-              id: `new-task-${Date.now()}`,
-              title: "",
-              phase: "Phase 1: Chuẩn bị",
-              assignee: "",
-              startDate: project?.startDate || "",
-              endDate: project?.endDate || "",
-              status: "Todo" as ProjectTask["status"],
-              progress: 0,
-              isHeader: true,
-              notes: ""
-            }
-          ];
-          return autoAssignTaskIndices(nextPlan);
-        });
+        handleAppendTempTask('main');
       }, 50);
     } else {
-      handleAppendTempTask(true);
+      handleAppendTempTask('main');
     }
   };
 
@@ -693,28 +725,27 @@ export default function ProjectDetailPage() {
     if (!isEditingPlan) {
       handleStartEditPlan();
       setTimeout(() => {
-        setTempPlan(prev => {
-          const nextPlan = [
-            ...(project?.plan || []),
-            {
-              id: `new-task-${Date.now()}`,
-              title: "",
-              phase: "Phase 1: Chuẩn bị",
-              assignee: "",
-              startDate: project?.startDate || "",
-              endDate: project?.endDate || "",
-              status: "Todo" as ProjectTask["status"],
-              progress: 0,
-              isHeader: false,
-              notes: ""
-            }
-          ];
-          return autoAssignTaskIndices(nextPlan);
-        });
+        handleAppendTempTask('sub');
       }, 50);
     } else {
-      handleAppendTempTask(false);
+      handleAppendTempTask('sub');
     }
+  };
+
+  const handleTaskLevelChange = (index: number, newLevel: TaskLevel) => {
+    setTempPlan(prev => {
+      const nextPlan = prev.map((task, idx) => {
+        if (idx === index) {
+          return {
+            ...task,
+            level: newLevel,
+            isHeader: newLevel === 'phase'
+          };
+        }
+        return task;
+      });
+      return autoAssignTaskIndices(nextPlan);
+    });
   };
 
   const handleRemoveTempTask = (index: number) => {
@@ -956,28 +987,41 @@ export default function ProjectDetailPage() {
     if (isTemplate) {
       rows = [
         ["1", "Phase 1: Khảo sát & Chuẩn bị", "Phase", "2026-10-01", "2026-10-07", "", "", "", "100%", "Hoàn thành", "Giai đoạn chuẩn bị"],
-        ["1.1", "Họp Kick-off và thống nhất yêu cầu", "Công việc", "2026-10-01", "2026-10-03", "2026-10-01", "2026-10-03", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã ký biên bản họp"],
-        ["1.2", "Khảo sát hiện trạng hạ tầng kỹ thuật", "Công việc", "2026-10-04", "2026-10-07", "2026-10-04", "2026-10-07", "Trần Thị B", "100%", "Hoàn thành", "Hạ tầng sẵn sàng"],
-        ["2", "Phase 2: Triển khai cài đặt hệ thống", "Phase", "2026-10-08", "2026-10-25", "", "", "", "30%", "Đang thực hiện", "Giai đoạn cài đặt chính"],
-        ["2.1", "Cài đặt phần mềm máy chủ & Database", "Công việc", "2026-10-08", "2026-10-15", "2026-10-08", "", "Lê Văn C", "60%", "Đang thực hiện", "Đang hoàn tất DB"],
-        ["2.2", "Cấu hình phân quyền & tài khoản người dùng", "Công việc", "2026-10-16", "2026-10-25", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Chờ hoàn thành máy chủ"],
-        ["3", "Phase 3: Nghiệm thu & Bàn giao", "Phase", "2026-10-26", "2026-10-31", "", "", "", "0%", "Chưa thực hiện", "Giai đoạn bàn giao"],
-        ["3.1", "Đào tạo người dùng & Chuyển giao tài liệu", "Công việc", "2026-10-26", "2026-10-28", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Chuẩn bị giáo trình"],
-        ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "Công việc", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
+        ["1.1", "Khảo sát hiện trạng & thống nhất SOW", "Main task", "2026-10-01", "2026-10-04", "2026-10-01", "2026-10-04", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã hoàn thành khảo sát"],
+        ["1.1.1", "Họp Kick-off và thống nhất yêu cầu kỹ thuật", "Sub task", "2026-10-01", "2026-10-02", "2026-10-01", "2026-10-02", "Nguyễn Văn A", "100%", "Hoàn thành", "Biên bản họp đầy đủ"],
+        ["1.1.2", "Khảo sát hạ tầng mạng và server phòng máy", "Sub task", "2026-10-03", "2026-10-04", "2026-10-03", "2026-10-04", "Trần Thị B", "100%", "Hoàn thành", "Hạ tầng đạt tiêu chuẩn"],
+        ["1.2", "Lập hồ sơ thiết kế chi tiết & Kế hoạch triển khai", "Main task", "2026-10-05", "2026-10-07", "2026-10-05", "2026-10-07", "Nguyễn Văn A", "100%", "Hoàn thành", "Đã phê duyệt hồ sơ"],
+        ["2", "Phase 2: Triển khai cài đặt hệ thống", "Phase", "2026-10-08", "2026-10-25", "", "", "", "40%", "Đang thực hiện", "Giai đoạn cài đặt chính"],
+        ["2.1", "Cài đặt phần mềm máy chủ & Database AVDF", "Main task", "2026-10-08", "2026-10-18", "2026-10-08", "", "Lê Văn C", "75%", "Đang thực hiện", "Đang cài đặt cụm DB"],
+        ["2.1.1", "Cài đặt hệ điều hành và môi trường máy chủ", "Sub task", "2026-10-08", "2026-10-12", "2026-10-08", "2026-10-12", "Lê Văn C", "100%", "Hoàn thành", "Cấu hình OS hoàn tất"],
+        ["2.1.2", "Cấu hình phần mềm AVDF và cơ sở dữ liệu Audit", "Sub task", "2026-10-13", "2026-10-18", "2026-10-13", "", "Lê Văn C", "50%", "Đang thực hiện", "Đang kiểm tra kết nối DB"],
+        ["2.2", "Cấu hình phân quyền & kiểm thử tích hợp", "Main task", "2026-10-19", "2026-10-25", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Chờ xong cài đặt máy chủ"],
+        ["2.2.1", "Phân quyền tài khoản người dùng & Chính sách Audit", "Sub task", "2026-10-19", "2026-10-22", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Đã lập danh sách user"],
+        ["2.2.2", "Kiểm thử thu thập log và cảnh báo thời gian thực", "Sub task", "2026-10-23", "2026-10-25", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Kịch bản kiểm thử"],
+        ["3", "Phase 3: Nghiệm thu & Chuyển giao", "Phase", "2026-10-26", "2026-10-31", "", "", "", "0%", "Chưa thực hiện", "Giai đoạn bàn giao"],
+        ["3.1", "Đào tạo người dùng & Chuyển giao tài liệu", "Main task", "2026-10-26", "2026-10-28", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Slide đào tạo"],
+        ["3.1.1", "Đào tạo cán bộ quản trị hệ thống", "Sub task", "2026-10-26", "2026-10-27", "", "", "Trần Thị B", "0%", "Chưa thực hiện", "Giáo trình quản trị"],
+        ["3.1.2", "Bàn giao tài liệu kỹ thuật & Hướng dẫn vận hành", "Sub task", "2026-10-28", "2026-10-28", "", "", "Nguyễn Văn A", "0%", "Chưa thực hiện", "Bộ tài liệu PDF"],
+        ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "Main task", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
       ];
     } else {
       rows = project.plan.map((t, idx) => {
-        const isHeader = !!t.isHeader;
+        const levelLabel = resolveTaskLevel(t);
+        const isPhase = levelLabel === "Phase";
         const viStatus = statusMapVi[t.status] || t.status || "Chưa thực hiện";
+        let displayTitle = t.title || "";
+        if (levelLabel === "Sub task") displayTitle = `    ↳ ${displayTitle}`;
+        else if (levelLabel === "Main task") displayTitle = `  ${displayTitle}`;
+
         return [
-          t.taskIndex || (isHeader ? `${idx + 1}` : `${idx + 1}.1`),
-          t.title || "",
-          isHeader ? "Phase" : "Công việc",
+          t.taskIndex || (isPhase ? `${idx + 1}` : `${idx + 1}.1`),
+          displayTitle,
+          levelLabel,
           t.startDate || "",
           t.endDate || "",
           t.actualStartDate || "",
           t.actualEndDate || "",
-          isHeader ? "" : (t.assignee || ""),
+          isPhase ? "" : (t.assignee || ""),
           `${typeof t.progress === "number" ? t.progress : 0}%`,
           viStatus,
           t.notes || "",
@@ -1063,7 +1107,8 @@ export default function ProjectDetailPage() {
             actualStartDate: normalizeDateInput(t.actualStartDate) || "",
             actualEndDate: normalizeDateInput(t.actualEndDate) || "",
             notes: t.notes || "",
-            isHeader: !!t.isHeader
+            isHeader: !!t.isHeader,
+            level: t.level || (t.isHeader ? 'phase' : 'main')
           }));
 
           const reindexed = autoAssignTaskIndices(validated);
@@ -1111,8 +1156,11 @@ export default function ProjectDetailPage() {
         // Skip empty title rows or subheader repeats
         if (!title || title.toLowerCase() === "công việc" || title.toLowerCase() === "tên công việc") continue;
 
+        // Clean tree indentation prefix if imported from formatted export
+        const cleanTitle = title.replace(/^[\s\t↳\->\*\•]+/, '').trim();
+
         const rawIndex = getCellVal(row, ["stt", "no", "số thứ tự", "index", "taskindex", "so thu tu"]);
-        const rawType = getCellVal(row, ["loại dòng", "loại", "phase", "giai đoạn", "isheader", "header", "loai dong", "loai"]);
+        const rawType = getCellVal(row, ["loại dòng", "loại", "phase", "giai đoạn", "isheader", "header", "loai dong", "loai", "level"]);
         const rawStart = getCellVal(row, ["thời gian bắt đầu", "ngày bắt đầu", "bắt đầu", "start date", "startdate", "start", "ngay bat dau"]);
         const rawEnd = getCellVal(row, ["thời gian kết thúc", "ngày kết thúc", "kết thúc", "hạn chót", "end date", "enddate", "end", "deadline", "ngay ket thuc"]);
         const rawActualStart = getCellVal(row, ["thời gian bắt đầu thực tế", "bắt đầu thực tế", "ngày bắt đầu thực tế", "actual start date", "actualstartdate", "actual start"]);
@@ -1122,14 +1170,46 @@ export default function ProjectDetailPage() {
         const rawStatus = getCellVal(row, ["trạng thái", "status", "tình trạng", "trang thai"]);
         const notes = getCellVal(row, ["ghi chú", "notes", "note", "comment", "mô tả", "ghi chu"]);
 
-        // Determine if this row is a phase/header
-        const normType = rawType.toLowerCase();
-        const normTitle = title.toLowerCase();
-        const isExplicitHeader = normType.includes("phase") || normType.includes("giai đoạn") || normType.includes("header") || normType === "true" || normType === "1";
-        const isTitleHeader = normTitle.startsWith("phase ") || normTitle.startsWith("giai đoạn ") || normTitle.startsWith("phần ");
-        const isNoDotIndex = rawIndex !== "" && !rawIndex.includes(".") && !rawIndex.includes(",") && !assignee && !rawActualStart;
+        // Determine 3 levels from Loại dòng or STT
+        const normType = rawType.toLowerCase().trim();
+        let taskLevel: TaskLevel = 'main';
 
-        const isHeader = isExplicitHeader || isTitleHeader || (isNoDotIndex && normType !== "công việc" && normType !== "task");
+        if (
+          normType.includes("phase") ||
+          normType.includes("giai đoạn") ||
+          normType.includes("cấp 1") ||
+          normType === "header" ||
+          cleanTitle.toLowerCase().startsWith("phase ") ||
+          cleanTitle.toLowerCase().startsWith("giai đoạn ")
+        ) {
+          taskLevel = 'phase';
+        } else if (
+          normType.includes("sub") ||
+          normType.includes("con") ||
+          normType.includes("phụ") ||
+          normType.includes("cấp 3") ||
+          title.includes("↳") ||
+          (rawIndex && (rawIndex.match(/\./g) || []).length >= 2)
+        ) {
+          taskLevel = 'sub';
+        } else if (
+          normType.includes("main") ||
+          normType.includes("chính") ||
+          normType.includes("cấp 2") ||
+          (rawIndex && (rawIndex.match(/\./g) || []).length === 1)
+        ) {
+          taskLevel = 'main';
+        } else {
+          // Infer from STT dots
+          if (rawIndex) {
+            const dots = (rawIndex.match(/\./g) || []).length;
+            if (dots >= 2) taskLevel = 'sub';
+            else if (dots === 1) taskLevel = 'main';
+            else if (dots === 0 && !assignee && !rawActualStart) taskLevel = 'phase';
+          }
+        }
+
+        const isHeader = taskLevel === 'phase';
 
         // Parse progress
         let progress = 0;
@@ -1159,8 +1239,8 @@ export default function ProjectDetailPage() {
 
         parsedTasks.push({
           id: `imported-task-${idx}-${Date.now()}`,
-          title,
-          phase: isHeader ? title : "Phase",
+          title: cleanTitle,
+          phase: isHeader ? cleanTitle : "Phase",
           assignee: isHeader ? "" : assignee,
           startDate: normalizeDateInput(rawStart) || project.startDate,
           endDate: normalizeDateInput(rawEnd) || project.endDate,
@@ -1169,6 +1249,7 @@ export default function ProjectDetailPage() {
           status,
           progress,
           notes,
+          level: taskLevel,
           isHeader,
           taskIndex: rawIndex || undefined,
         });
@@ -1183,16 +1264,17 @@ export default function ProjectDetailPage() {
       const reindexed = autoAssignTaskIndices(parsedTasks);
       const updated = updateProjectPlan(project.id, reindexed);
       if (updated) {
-        const phaseCount = reindexed.filter(t => t.isHeader).length;
-        const subCount = reindexed.filter(t => !t.isHeader).length;
+        const phaseCount = reindexed.filter(t => t.level === 'phase').length;
+        const mainCount = reindexed.filter(t => t.level === 'main').length;
+        const subCount = reindexed.filter(t => t.level === 'sub').length;
         addDiaryEntry(project.id, {
           author: "John D.",
-          content: `Nhập dữ liệu kế hoạch dự án từ tệp "${file.name}" thành công (${reindexed.length} hạng mục: ${phaseCount} Phase, ${subCount} Công việc)`,
+          content: `Nhập dữ liệu kế hoạch dự án từ tệp "${file.name}" thành công (${reindexed.length} dòng: ${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task)`,
           category: "Update"
         });
         refreshProjectData();
         alert(
-          `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${subCount} Công việc con) từ file "${file.name}"!`
+          `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task) từ file "${file.name}"!`
         );
       }
     } catch (err: any) {
@@ -1743,18 +1825,25 @@ export default function ProjectDetailPage() {
               {isEditingPlan ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
-                    onClick={() => handleAppendTempTask(true)}
+                    onClick={() => handleAppendTempTask('phase')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition cursor-pointer"
                   >
                     <Plus size={13} />
-                    <span>Thêm Phase</span>
+                    <span>+ Phase</span>
                   </button>
                   <button
-                    onClick={() => handleAppendTempTask(false)}
+                    onClick={() => handleAppendTempTask('main')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>+ Main task</span>
+                  </button>
+                  <button
+                    onClick={() => handleAppendTempTask('sub')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
                   >
                     <Plus size={13} />
-                    <span>Thêm Công việc</span>
+                    <span>+ Sub task</span>
                   </button>
                   <button
                     onClick={handleSavePlanEdits}
@@ -1779,18 +1868,25 @@ export default function ProjectDetailPage() {
                     <span>Chỉnh sửa</span>
                   </button>
                   <button
-                    onClick={handleAddMainTaskClick}
+                    onClick={handleAddPhaseClick}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition cursor-pointer"
                   >
                     <Plus size={13} />
-                    <span>Thêm Phase</span>
+                    <span>+ Phase</span>
+                  </button>
+                  <button
+                    onClick={handleAddMainTaskClick}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>+ Main task</span>
                   </button>
                   <button
                     onClick={handleAddSubTaskClick}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
                   >
                     <Plus size={13} />
-                    <span>Thêm Công việc</span>
+                    <span>+ Sub task</span>
                   </button>
                   {/* Nút Nhập File (Excel / CSV / JSON) */}
                   <button
@@ -1918,6 +2014,7 @@ export default function ProjectDetailPage() {
                       No
                     </th>
                     <th className="py-2.5 px-3 font-bold border border-slate-200">Công việc</th>
+                    <th className="py-2.5 px-2 font-bold border border-slate-200 text-center w-28">Loại dòng</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian bắt đầu</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian kết thúc</th>
                     <th className="py-2.5 px-2 font-bold border border-slate-200 w-32">Thời gian bắt đầu thực tế</th>
@@ -1933,13 +2030,17 @@ export default function ProjectDetailPage() {
                   {isEditingPlan ? (
                     tempPlan.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic">
-                          Chưa có công việc nào. Hãy thêm Phase hoặc Công việc bằng các nút phía trên.
+                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic">
+                          Chưa có công việc nào. Hãy thêm Phase, Main task hoặc Sub task bằng các nút phía trên.
                         </td>
                       </tr>
                     ) : (
                       tempPlan.map((task, idx) => {
-                        const isHeader = !!task.isHeader;
+                        const level = resolveTaskLevel(task);
+                        const isPhase = level === 'Phase';
+                        const isMain = level === 'Main task';
+                        const isSub = level === 'Sub task';
+
                         return (
                           <tr 
                             key={task.id || idx} 
@@ -1951,7 +2052,11 @@ export default function ProjectDetailPage() {
                             className={`border-b transition ${
                               dragOverIndex === idx && dragIndex !== idx
                                 ? 'border-blue-400 bg-blue-50/60 ring-1 ring-blue-300'
-                                : isHeader ? 'border-slate-200 bg-[#E8E8E8] font-bold' : 'border-slate-200 bg-white hover:bg-slate-50/40'
+                                : isPhase
+                                ? 'border-slate-300 bg-[#E6EEF7] font-bold'
+                                : isMain
+                                ? 'border-slate-200 bg-slate-50/50 font-semibold'
+                                : 'border-slate-200 bg-white hover:bg-slate-50/40'
                             }`}
                           >
                             {/* Drag Handle + Index Cell */}
@@ -1973,29 +2078,42 @@ export default function ProjectDetailPage() {
 
                             {/* Công việc Input */}
                             <td className="p-1.5 border border-slate-200">
-                              <div className="space-y-1">
-                                <input
-                                  type="text"
-                                  value={task.title}
-                                  onChange={(e) => handleTempTaskChange(idx, "title", e.target.value)}
-                                  className={`w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${isHeader ? "font-bold text-slate-900" : "text-slate-700"}`}
-                                  placeholder="Nhập tên công việc..."
-                                />
-                                <label className="flex items-center gap-1.5 text-[9px] text-slate-550 font-bold select-none cursor-pointer">
+                              <div className={`space-y-1 ${isSub ? 'pl-4' : isMain ? 'pl-2' : ''}`}>
+                                <div className="flex items-center gap-1.5">
+                                  {isSub && <span className="text-slate-400 font-mono text-xs select-none">↳</span>}
                                   <input
-                                    type="checkbox"
-                                    checked={isHeader}
-                                    onChange={(e) => handleTempTaskChange(idx, "isHeader", e.target.checked)}
-                                    className="w-3 h-3 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                                    type="text"
+                                    value={task.title}
+                                    onChange={(e) => handleTempTaskChange(idx, "title", e.target.value)}
+                                    className={`w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${isPhase ? "font-bold text-slate-900" : isMain ? "font-semibold text-slate-800" : "text-slate-700"}`}
+                                    placeholder={isPhase ? "Tên Phase (Giai đoạn)..." : isMain ? "Tên Main task (Công việc chính)..." : "Tên Sub task (Công việc con)..."}
                                   />
-                                  <span>Giai đoạn chính (Header)</span>
-                                </label>
+                                </div>
                               </div>
+                            </td>
+
+                            {/* Loại dòng Selector */}
+                            <td className="p-1 border border-slate-200 text-center w-28">
+                              <select
+                                value={isPhase ? 'phase' : (isSub ? 'sub' : 'main')}
+                                onChange={(e) => handleTaskLevelChange(idx, e.target.value as TaskLevel)}
+                                className={`w-full px-2 py-1.5 border rounded-lg text-xs font-bold outline-none cursor-pointer ${
+                                  isPhase
+                                    ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                    : isSub
+                                    ? 'bg-slate-100 text-slate-600 border-slate-300'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                                }`}
+                              >
+                                <option value="phase">Phase</option>
+                                <option value="main">Main task</option>
+                                <option value="sub">Sub task</option>
+                              </select>
                             </td>
 
                             {/* Start Date */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.startDate) || 'Tự tasks'; })()}
                                 </span>
@@ -2009,7 +2127,7 @@ export default function ProjectDetailPage() {
 
                             {/* End Date */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.endDate) || 'Tự tasks'; })()}
                                 </span>
@@ -2023,7 +2141,7 @@ export default function ProjectDetailPage() {
 
                             {/* Actual Start Date */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <span className="text-[10px] px-1.5 text-slate-400">—</span>
                               ) : (
                                 <input type="date" value={task.actualStartDate || ""}
@@ -2035,7 +2153,7 @@ export default function ProjectDetailPage() {
 
                             {/* Actual End Date */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-emerald-600 font-bold">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return s.actualEndDate ? formatDate(s.actualEndDate) : '—'; })()}
                                 </span>
@@ -2049,7 +2167,7 @@ export default function ProjectDetailPage() {
 
                             {/* Assignee - multi select from staff */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <div className="text-[10px] text-blue-600 font-medium px-1 flex flex-wrap gap-1">
                                   {(() => {
                                     const { assignees } = getPhaseStats(tempPlan, idx);
@@ -2075,7 +2193,7 @@ export default function ProjectDetailPage() {
 
                             {/* Progress % */}
                             <td className="p-1 border border-slate-200">
-                              {isHeader ? (
+                              {isPhase ? (
                                 <div className="flex items-center gap-1">
                                   <span className="w-12 px-1 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-lg font-bold text-right text-blue-700 block">
                                     {(() => {
@@ -2144,17 +2262,27 @@ export default function ProjectDetailPage() {
                     // READ ONLY VIEW
                     project.plan.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic">
+                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic">
                           Chưa có công việc nào được thiết lập. Hãy bấm Chỉnh sửa hoặc thêm mới để bắt đầu.
                         </td>
                       </tr>
                     ) : (
                       project.plan.map((task, idx) => {
-                        const isHeader = !!task.isHeader;
+                        const level = resolveTaskLevel(task);
+                        const isPhase = level === 'Phase';
+                        const isMain = level === 'Main task';
+                        const isSub = level === 'Sub task';
+
                         return (
                           <tr 
                             key={task.id || idx} 
-                            className={`border-b border-slate-200 transition ${isHeader ? "bg-[#E8E8E8] font-bold animate-fade-in" : "bg-white hover:bg-slate-50/40"}`}
+                            className={`border-b border-slate-200 transition ${
+                              isPhase
+                                ? "bg-[#E6EEF7] font-bold animate-fade-in"
+                                : isMain
+                                ? "bg-slate-50/40 font-semibold hover:bg-slate-50/70"
+                                : "bg-white hover:bg-slate-50/30"
+                            }`}
                           >
                             {/* STT */}
                             <td className="py-3 px-2 text-center font-mono font-bold text-slate-500 border border-slate-200">
@@ -2162,39 +2290,59 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Công việc */}
-                            <td className={`py-3 px-3 border border-slate-200 ${isHeader ? "text-slate-900 text-xs font-extrabold" : "text-slate-700 font-medium"}`}>
-                              {task.title}
+                            <td className="py-3 px-3 border border-slate-200">
+                              {isPhase ? (
+                                <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide">{task.title}</span>
+                              ) : isMain ? (
+                                <div className="pl-3 font-bold text-slate-800 text-xs">{task.title}</div>
+                              ) : (
+                                <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs">
+                                  <span className="text-slate-400 font-mono">↳</span>
+                                  <span>{task.title}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Loại dòng Badge */}
+                            <td className="py-3 px-2 border border-slate-200 text-center">
+                              {isPhase ? (
+                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200 uppercase">Phase</span>
+                              ) : isMain ? (
+                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Main task</span>
+                              ) : (
+                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">Sub task</span>
+                              )}
                             </td>
 
                             {/* Start Date */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
-                              {isHeader
+                              {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()
                                 : (formatDate(task.startDate) || '—')}
                             </td>
 
                             {/* End Date */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
-                              {isHeader
+                              {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()
                                 : (formatDate(task.endDate) || '—')}
                             </td>
 
                             {/* Actual Start Date */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
-                              {isHeader ? '—' : (formatDate(task.actualStartDate) || '—')}
+                              {isPhase ? '—' : (formatDate(task.actualStartDate) || '—')}
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
-                              {isHeader
+                              {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-600 font-bold">{formatDate(s.actualEndDate)}</span> : '—'; })()
                                 : (formatDate(task.actualEndDate) || '—')}
                             </td>
 
                             {/* Assignee */}
                             <td className="py-3 px-2 border border-slate-200 text-slate-700 font-semibold">
-                              {isHeader ? (() => {
+                              {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
                                 return assignees.length > 0
                                   ? <div className="flex flex-wrap gap-1">{assignees.map(n => <span key={n} className="text-[10px] px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full font-semibold">{n}</span>)}</div>
@@ -2208,7 +2356,7 @@ export default function ProjectDetailPage() {
 
                             {/* Progress */}
                             <td className="py-3 px-2 border border-slate-200 text-center font-extrabold text-slate-800 text-xs">
-                              {isHeader
+                              {isPhase
                                 ? `${getPhaseStats(project.plan, idx).progress}%`
                                 : `${task.progress}%`}
                             </td>
@@ -2237,7 +2385,7 @@ export default function ProjectDetailPage() {
 
                             {/* Action column (Sửa button) */}
                             <td className="py-3 px-2 border border-slate-200 text-center">
-                              {!isHeader && (
+                              {!isPhase && (
                                 <button
                                   type="button"
                                   onClick={handleStartEditPlan}
