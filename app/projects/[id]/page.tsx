@@ -58,7 +58,9 @@ import {
   Edit,
   FileSpreadsheet,
   ChevronDown,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 // Helper functions for mock SOW data
@@ -244,6 +246,7 @@ export default function ProjectDetailPage() {
 
   // Plan Edit State
   const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [tempPlan, setTempPlan] = useState<ProjectTask[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -1463,15 +1466,41 @@ export default function ProjectDetailPage() {
   return (
     <MainLayout>
       {/* Subheader Back Link */}
-      <div className="mb-4">
-        <Link href="/projects" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-blue-600 transition">
-          <ArrowLeft size={16} />
-          <span>Danh sách dự án</span>
-        </Link>
-      </div>
+      {!isHeaderHidden && (
+        <div className="mb-4">
+          <Link href="/projects" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-blue-600 transition">
+            <ArrowLeft size={16} />
+            <span>Danh sách dự án</span>
+          </Link>
+        </div>
+      )}
+
+      {/* Mini Bar when Header is Hidden */}
+      {isHeaderHidden && (
+        <div className="mb-3 px-4 py-2 bg-slate-900 text-white rounded-xl shadow-md flex items-center justify-between text-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5 truncate">
+            <span className="font-mono font-bold bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">
+              {project.code}
+            </span>
+            <span className="font-bold truncate">{project.name}</span>
+            <span className="text-slate-400 text-[11px] hidden md:inline">({project.customer})</span>
+            <span className="text-blue-400 font-semibold text-[11px]">Tiến độ: {project.progress}%</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsHeaderHidden(false)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold transition shrink-0 ml-2 cursor-pointer"
+            title="Hiện lại toàn bộ thông tin dự án phía trên"
+          >
+            <Eye size={13} />
+            <span>Unhide (Hiện thông tin trên)</span>
+          </button>
+        </div>
+      )}
 
       {/* Project Banner Card with Integrated Tabs */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm mb-4 overflow-hidden">
+      {!isHeaderHidden && (
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm mb-4 overflow-hidden">
         <div className="px-5 py-2.5 pb-0">
           {/* Row 1: Code, Customer, PM, Time (Upper Row) */}
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 pb-2.5 border-b border-slate-100 text-xs text-slate-500 font-medium">
@@ -1634,6 +1663,8 @@ export default function ProjectDetailPage() {
             </span>
           </button>
         </div>
+      </div>
+    )}
 
       {/* Tabs Content */}
       <div className="space-y-6">
@@ -2027,6 +2058,21 @@ export default function ProjectDetailPage() {
                     )}
                   </div>
 
+                  {/* Nút Ẩn / Hiện thông tin dự án phía trên (Hide / Unhide) */}
+                  <button
+                    type="button"
+                    onClick={() => setIsHeaderHidden(!isHeaderHidden)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      isHeaderHidden
+                        ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-250"
+                    }`}
+                    title={isHeaderHidden ? "Hiện lại thông tin dự án phía trên (Unhide)" : "Ẩn thông tin dự án phía trên (Hide) để mở rộng bảng danh mục công việc"}
+                  >
+                    {isHeaderHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                    <span>{isHeaderHidden ? "Unhide" : "Hide"}</span>
+                  </button>
+
                   <input
                     id="plan-import-file"
                     type="file"
@@ -2038,31 +2084,51 @@ export default function ProjectDetailPage() {
               )}
             </div>
 
-            {/* Plan Spreadsheet Table Container */}
-            <div className="p-6 overflow-x-auto">
+            {/* Plan Spreadsheet Table Container with Sticky Header & Scrollable Body */}
+            <div className={`p-3 sm:p-5 overflow-x-auto overflow-y-auto ${isHeaderHidden ? "max-h-[calc(100vh-140px)]" : "max-h-[620px]"} relative rounded-xl border border-slate-200 shadow-sm bg-white scrollbar-thin`}>
               <table className="w-full text-left border-collapse border border-slate-200 text-xs">
-                <thead>
-                  <tr className="bg-[#E6EEF7] text-slate-700 border-b border-slate-355 select-none">
-                    <th className="py-2.5 px-2 text-center font-bold border border-slate-200 w-14">
+                <thead className="sticky top-0 z-20 shadow-md">
+                  <tr className="bg-[#1E40AF] text-white select-none">
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-14 whitespace-nowrap">
                       No
                     </th>
-                    <th className="py-2.5 px-3 font-bold border border-slate-200">Công việc</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian bắt đầu</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 w-28">Thời gian kết thúc</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 w-32">Thời gian bắt đầu thực tế</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 w-32">Thời gian kết thúc thực tế</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200">Người thực hiện</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 text-center w-20">% Hoàn thành</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 text-center w-32">Trạng thái</th>
-                    <th className="py-2.5 px-3 font-bold border border-slate-200 w-40">Ghi chú</th>
-                    <th className="py-2.5 px-2 font-bold border border-slate-200 text-center w-20">Thao tác</th>
+                    <th className="py-3 px-4 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 min-w-[280px] whitespace-nowrap">
+                      Công việc
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-28 whitespace-nowrap">
+                      Thời gian bắt đầu
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-28 whitespace-nowrap">
+                      Thời gian kết thúc
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-32 whitespace-nowrap">
+                      Thời gian bắt đầu thực tế
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-32 whitespace-nowrap">
+                      Thời gian kết thúc thực tế
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 min-w-[140px] whitespace-nowrap">
+                      Người thực hiện
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-24 whitespace-nowrap">
+                      % Hoàn thành
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-32 whitespace-nowrap">
+                      Trạng thái
+                    </th>
+                    <th className="py-3 px-3 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 min-w-[160px] whitespace-nowrap">
+                      Ghi chú
+                    </th>
+                    <th className="py-3 px-2 text-center font-bold border border-blue-800 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 w-20 whitespace-nowrap">
+                      Thao tác
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {isEditingPlan ? (
                     tempPlan.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic">
+                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
                           Chưa có công việc nào. Hãy thêm Phase, Main task hoặc Sub task bằng các nút phía trên.
                         </td>
                       </tr>
@@ -2091,8 +2157,7 @@ export default function ProjectDetailPage() {
                                 : 'border-slate-200 bg-white hover:bg-slate-50/40'
                             }`}
                           >
-                            {/* Drag Handle + Index Cell */}
-                            <td className="p-1 text-center border border-slate-200 select-none w-8">
+                            <td className="p-1 text-center border border-slate-200 select-none w-8 whitespace-nowrap">
                               <div className="flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing" title="Kéo để di chuyển">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 hover:text-blue-500 transition">
                                   <circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/>
@@ -2109,7 +2174,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Công việc Input */}
-                            <td className="p-1.5 border border-slate-200">
+                            <td className="p-1.5 border border-slate-200 whitespace-nowrap">
                               <div className={`space-y-1 ${isSub ? 'pl-4' : isMain ? 'pl-2' : ''}`}>
                                 <div className="flex items-center gap-1.5">
                                   {isSub && <span className="text-slate-400 font-mono text-xs select-none">↳</span>}
@@ -2125,7 +2190,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.startDate) || 'Tự tasks'; })()}
@@ -2139,7 +2204,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* End Date */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.endDate) || 'Tự tasks'; })()}
@@ -2153,7 +2218,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 text-slate-400">—</span>
                               ) : (
@@ -2165,7 +2230,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual End Date */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-emerald-600 font-bold">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return s.actualEndDate ? formatDate(s.actualEndDate) : '—'; })()}
@@ -2179,9 +2244,9 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Assignee - multi select from staff */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
-                                <div className="text-[10px] text-blue-600 font-medium px-1 flex flex-wrap gap-1">
+                                <div className="text-[10px] text-blue-600 font-medium px-1 flex flex-wrap gap-1 items-center justify-center">
                                   {(() => {
                                     const { assignees } = getPhaseStats(tempPlan, idx);
                                     return assignees.length > 0
@@ -2205,9 +2270,9 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Progress % */}
-                            <td className="p-1 border border-slate-200">
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
                               {isPhase ? (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center justify-center gap-1">
                                   <span className="w-12 px-1 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-lg font-bold text-right text-blue-700 block">
                                     {(() => {
                                       const subs = tempPlan.filter(t => !t.isHeader && t.phase === task.phase);
@@ -2218,6 +2283,55 @@ export default function ProjectDetailPage() {
                                   <span className="text-[10px] font-bold text-slate-450">%</span>
                                 </div>
                               ) : (
+                                <div className="flex items-center justify-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={task.progress}
+                                    onChange={(e) => handleTempTaskChange(idx, "progress", e.target.value)}
+                                    className="w-12 px-1 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-semibold text-right outline-none"
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-450">%</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td className="p-1 border border-slate-200 whitespace-nowrap text-center">
+                              <select
+                                value={task.status}
+                                onChange={(e) => handleTempTaskChange(idx, "status", e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold outline-none text-slate-700"
+                              >
+                                <option value="Todo">Chưa thực hiện</option>
+                                <option value="In Progress">Đang thực hiện</option>
+                                <option value="Completed">Hoàn thành</option>
+                              </select>
+                            </td>
+
+                            {/* Notes */}
+                            <td className="p-1 border border-slate-200 whitespace-nowrap">
+                              <input
+                                type="text"
+                                value={task.notes || ""}
+                                onChange={(e) => handleTempTaskChange(idx, "notes", e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 outline-none"
+                                placeholder="Ghi chú..."
+                              />
+                            </td>
+
+                            {/* Delete Button */}
+                            <td className="p-1 border border-slate-200 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTempTask(idx)}
+                                className="p-1 text-slate-455 hover:text-red-500 hover:bg-red-50 rounded transition cursor-pointer mx-auto block"
+                                title="Xóa dòng này"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>                              ) : (
                                 <div className="flex items-center gap-1">
                                   <input
                                     type="number"
@@ -2275,7 +2389,7 @@ export default function ProjectDetailPage() {
                     // READ ONLY VIEW
                     project.plan.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic">
+                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
                           Chưa có công việc nào được thiết lập. Hãy bấm Chỉnh sửa hoặc thêm mới để bắt đầu.
                         </td>
                       </tr>
@@ -2298,75 +2412,92 @@ export default function ProjectDetailPage() {
                             }`}
                           >
                             {/* STT */}
-                            <td className="py-3 px-2 text-center font-mono font-bold text-slate-500 border border-slate-200">
+                            <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500 border border-slate-200 whitespace-nowrap">
                               {task.taskIndex}
                             </td>
 
                             {/* Công việc */}
-                            <td className="py-3 px-3 border border-slate-200">
+                            <td className="py-2.5 px-3 border border-slate-200 whitespace-nowrap">
                               {isPhase ? (
-                                <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide">{task.title}</span>
+                                <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide whitespace-nowrap" title={task.title}>{task.title}</span>
                               ) : isMain ? (
-                                <div className="pl-3 font-bold text-slate-800 text-xs">{task.title}</div>
+                                <div className="pl-3 font-bold text-slate-800 text-xs whitespace-nowrap" title={task.title}>{task.title}</div>
                               ) : (
-                                <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs">
+                                <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap" title={task.title}>
                                   <span className="text-slate-400 font-mono">↳</span>
-                                  <span>{task.title}</span>
+                                  <span className="whitespace-nowrap">{task.title}</span>
                                 </div>
                               )}
                             </td>
 
-
                             {/* Start Date */}
-                            <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
+                            <td className="py-2.5 px-2 border border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()
                                 : (formatDate(task.startDate) || '—')}
                             </td>
 
                             {/* End Date */}
-                            <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
+                            <td className="py-2.5 px-2 border border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()
                                 : (formatDate(task.endDate) || '—')}
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
+                            <td className="py-2.5 px-2 border border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? '—' : (formatDate(task.actualStartDate) || '—')}
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
-                            <td className="py-3 px-2 border border-slate-200 text-slate-650 font-medium">
+                            <td className="py-2.5 px-2 border border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-600 font-bold">{formatDate(s.actualEndDate)}</span> : '—'; })()
                                 : (formatDate(task.actualEndDate) || '—')}
                             </td>
 
-                            {/* Assignee */}
-                            <td className="py-3 px-2 border border-slate-200 text-slate-700 font-semibold">
+                            {/* Assignee (Show truncate with ... if too long) */}
+                            <td className="py-2.5 px-2 border border-slate-200 text-center whitespace-nowrap">
                               {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
-                                return assignees.length > 0
-                                  ? <div className="flex flex-wrap gap-1">{assignees.map(n => <span key={n} className="text-[10px] px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full font-semibold">{n}</span>)}</div>
-                                  : <span className="text-slate-400">—</span>;
+                                return assignees.length > 0 ? (
+                                  <div className="flex items-center justify-center">
+                                    <span 
+                                      className="inline-block max-w-[130px] truncate text-[11px] px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full font-semibold align-middle"
+                                      title={assignees.join(', ')}
+                                    >
+                                      {assignees.join(', ')}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                );
                               })() : (
-                                task.assignee
-                                  ? <div className="flex flex-wrap gap-1">{task.assignee.split(',').map(n => n.trim()).filter(Boolean).map(n => <span key={n} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-full font-medium">{n}</span>)}</div>
-                                  : <span className="text-slate-400">—</span>
+                                task.assignee ? (
+                                  <div className="flex items-center justify-center">
+                                    <span 
+                                      className="inline-block max-w-[130px] truncate text-[11px] px-2.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-full font-semibold align-middle"
+                                      title={task.assignee}
+                                    >
+                                      {task.assignee}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )
                               )}
                             </td>
 
                             {/* Progress */}
-                            <td className="py-3 px-2 border border-slate-200 text-center font-extrabold text-slate-800 text-xs">
+                            <td className="py-2.5 px-2 border border-slate-200 text-center font-extrabold text-slate-800 text-xs whitespace-nowrap">
                               {isPhase
                                 ? `${getPhaseStats(project.plan, idx).progress}%`
                                 : `${task.progress}%`}
                             </td>
 
                             {/* Status */}
-                            <td className="py-3 px-2 border border-slate-200 text-center">
-                              <span className={`inline-block w-full py-1 text-[10px] font-bold rounded tracking-wide ${
+                            <td className="py-2.5 px-2 border border-slate-200 text-center whitespace-nowrap">
+                              <span className={`inline-block px-2.5 py-1 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
                                 task.status === 'Completed' 
                                   ? 'bg-[#2ecc71] text-white' 
                                   : task.status === 'In Progress' 
@@ -2382,12 +2513,12 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Notes */}
-                            <td className="py-3 px-3 border border-slate-200 text-slate-500 italic max-w-[200px] truncate" title={task.notes || ""}>
+                            <td className="py-2.5 px-3 border border-slate-200 text-slate-500 italic max-w-[180px] truncate whitespace-nowrap" title={task.notes || ""}>
                               {task.notes || "—"}
                             </td>
 
                             {/* Action column (Sửa button) */}
-                            <td className="py-3 px-2 border border-slate-200 text-center">
+                            <td className="py-2.5 px-2 border border-slate-200 text-center whitespace-nowrap">
                               {!isPhase && (
                                 <button
                                   type="button"
@@ -2956,8 +3087,6 @@ export default function ProjectDetailPage() {
             )}
           </div>
         )}
-
-      </div>
 
       </div>
 
