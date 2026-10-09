@@ -60,7 +60,11 @@ import {
   ChevronDown,
   Loader2,
   Eye,
-  EyeOff
+  EyeOff,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  GripVertical
 } from "lucide-react";
 
 // Helper functions for mock SOW data
@@ -247,6 +251,9 @@ export default function ProjectDetailPage() {
   // Plan Edit State
   const [isEditingPlan, setIsEditingPlan] = useState(false);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const [isMoveMode, setIsMoveMode] = useState(false);
+  const [moveModeDragIdx, setMoveModeDragIdx] = useState<number | null>(null);
+  const [moveModeOverIdx, setMoveModeOverIdx] = useState<number | null>(null);
   const [tempPlan, setTempPlan] = useState<ProjectTask[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -729,6 +736,7 @@ export default function ProjectDetailPage() {
 
   const handleStartEditPlan = () => {
     if (!project) return;
+    setIsMoveMode(false);
     setTempPlan(project.plan || []);
     setIsEditingPlan(true);
   };
@@ -908,6 +916,68 @@ export default function ProjectDetailPage() {
   const handleDragEnd = () => {
     setDragIndex(null);
     setDragOverIndex(null);
+  };
+
+  // Move mode operations for project.plan
+  const handleMovePlanRow = (fromIdx: number, toIdx: number) => {
+    if (!project) return;
+    const total = project.plan.length;
+    if (fromIdx < 0 || fromIdx >= total || toIdx < 0 || toIdx >= total || fromIdx === toIdx) return;
+    const newPlan = [...project.plan];
+    const [movedItem] = newPlan.splice(fromIdx, 1);
+    newPlan.splice(toIdx, 0, movedItem);
+    const reindexed = autoAssignTaskIndices(newPlan);
+    updateProjectPlan(project.id, reindexed);
+    refreshProjectData();
+  };
+
+  const handleMovePlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
+    if (!project) return;
+    const targetRow = typeof targetRowVal === "number" ? targetRowVal : parseInt(String(targetRowVal).trim(), 10);
+    const total = project.plan.length;
+    if (isNaN(targetRow) || targetRow < 1 || targetRow > total) return;
+    const toIdx = targetRow - 1;
+    if (toIdx === fromIdx) return;
+    handleMovePlanRow(fromIdx, toIdx);
+  };
+
+  const handleMoveTempPlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
+    const targetRow = typeof targetRowVal === "number" ? targetRowVal : parseInt(String(targetRowVal).trim(), 10);
+    const total = tempPlan.length;
+    if (isNaN(targetRow) || targetRow < 1 || targetRow > total) return;
+    const toIdx = targetRow - 1;
+    if (toIdx === fromIdx) return;
+    setTempPlan(prev => {
+      const next = [...prev];
+      const [dragged] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, dragged);
+      return autoAssignTaskIndices(next);
+    });
+  };
+
+  const handleMoveModeDragStart = (idx: number) => {
+    setMoveModeDragIdx(idx);
+  };
+
+  const handleMoveModeDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setMoveModeOverIdx(idx);
+  };
+
+  const handleMoveModeDrop = (idx: number) => {
+    if (moveModeDragIdx === null || moveModeDragIdx === idx) {
+      setMoveModeDragIdx(null);
+      setMoveModeOverIdx(null);
+      return;
+    }
+    handleMovePlanRow(moveModeDragIdx, idx);
+    setMoveModeDragIdx(null);
+    setMoveModeOverIdx(null);
+  };
+
+  const handleMoveModeDragEnd = () => {
+    setMoveModeDragIdx(null);
+    setMoveModeOverIdx(null);
   };
 
   // Normalization helper for dates
@@ -1951,7 +2021,9 @@ export default function ProjectDetailPage() {
                 <p className="text-xs text-slate-500">
                   {isEditingPlan 
                     ? "Đang chỉnh sửa kế hoạch. Bấm ▲/▼ để đổi vị trí, hoặc thêm hàng bằng nút trên." 
-                    : "Xem tiến độ chi tiết. Bấm 'Chỉnh sửa' hoặc nút 'Sửa' của công việc để điều chỉnh."}
+                    : isMoveMode
+                    ? "Chế độ di chuyển: Nhập số hàng vào ô để chuyển vị trí, hoặc dùng nút ▲/▼ / kéo thả hàng."
+                    : "Xem tiến độ chi tiết. Bấm 'Di chuyển' để đổi thứ tự hàng, hoặc 'Chỉnh sửa' để sửa toàn bộ."}
                 </p>
               </div>
               
@@ -2012,6 +2084,19 @@ export default function ProjectDetailPage() {
                   >
                     <Edit size={14} />
                     <span>Chỉnh sửa</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsMoveMode(!isMoveMode)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      isMoveMode
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700 shadow-sm ring-2 ring-indigo-200"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-250"
+                    }`}
+                    title={isMoveMode ? "Thoát chế độ di chuyển hàng" : "Bật chế độ di chuyển hàng (kéo thả hoặc nhập số hàng)"}
+                  >
+                    <ArrowUpDown size={14} className={isMoveMode ? "text-white" : "text-slate-600"} />
+                    <span>{isMoveMode ? "Xong di chuyển" : "Di chuyển"}</span>
                   </button>
                   <button
                     onClick={handleAddPhaseClick}
@@ -2166,11 +2251,36 @@ export default function ProjectDetailPage() {
               )}
             </div>
 
+            {/* Move Mode Notice Banner */}
+            {isMoveMode && (
+              <div className="mx-6 my-2.5 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between gap-3 text-xs text-indigo-900 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                  </span>
+                  <span>
+                    <strong>Chế độ Di chuyển hàng đang bật:</strong> Bạn có thể nhập số hàng mới vào ô tại cột <strong>"Hàng"</strong> rồi nhấn <strong>Enter</strong> để chuyển ngay đến vị trí đó, hoặc dùng nút <strong>▲ / ▼</strong>, hoặc kéo thả hàng.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMoveMode(false)}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shrink-0"
+                >
+                  Xong di chuyển
+                </button>
+              </div>
+            )}
+
             {/* Plan Spreadsheet Table Container with Sticky Header & Scrollable Body */}
             <div className={`overflow-x-auto overflow-y-auto ${isHeaderHidden ? "h-[calc(100vh-125px)] min-h-[500px]" : "h-[calc(100vh-275px)] min-h-[420px]"} relative bg-white scrollbar-thin`}>
               <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                 <thead className="select-none">
                   <tr className="bg-[#1E40AF] text-white">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-16 whitespace-nowrap shadow-sm">
+                      Hàng
+                    </th>
                     <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
                       No
                     </th>
@@ -2210,7 +2320,7 @@ export default function ProjectDetailPage() {
                   {isEditingPlan ? (
                     tempPlan.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
+                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
                           Chưa có công việc nào. Hãy thêm Phase, Main task hoặc Sub task bằng các nút phía trên.
                         </td>
                       </tr>
@@ -2239,7 +2349,28 @@ export default function ProjectDetailPage() {
                                 : 'border-slate-200 bg-white hover:bg-slate-50/40'
                             }`}
                           >
-                            <td className="p-1 text-center border-b border-r border-slate-200 select-none w-8 whitespace-nowrap">
+                            {/* Cột Hàng */}
+                            <td className="p-1 text-center border-b border-r border-slate-200 select-none w-16 whitespace-nowrap bg-blue-50/30">
+                              <input
+                                type="number"
+                                min={1}
+                                max={tempPlan.length}
+                                defaultValue={idx + 1}
+                                key={`temp-row-${task.id || idx}-${idx + 1}`}
+                                onBlur={(e) => handleMoveTempPlanRowToPosition(idx, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleMoveTempPlanRowToPosition(idx, (e.target as HTMLInputElement).value);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                className="w-10 text-center font-mono text-xs font-bold bg-white border border-slate-300 rounded px-1 py-0.5 text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                title="Nhập số hàng và bấm Enter để chuyển đến vị trí mới"
+                              />
+                            </td>
+
+                            {/* Cột No */}
+                            <td className="p-1 text-center border-b border-r border-slate-200 select-none w-14 whitespace-nowrap">
                               <div className="flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing" title="Kéo để di chuyển">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 hover:text-blue-500 transition">
                                   <circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/>
@@ -2422,7 +2553,7 @@ export default function ProjectDetailPage() {
                     // READ ONLY VIEW
                     project.plan.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
+                        <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
                           Chưa có công việc nào được thiết lập. Hãy bấm Chỉnh sửa hoặc thêm mới để bắt đầu.
                         </td>
                       </tr>
@@ -2436,17 +2567,85 @@ export default function ProjectDetailPage() {
                         return (
                           <tr 
                             key={task.id || idx} 
+                            draggable={isMoveMode}
+                            onDragStart={() => handleMoveModeDragStart(idx)}
+                            onDragOver={(e) => handleMoveModeDragOver(e, idx)}
+                            onDrop={() => handleMoveModeDrop(idx)}
+                            onDragEnd={handleMoveModeDragEnd}
                             className={`border-b border-slate-200 transition ${
-                              isPhase
+                              isMoveMode && moveModeOverIdx === idx && moveModeDragIdx !== idx
+                                ? "border-indigo-400 bg-indigo-100/70 ring-2 ring-indigo-400"
+                                : isPhase
                                 ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
                                 : isMain
                                 ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
                                 : "bg-white hover:bg-slate-50/40 text-slate-700"
                             }`}
                           >
-                            {/* STT */}
-                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap">
-                              {task.taskIndex}
+                            {/* Cột Hàng (1, 2, 3...) */}
+                            {isMoveMode ? (
+                              <td className="py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 w-16 select-none">
+                                <div className="inline-flex items-center justify-center gap-0.5">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={project.plan.length}
+                                    defaultValue={idx + 1}
+                                    key={`move-input-${task.id || idx}-${idx + 1}`}
+                                    onBlur={(e) => handleMovePlanRowToPosition(idx, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleMovePlanRowToPosition(idx, (e.target as HTMLInputElement).value);
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    className="w-9 text-center font-mono text-xs font-black bg-white border border-indigo-400 text-indigo-800 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                                    title="Nhập số hàng và bấm Enter để chuyển đến vị trí đó"
+                                  />
+                                  <div className="flex flex-col">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMovePlanRow(idx, idx - 1);
+                                      }}
+                                      className="p-0.5 hover:bg-indigo-200 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none"
+                                      title="Chuyển lên 1 hàng"
+                                    >
+                                      <ArrowUp size={10} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === project.plan.length - 1}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMovePlanRow(idx, idx + 1);
+                                      }}
+                                      className="p-0.5 hover:bg-indigo-200 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none"
+                                      title="Chuyển xuống 1 hàng"
+                                    >
+                                      <ArrowDown size={10} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            ) : (
+                              <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
+                                {idx + 1}
+                              </td>
+                            )}
+
+                            {/* Cột No (1, 1.1, 1.1.1...) */}
+                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
+                              {isMoveMode ? (
+                                <div className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-indigo-700 font-bold" title="Kéo để di chuyển hàng">
+                                  <GripVertical size={13} className="text-indigo-400 shrink-0" />
+                                  <span>{task.taskIndex}</span>
+                                </div>
+                              ) : (
+                                <span>{task.taskIndex}</span>
+                              )}
                             </td>
 
                             {/* Công việc */}
