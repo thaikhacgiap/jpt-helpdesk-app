@@ -717,6 +717,21 @@ export default function ProjectDetailPage() {
 
   
   // Inline Plan Table Operations (directly edit without entering edit mode)
+  const handleInlineTaskFieldChange = (idx: number, field: keyof ProjectTask, value: any) => {
+    if (!project) return;
+    const currentVal = project.plan[idx]?.[field];
+    if (currentVal === value) return;
+
+    const newPlan = [...project.plan];
+    newPlan[idx] = {
+      ...newPlan[idx],
+      [field]: value
+    };
+
+    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
+    updateProjectPlan(project.id, newPlan);
+  };
+
   const handleInlineTaskStatusChange = (task: ProjectTask, idx: number, newStatus: ProjectTask["status"]) => {
     if (!project) return;
     let newProgress = task.progress;
@@ -732,8 +747,8 @@ export default function ProjectDetailPage() {
       actualEndDate: newStatus === "Completed" ? (newPlan[idx].actualEndDate || new Date().toISOString().split("T")[0]) : (newStatus === "Todo" ? "" : newPlan[idx].actualEndDate)
     };
 
+    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
     updateProjectPlan(project.id, newPlan);
-    refreshProjectData();
   };
 
   const handleInlineTaskProgressChange = (task: ProjectTask, idx: number, progressVal: number) => {
@@ -753,8 +768,8 @@ export default function ProjectDetailPage() {
       actualEndDate: validProgress === 100 ? (newPlan[idx].actualEndDate || new Date().toISOString().split("T")[0]) : (validProgress === 0 ? "" : newPlan[idx].actualEndDate)
     };
 
+    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
     updateProjectPlan(project.id, newPlan);
-    refreshProjectData();
   };
 
   const handleInlineTaskNotesBlur = (task: ProjectTask, idx: number, newNotes: string) => {
@@ -765,8 +780,8 @@ export default function ProjectDetailPage() {
       ...newPlan[idx],
       notes: newNotes.trim()
     };
+    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
     updateProjectPlan(project.id, newPlan);
-    refreshProjectData();
   };
 
   const handleDeletePlanTask = (task: ProjectTask, idx: number) => {
@@ -774,13 +789,13 @@ export default function ProjectDetailPage() {
     if (window.confirm(`Bạn có chắc chắn muốn xóa công việc "${task.title}"?`)) {
       const newPlan = project.plan.filter((_, i) => i !== idx);
       const reindexed = autoAssignTaskIndices(newPlan);
+      setProject(prev => prev ? { ...prev, plan: reindexed } : null);
       updateProjectPlan(project.id, reindexed);
       addDiaryEntry(project.id, {
         author: "John D.",
         content: `Đã xóa công việc: "${task.title}"`,
         category: "Update"
       });
-      refreshProjectData();
     }
   };
 
@@ -2718,60 +2733,97 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
-                              {isPhase
-                                ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()
-                                : (formatDate(task.startDate) || '—')}
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                              {isPhase ? (
+                                <span className="text-[11px] font-semibold text-blue-900">
+                                  {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()}
+                                </span>
+                              ) : (
+                                <input
+                                  type="date"
+                                  value={task.startDate || ""}
+                                  onChange={(e) => handleInlineTaskFieldChange(idx, "startDate", e.target.value)}
+                                  className="w-full px-1.5 py-0.5 border border-slate-200/90 hover:border-blue-400 focus:border-blue-500 rounded text-xs text-slate-700 bg-white outline-none cursor-pointer text-center transition"
+                                  title="Bấm để chọn thời gian bắt đầu"
+                                />
+                              )}
                             </td>
 
                             {/* End Date */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
-                              {isPhase
-                                ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()
-                                : (formatDate(task.endDate) || '—')}
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                              {isPhase ? (
+                                <span className="text-[11px] font-semibold text-blue-900">
+                                  {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()}
+                                </span>
+                              ) : (
+                                <input
+                                  type="date"
+                                  value={task.endDate || ""}
+                                  onChange={(e) => handleInlineTaskFieldChange(idx, "endDate", e.target.value)}
+                                  className="w-full px-1.5 py-0.5 border border-slate-200/90 hover:border-blue-400 focus:border-blue-500 rounded text-xs text-slate-700 bg-white outline-none cursor-pointer text-center transition"
+                                  title="Bấm để chọn thời gian kết thúc"
+                                />
+                              )}
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
-                              {isPhase ? '—' : (formatDate(task.actualStartDate) || '—')}
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                              {isPhase ? (
+                                <span className="text-slate-400 text-xs">—</span>
+                              ) : (
+                                <input
+                                  type="date"
+                                  value={task.actualStartDate || ""}
+                                  onChange={(e) => handleInlineTaskFieldChange(idx, "actualStartDate", e.target.value)}
+                                  className="w-full px-1.5 py-0.5 border border-slate-200/90 hover:border-blue-400 focus:border-blue-500 rounded text-xs text-slate-700 bg-white outline-none cursor-pointer text-center transition"
+                                  title="Bấm để chọn thời gian bắt đầu thực tế"
+                                />
+                              )}
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
-                              {isPhase
-                                ? (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-600 font-bold">{formatDate(s.actualEndDate)}</span> : '—'; })()
-                                : (formatDate(task.actualEndDate) || '—')}
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                              {isPhase ? (
+                                (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-700 font-bold text-xs">{formatDate(s.actualEndDate)}</span> : <span className="text-slate-400 text-xs">—</span>; })()
+                              ) : (
+                                <input
+                                  type="date"
+                                  value={task.actualEndDate || ""}
+                                  onChange={(e) => handleInlineTaskFieldChange(idx, "actualEndDate", e.target.value)}
+                                  className="w-full px-1.5 py-0.5 border border-slate-200/90 hover:border-blue-400 focus:border-blue-500 rounded text-xs text-slate-700 bg-white outline-none cursor-pointer text-center transition"
+                                  title="Bấm để chọn thời gian kết thúc thực tế"
+                                />
+                              )}
                             </td>
 
-                            {/* Assignee (Show truncate with ... if too long) */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {/* Assignee - inline editable via StaffSearchSelect */}
+                            <td className="py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap">
                               {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
                                 return assignees.length > 0 ? (
                                   <div className="flex items-center justify-center">
                                     <span 
-                                      className="inline-block max-w-[130px] truncate text-[11px] px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full font-semibold align-middle"
+                                      className="inline-block max-w-[140px] truncate text-[11px] px-2 py-0.5 bg-blue-100/80 border border-blue-300 text-blue-900 rounded-full font-bold align-middle"
                                       title={assignees.join(', ')}
                                     >
                                       {assignees.join(', ')}
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400">—</span>
+                                  <span className="text-slate-400 italic text-[10px]">Tự động từ tasks</span>
                                 );
                               })() : (
-                                task.assignee ? (
-                                  <div className="flex items-center justify-center">
-                                    <span 
-                                      className="inline-block max-w-[130px] truncate text-[11px] px-2.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-full font-semibold align-middle"
-                                      title={task.assignee}
-                                    >
-                                      {task.assignee}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-400">—</span>
-                                )
+                                <div className="w-full min-w-[140px] max-w-[200px] mx-auto">
+                                  <StaffSearchSelect
+                                    mode="multiple"
+                                    size="sm"
+                                    staffList={staffList}
+                                    value={task.assignee || ''}
+                                    outputFormat="string"
+                                    onChange={(val) => handleInlineTaskFieldChange(idx, 'assignee', val as string)}
+                                    placeholder="Chọn nhân sự..."
+                                  />
+                                </div>
                               )}
                             </td>
 
