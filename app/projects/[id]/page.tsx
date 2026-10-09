@@ -2102,37 +2102,37 @@ export default function ProjectDetailPage() {
               <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                 <thead className="select-none">
                   <tr className="bg-[#1E40AF] text-white">
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
                       No
                     </th>
-                    <th className="py-3 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[280px] whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[280px] whitespace-nowrap shadow-sm">
                       Công việc
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
                       Thời gian bắt đầu
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
                       Thời gian kết thúc
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
                       Thời gian bắt đầu thực tế
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
                       Thời gian kết thúc thực tế
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[140px] whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[140px] whitespace-nowrap shadow-sm">
                       Người thực hiện
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
                       % Hoàn thành
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
                       Trạng thái
                     </th>
-                    <th className="py-3 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[160px] whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[160px] whitespace-nowrap shadow-sm">
                       Ghi chú
                     </th>
-                    <th className="py-3 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-20 whitespace-nowrap shadow-sm">
+                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-20 whitespace-nowrap shadow-sm">
                       Thao tác
                     </th>
                   </tr>
@@ -2376,12 +2376,12 @@ export default function ProjectDetailPage() {
                             }`}
                           >
                             {/* STT */}
-                            <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap">
                               {task.taskIndex}
                             </td>
 
                             {/* Công việc */}
-                            <td className="py-2.5 px-3 border-b border-r border-slate-200 whitespace-nowrap">
+                            <td className="py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap">
                               {isPhase ? (
                                 <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide whitespace-nowrap" title={task.title}>{task.title}</span>
                               ) : isMain ? (
@@ -2395,33 +2395,33 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()
                                 : (formatDate(task.startDate) || '—')}
                             </td>
 
                             {/* End Date */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()
                                 : (formatDate(task.endDate) || '—')}
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? '—' : (formatDate(task.actualStartDate) || '—')}
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase
                                 ? (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-600 font-bold">{formatDate(s.actualEndDate)}</span> : '—'; })()
                                 : (formatDate(task.actualEndDate) || '—')}
                             </td>
 
                             {/* Assignee (Show truncate with ... if too long) */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
                               {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
                                 return assignees.length > 0 ? (
@@ -2453,15 +2453,15 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Progress */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-center font-extrabold text-slate-800 text-xs whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center font-extrabold text-slate-800 text-xs whitespace-nowrap">
                               {isPhase
                                 ? `${getPhaseStats(project.plan, idx).progress}%`
                                 : `${task.progress}%`}
                             </td>
 
                             {/* Status */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
-                              <span className={`inline-block px-2.5 py-1 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                              <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
                                 task.status === 'Completed' 
                                    ? 'bg-[#2ecc71] text-white' 
                                    : task.status === 'In Progress' 
@@ -2477,12 +2477,12 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Notes */}
-                            <td className="py-2.5 px-3 border-b border-r border-slate-200 text-slate-500 italic max-w-[180px] truncate whitespace-nowrap" title={task.notes || ""}>
+                            <td className="py-1 px-3 border-b border-r border-slate-200 text-slate-500 italic max-w-[180px] truncate whitespace-nowrap" title={task.notes || ""}>
                               {task.notes || "—"}
                             </td>
 
                             {/* Action column (Sửa button) */}
-                            <td className="py-2.5 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
                               {!isPhase && (
                                 <button
                                   type="button"
