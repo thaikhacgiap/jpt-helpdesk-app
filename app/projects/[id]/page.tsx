@@ -229,6 +229,55 @@ const getSowStatusClass = (status: string) => {
   }
 };
 
+// Dedicated component for moving rows by direct number input
+function MoveRowInput({
+  rowIndex,
+  totalRows,
+  onMoveToRow,
+}: {
+  rowIndex: number;
+  totalRows: number;
+  onMoveToRow: (fromIdx: number, targetRow: number) => void;
+}) {
+  const currentNum = rowIndex + 1;
+  const [val, setVal] = useState<string>(String(currentNum));
+
+  useEffect(() => {
+    setVal(String(rowIndex + 1));
+  }, [rowIndex]);
+
+  const submitChange = (newValStr: string) => {
+    const num = parseInt(newValStr.trim(), 10);
+    if (isNaN(num) || num < 1 || num > totalRows || num === currentNum) {
+      setVal(String(currentNum));
+      return;
+    }
+    onMoveToRow(rowIndex, num);
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={totalRows}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitChange(val);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      onBlur={() => {
+        submitChange(val);
+      }}
+      className="w-10 text-center font-mono text-xs font-black bg-white border border-indigo-400 text-indigo-850 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+      title="Nhập số hàng và nhấn Enter để chuyển đến vị trí cần"
+    />
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -604,7 +653,12 @@ export default function ProjectDetailPage() {
 
   // Helper to determine 3-level hierarchy: 1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task
   const resolveTaskLevel = (task: ProjectTask): 'Phase' | 'Main task' | 'Sub task' => {
-    // 1. Primary rule: Determine by taskIndex (STT)
+    // 1. Primary rule: Explicit level property on task
+    if (task.level === 'phase' || task.isHeader) return 'Phase';
+    if (task.level === 'sub') return 'Sub task';
+    if (task.level === 'main') return 'Main task';
+
+    // 2. Secondary rule: Determine by taskIndex (STT) if level not set
     if (task.taskIndex) {
       const clean = String(task.taskIndex).trim();
       const dots = (clean.match(/\./g) || []).length;
@@ -612,10 +666,6 @@ export default function ProjectDetailPage() {
       if (dots === 1) return 'Main task';
       if (dots === 0 && (/^\d+$/.test(clean) || clean.toLowerCase().includes('phase'))) return 'Phase';
     }
-    // 2. Secondary rule: Level property
-    if (task.level === 'phase' || task.isHeader) return 'Phase';
-    if (task.level === 'sub') return 'Sub task';
-    if (task.level === 'main') return 'Main task';
     return 'Main task';
   };
 
@@ -927,8 +977,12 @@ export default function ProjectDetailPage() {
     const [movedItem] = newPlan.splice(fromIdx, 1);
     newPlan.splice(toIdx, 0, movedItem);
     const reindexed = autoAssignTaskIndices(newPlan);
+    
+    // Cập nhật state trực tiếp ngay lập tức - tránh race condition với async Supabase fetch
+    setProject(prev => prev ? { ...prev, plan: reindexed } : null);
+    
+    // Lưu vào LocalStorage và đồng bộ Supabase ngầm
     updateProjectPlan(project.id, reindexed);
-    refreshProjectData();
   };
 
   const handleMovePlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
@@ -961,7 +1015,10 @@ export default function ProjectDetailPage() {
 
   const handleMoveModeDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    setMoveModeOverIdx(idx);
+    e.dataTransfer.dropEffect = "move";
+    if (moveModeOverIdx !== idx) {
+      setMoveModeOverIdx(idx);
+    }
   };
 
   const handleMoveModeDrop = (idx: number) => {
@@ -2334,14 +2391,13 @@ export default function ProjectDetailPage() {
                         return (
                           <tr 
                             key={task.id || idx} 
-                            draggable
-                            onDragStart={() => handleDragStart(idx)}
                             onDragOver={(e) => handleDragOver(e, idx)}
                             onDrop={() => handleDrop(idx)}
-                            onDragEnd={handleDragEnd}
                             className={`border-b transition ${
                               dragOverIndex === idx && dragIndex !== idx
-                                ? 'border-blue-400 bg-blue-50/60 ring-1 ring-blue-300'
+                                ? 'border-t-2 border-t-blue-500 bg-blue-50/60 ring-1 ring-blue-300'
+                                : dragIndex === idx
+                                ? 'opacity-40 bg-blue-50/40'
                                 : isPhase
                                 ? 'border-slate-300 bg-[#BFDBFE] font-black text-blue-950'
                                 : isMain
@@ -2351,27 +2407,26 @@ export default function ProjectDetailPage() {
                           >
                             {/* Cột Hàng */}
                             <td className="p-1 text-center border-b border-r border-slate-200 select-none w-16 whitespace-nowrap bg-blue-50/30">
-                              <input
-                                type="number"
-                                min={1}
-                                max={tempPlan.length}
-                                defaultValue={idx + 1}
-                                key={`temp-row-${task.id || idx}-${idx + 1}`}
-                                onBlur={(e) => handleMoveTempPlanRowToPosition(idx, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleMoveTempPlanRowToPosition(idx, (e.target as HTMLInputElement).value);
-                                    (e.target as HTMLInputElement).blur();
-                                  }
-                                }}
-                                className="w-10 text-center font-mono text-xs font-bold bg-white border border-slate-300 rounded px-1 py-0.5 text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                title="Nhập số hàng và bấm Enter để chuyển đến vị trí mới"
+                              <MoveRowInput
+                                rowIndex={idx}
+                                totalRows={tempPlan.length}
+                                onMoveToRow={handleMoveTempPlanRowToPosition}
                               />
                             </td>
 
                             {/* Cột No */}
                             <td className="p-1 text-center border-b border-r border-slate-200 select-none w-14 whitespace-nowrap">
-                              <div className="flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing" title="Kéo để di chuyển">
+                              <div 
+                                draggable={true}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.effectAllowed = "move";
+                                  e.dataTransfer.setData("text/plain", `${idx}`);
+                                  handleDragStart(idx);
+                                }}
+                                onDragEnd={handleDragEnd}
+                                className="flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-blue-100" 
+                                title="Kéo biểu tượng này để di chuyển hàng"
+                              >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 hover:text-blue-500 transition">
                                   <circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/>
                                   <circle cx="15" cy="5" r="1" fill="currentColor" stroke="none"/>
@@ -2567,14 +2622,13 @@ export default function ProjectDetailPage() {
                         return (
                           <tr 
                             key={task.id || idx} 
-                            draggable={isMoveMode}
-                            onDragStart={() => handleMoveModeDragStart(idx)}
-                            onDragOver={(e) => handleMoveModeDragOver(e, idx)}
-                            onDrop={() => handleMoveModeDrop(idx)}
-                            onDragEnd={handleMoveModeDragEnd}
+                            onDragOver={(e) => isMoveMode && handleMoveModeDragOver(e, idx)}
+                            onDrop={(e) => isMoveMode && handleMoveModeDrop(idx)}
                             className={`border-b border-slate-200 transition ${
                               isMoveMode && moveModeOverIdx === idx && moveModeDragIdx !== idx
-                                ? "border-indigo-400 bg-indigo-100/70 ring-2 ring-indigo-400"
+                                ? "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs"
+                                : isMoveMode && moveModeDragIdx === idx
+                                ? "opacity-40 bg-indigo-50/50"
                                 : isPhase
                                 ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
                                 : isMain
@@ -2586,46 +2640,37 @@ export default function ProjectDetailPage() {
                             {isMoveMode ? (
                               <td className="py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 w-16 select-none">
                                 <div className="inline-flex items-center justify-center gap-0.5">
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={project.plan.length}
-                                    defaultValue={idx + 1}
-                                    key={`move-input-${task.id || idx}-${idx + 1}`}
-                                    onBlur={(e) => handleMovePlanRowToPosition(idx, e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        handleMovePlanRowToPosition(idx, (e.target as HTMLInputElement).value);
-                                        (e.target as HTMLInputElement).blur();
-                                      }
-                                    }}
-                                    className="w-9 text-center font-mono text-xs font-black bg-white border border-indigo-400 text-indigo-800 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
-                                    title="Nhập số hàng và bấm Enter để chuyển đến vị trí đó"
+                                  <MoveRowInput
+                                    rowIndex={idx}
+                                    totalRows={project.plan.length}
+                                    onMoveToRow={handleMovePlanRowToPosition}
                                   />
                                   <div className="flex flex-col">
                                     <button
                                       type="button"
                                       disabled={idx === 0}
                                       onClick={(e) => {
+                                        e.preventDefault();
                                         e.stopPropagation();
                                         handleMovePlanRow(idx, idx - 1);
                                       }}
-                                      className="p-0.5 hover:bg-indigo-200 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none"
+                                      className="p-1 hover:bg-indigo-200 active:bg-indigo-300 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none transition"
                                       title="Chuyển lên 1 hàng"
                                     >
-                                      <ArrowUp size={10} />
+                                      <ArrowUp size={11} />
                                     </button>
                                     <button
                                       type="button"
                                       disabled={idx === project.plan.length - 1}
                                       onClick={(e) => {
+                                        e.preventDefault();
                                         e.stopPropagation();
                                         handleMovePlanRow(idx, idx + 1);
                                       }}
-                                      className="p-0.5 hover:bg-indigo-200 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none"
+                                      className="p-1 hover:bg-indigo-200 active:bg-indigo-300 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none transition"
                                       title="Chuyển xuống 1 hàng"
                                     >
-                                      <ArrowDown size={10} />
+                                      <ArrowDown size={11} />
                                     </button>
                                   </div>
                                 </div>
@@ -2639,8 +2684,18 @@ export default function ProjectDetailPage() {
                             {/* Cột No (1, 1.1, 1.1.1...) */}
                             <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
                               {isMoveMode ? (
-                                <div className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-indigo-700 font-bold" title="Kéo để di chuyển hàng">
-                                  <GripVertical size={13} className="text-indigo-400 shrink-0" />
+                                <div 
+                                  draggable={true}
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = "move";
+                                    e.dataTransfer.setData("text/plain", `${idx}`);
+                                    handleMoveModeDragStart(idx);
+                                  }}
+                                  onDragEnd={handleMoveModeDragEnd}
+                                  className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-indigo-700 font-bold select-none px-1 py-0.5 rounded hover:bg-indigo-100 active:bg-indigo-200 transition"
+                                  title="Giữ chuột vào đây để kéo hàng đến vị trí mong muốn"
+                                >
+                                  <GripVertical size={14} className="text-indigo-500 shrink-0" />
                                   <span>{task.taskIndex}</span>
                                 </div>
                               ) : (
