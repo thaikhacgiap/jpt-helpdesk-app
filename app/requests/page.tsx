@@ -47,6 +47,14 @@ import {
   Briefcase
 } from "lucide-react";
 
+export const TT_TYPE_OPTIONS = [
+  "Xử Lý Sự Cố",
+  "Hỗ Trợ Kỹ Thuật",
+  "Điều Chỉnh/Thay đổi hệ thống",
+  "Bảo Trì",
+  "Triển Khai Dự Án"
+];
+
 const getLocalDateTimeString = (dateInput?: Date | string | null): string => {
   if (!dateInput) return "";
   const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
@@ -71,6 +79,41 @@ export default function RequestsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  // Helper to find linked ticket and resolve synchronized data (Request Time, Status, Complete Time)
+  const findLinkedTicket = (t: ServiceTicket) => {
+    if (!customerTickets || customerTickets.length === 0) return null;
+    if (t.document_link && t.document_link.startsWith("TK-")) {
+      const found = customerTickets.find(x => x.ticket_id === t.document_link || x.id === t.document_link);
+      if (found) return found;
+    }
+    const crCode = t.ticket_id.replace(/^TH-/, "CR-").toUpperCase();
+    const thCode = t.ticket_id.replace(/^CR-/, "TH-").toUpperCase();
+    const rawId = t.ticket_id.toUpperCase();
+    const foundByReqCode = customerTickets.find(x => {
+      if (!x.ticket_id.startsWith("TK-")) return false;
+      const rc = ((x as any).request_code || "").toUpperCase();
+      return rc === crCode || rc === thCode || rc === rawId;
+    });
+    if (foundByReqCode) return foundByReqCode;
+
+    const foundByRemark = customerTickets.find(x => {
+      if (!x.ticket_id.startsWith("TK-")) return false;
+      const remark = (x.remark || "").toUpperCase();
+      return remark.includes(crCode) || remark.includes(rawId);
+    });
+    return foundByRemark || null;
+  };
+
+  const getRequestLinkedData = (t: ServiceTicket) => {
+    const linked = findLinkedTicket(t);
+    const requestTime = linked?.request_time || (linked as any)?.requestTime || t.request_time || (t as any)?.requestTime || t.start_time || t.created_at;
+    const status = linked?.tt_status || t.tt_status || "New";
+    const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || (t as any)?.tt_close_time || (t as any)?.close_time || t.end_time || null;
+    const linkedCode = linked ? linked.ticket_id : (t.document_link && t.document_link.startsWith("TK-") ? t.document_link : null);
+
+    return { linked, requestTime, status, completeTime, linkedCode };
+  };
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -335,21 +378,23 @@ export default function RequestsPage() {
       desc = desc.substring(0, incidentInfoIndex);
     }
 
+    const { linked, requestTime, status, completeTime } = getRequestLinkedData(ticket);
+
     setCustomerFormData({
-      customerId: ticket.customer_id || "",
+      customerId: ticket.customer_id || (linked ? linked.customer_id : "") || "",
       title: ticket.title || "",
       description: desc,
-      tt_type: ticket.tt_type || "",
-      category: ticket.category || "",
-      priority: ticket.priority || "Medium",
-      contract_no: contractNo,
-      incident_start_time: getLocalDateTimeString((ticket as any).event_time || ticket.start_time),
-      affected_service: ticket.hold_reason || "",
-      requester: requesterName || ticket.creator_name || "",
-      assigned: ticket.assigned || "",
-      receive_time: getLocalDateTimeString(ticket.start_time || ticket.created_at),
-      end_time: getLocalDateTimeString(ticket.end_time),
-      tt_status: ticket.tt_status || "New"
+      tt_type: ticket.tt_type || (linked ? linked.tt_type : "") || "",
+      category: ticket.category || (linked ? linked.category : "") || "",
+      priority: ticket.priority || (linked ? linked.priority : "Medium") || "Medium",
+      contract_no: contractNo || (linked as any)?.contract_no || "",
+      incident_start_time: getLocalDateTimeString((ticket as any).event_time || ticket.start_time || linked?.start_time),
+      affected_service: ticket.hold_reason || (linked as any)?.hold_reason || "",
+      requester: requesterName || ticket.creator_name || (linked as any)?.creator_name || "",
+      assigned: ticket.assigned || (linked ? linked.assigned : "") || "",
+      receive_time: getLocalDateTimeString(requestTime),
+      end_time: getLocalDateTimeString(completeTime),
+      tt_status: status
     });
     setError("");
     setIsCustomerModalOpen(true);
@@ -443,8 +488,25 @@ export default function RequestsPage() {
       if (editingCustomerTicket) {
         await updateServiceTicket(editingCustomerTicket.id, {
           ...updateData,
+          request_time: startTimeValue,
+          close_time: endTimeValue,
+          tt_close_time: endTimeValue,
           customer_id: customerFormData.customerId
         });
+
+        // Sync to linked ticket if present
+        const linked = findLinkedTicket(editingCustomerTicket);
+        if (linked) {
+          await updateServiceTicket(linked.id, {
+            request_time: startTimeValue,
+            tt_status: customerFormData.tt_status,
+            end_time: endTimeValue,
+            close_time: endTimeValue,
+            tt_close_time: endTimeValue,
+            tt_type: customerFormData.tt_type,
+            category: customerFormData.category
+          });
+        }
       } else {
         await createServiceRequest(customerFormData.customerId, {
           title: customerFormData.title.trim(),
@@ -985,22 +1047,46 @@ export default function RequestsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "New":
+    const s = (status || "").toLowerCase().trim();
+    switch (s) {
+      case "new":
         return "bg-blue-50 text-blue-700 border-blue-200";
-      case "In Progress":
+      case "in progress":
         return "bg-amber-50 text-amber-700 border-amber-200";
-      case "Completed":
-      case "Resolved":
+      case "completed":
+      case "resolved":
         return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "Rejected":
-      case "Closed":
+      case "rejected":
+      case "cancel":
+      case "closed":
         return "bg-rose-50 text-rose-700 border-rose-200";
-      case "On Hold":
+      case "on hold":
+      case "reporting":
         return "bg-purple-50 text-purple-700 border-purple-200";
       default:
         return "bg-slate-50 text-slate-650 border-slate-200";
     }
+  };
+
+  const getTtTypeBadge = (type?: string) => {
+    if (!type) return "bg-slate-50 text-slate-650 border-slate-200";
+    const t = type.toLowerCase();
+    if (t.includes("sự cố") || t.includes("lỗi")) {
+      return "bg-red-50 text-red-700 border-red-200";
+    }
+    if (t.includes("hỗ trợ kỹ thuật") || t.includes("htkt") || t.includes("tư vấn")) {
+      return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+    if (t.includes("điều chỉnh") || t.includes("thay đổi")) {
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    }
+    if (t.includes("bảo trì")) {
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    }
+    if (t.includes("triển khai")) {
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    }
+    return "bg-slate-50 text-slate-650 border-slate-200";
   };
 
   const getTypeColor = (type: RequestTask["type"]) => {
@@ -1020,6 +1106,8 @@ export default function RequestsPage() {
     // Only show customer requests from portal (which start with 'TH-' or 'CR-')
     if (!t.ticket_id.startsWith("TH-") && !t.ticket_id.startsWith("CR-")) return false;
 
+    const { status } = getRequestLinkedData(t);
+
     const query = searchQuery.toLowerCase().trim();
     const altQuery = query.startsWith("cr-")
       ? query.replace(/^cr-/, "th-")
@@ -1038,8 +1126,8 @@ export default function RequestsPage() {
       (t.assigned || "").toLowerCase().includes(query) ||
       (t.remark || "").toLowerCase().includes(query);
 
-    const matchesStatus = statusFilter === "All" || t.tt_status === statusFilter;
-    const matchesType = typeFilter === "All" || t.tt_type === typeFilter;
+    const matchesStatus = statusFilter === "All" || status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesType = typeFilter === "All" || (t.tt_type && t.tt_type.toLowerCase() === typeFilter.toLowerCase());
 
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -1075,13 +1163,13 @@ export default function RequestsPage() {
 
   type TableVariant = "pending" | "in_progress" | "completed";
 
-  const pendingCustomerTickets = filteredCustomerTickets.filter(t => isPendingStatus(t.tt_status));
-  const inProgressCustomerTickets = filteredCustomerTickets.filter(t => isInProgressStatus(t.tt_status));
-  const completedCustomerTickets = filteredCustomerTickets.filter(t => isCompletedStatus(t.tt_status));
+  const pendingCustomerTickets = filteredCustomerTickets.filter(t => isPendingStatus(getRequestLinkedData(t).status));
+  const inProgressCustomerTickets = filteredCustomerTickets.filter(t => isInProgressStatus(getRequestLinkedData(t).status));
+  const completedCustomerTickets = filteredCustomerTickets.filter(t => isCompletedStatus(getRequestLinkedData(t).status));
 
   // Pending counts for tab alert badges
   const totalPendingCustomerCount = customerTickets.filter(
-    t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && isPendingStatus(t.tt_status)
+    t => (t.ticket_id.startsWith("TH-") || t.ticket_id.startsWith("CR-")) && isPendingStatus(getRequestLinkedData(t).status)
   ).length;
 
   const isTaskRequestItem = (req: RequestTask) => 
@@ -1182,7 +1270,7 @@ export default function RequestsPage() {
                 <th className="px-4 py-1.5 min-w-[180px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả HĐ</th>
                 <th className="px-4 py-1.5 min-w-[140px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Khách hàng</th>
                 <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Người tiếp nhận</th>
-                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian tiếp nhận</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian yêu cầu</th>
                 <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian hoàn thành</th>
                 <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Ticket liên kết</th>
                 <th className="px-4 py-1.5 text-center w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thao tác</th>
@@ -1200,8 +1288,9 @@ export default function RequestsPage() {
                 list.map((t) => {
                   const customer = dbCustomers.find(c => c.id === t.customer_id);
                   const customerName = customer ? `${customer.name} (${customer.code})` : "Khách hàng Portal";
-                  const hasLinkedTicket = t.document_link && t.document_link.startsWith("TK-");
                   const contractInfo = getContractInfo(t.remark);
+                  const { linked, requestTime, status, completeTime, linkedCode } = getRequestLinkedData(t);
+                  const hasLinkedTicket = Boolean(linkedCode);
 
                   return (
                     <tr key={t.id} className="hover:bg-blue-50/20 transition text-sm font-normal">
@@ -1217,8 +1306,8 @@ export default function RequestsPage() {
 
                       {/* Trạng thái - Chỉ xem, chỉnh sửa trong modal edit */}
                       <td className="px-4 py-1 whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(t.tt_status)}`}>
-                          {getStatusLabel(t.tt_status)}
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(status)}`}>
+                          {getStatusLabel(status)}
                         </span>
                       </td>
 
@@ -1236,16 +1325,7 @@ export default function RequestsPage() {
 
                       {/* Loại yêu cầu */}
                       <td className="px-4 py-1">
-                        <span className={`px-2 py-0.5 rounded-full text-sm font-normal border whitespace-nowrap ${
-                          t.tt_type === "Xử lý sự cố" || t.tt_type === "Xử lý lỗi" ? "bg-red-50 text-red-700 border-red-200" :
-                          t.tt_type === "HTKT thông thường" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                          t.tt_type === "HTKT nâng cao" ? "bg-purple-50 text-purple-700 border-purple-200" :
-                          t.tt_type === "Thay đổi hệ thống" || t.tt_type === "Thay đổi cấu hình" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                          t.tt_type === "Tư vấn kỹ thuật" ? "bg-teal-50 text-teal-700 border-teal-200" :
-                          t.tt_type === "Bảo Trì" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                          t.tt_type === "Triển khai dự án" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
-                          "bg-slate-50 text-slate-600 border-slate-200"
-                        }`}>{t.tt_type || "—"}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-sm font-normal border whitespace-nowrap ${getTtTypeBadge(t.tt_type)}`}>{t.tt_type || "—"}</span>
                       </td>
 
                       {/* Danh mục */}
@@ -1290,25 +1370,25 @@ export default function RequestsPage() {
                         )}
                       </td>
 
-                      {/* Thời gian tiếp nhận */}
+                      {/* Thời gian yêu cầu */}
                       <td className="px-4 py-1 font-mono text-slate-500 text-xs font-normal whitespace-nowrap">
-                        {t.start_time ? formatDate(t.start_time) : <span className="text-slate-300">—</span>}
+                        {requestTime ? formatDate(requestTime) : <span className="text-slate-300">—</span>}
                       </td>
 
                       {/* Thời gian hoàn thành */}
                       <td className="px-4 py-1 font-mono text-slate-500 text-xs font-normal whitespace-nowrap">
-                        {t.end_time ? formatDate(t.end_time) : <span className="text-slate-300">—</span>}
+                        {completeTime ? formatDate(completeTime) : <span className="text-slate-300">—</span>}
                       </td>
 
                       {/* Ticket liên kết */}
                       <td className="px-4 py-1 whitespace-nowrap font-mono text-sm font-normal">
                         {hasLinkedTicket ? (
                           <span
-                            onClick={() => { router.push(`/tickets?search=${t.document_link}`); }}
+                            onClick={() => { router.push(`/tickets?search=${linkedCode}`); }}
                             className="px-2.5 py-0.5 bg-green-50 text-green-700 border border-green-200/50 rounded-full text-xs font-normal cursor-pointer hover:bg-green-100 transition"
                             title="Bấm để xem chi tiết ticket"
                           >
-                            {t.document_link}
+                            {linkedCode}
                           </span>
                         ) : (
                           <span className="text-slate-300">—</span>
@@ -1755,13 +1835,9 @@ export default function RequestsPage() {
                     className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-normal bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 transition cursor-pointer"
                   >
                     <option value="All">Tất cả loại yêu cầu</option>
-                    <option value="Xử lý sự cố">Xử lý sự cố</option>
-                    <option value="HTKT thông thường">HTKT thông thường</option>
-                    <option value="HTKT nâng cao">HTKT nâng cao</option>
-                    <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
-                    <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
-                    <option value="Bảo Trì">Bảo Trì</option>
-                    <option value="Triển khai dự án">Triển khai dự án</option>
+                    {TT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
                   </select>
                 ) : (
                   <select
@@ -2698,14 +2774,10 @@ export default function RequestsPage() {
                           required
                           className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                         >
-                          <option value="">-- Loại --</option>
-                          <option value="Xử lý sự cố">Xử lý sự cố</option>
-                          <option value="HTKT thông thường">HTKT thông thường</option>
-                          <option value="HTKT nâng cao">HTKT nâng cao</option>
-                          <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
-                          <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
-                          <option value="Bảo Trì">Bảo Trì</option>
-                          <option value="Triển khai dự án">Triển khai dự án</option>
+                          <option value="">-- Loại yêu cầu --</option>
+                          {TT_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -2870,14 +2942,10 @@ export default function RequestsPage() {
                           required
                           className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                         >
-                          <option value="">-- Loại --</option>
-                          <option value="Xử lý sự cố">Xử lý sự cố</option>
-                          <option value="HTKT thông thường">HTKT thông thường</option>
-                          <option value="HTKT nâng cao">HTKT nâng cao</option>
-                          <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
-                          <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
-                          <option value="Bảo Trì">Bảo Trì</option>
-                          <option value="Triển khai dự án">Triển khai dự án</option>
+                          <option value="">-- Loại yêu cầu --</option>
+                          {TT_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -3031,7 +3099,7 @@ export default function RequestsPage() {
 
                   {/* Nút Tạo Ticket trong Form */}
                   {editingCustomerTicket && (
-                    !editingCustomerTicket.document_link || !editingCustomerTicket.document_link.startsWith("TK-") ? (
+                    !getRequestLinkedData(editingCustomerTicket).linkedCode ? (
                       <button
                         type="button"
                         onClick={handleModalCreateTicket}
@@ -3045,12 +3113,12 @@ export default function RequestsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          router.push(`/tickets?search=${editingCustomerTicket.document_link}`);
+                          router.push(`/tickets?search=${getRequestLinkedData(editingCustomerTicket).linkedCode}`);
                         }}
                         className="px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl font-medium text-xs transition cursor-pointer flex items-center gap-1.5"
                         title="Xem chi tiết ticket liên kết"
                       >
-                        <span>Đã liên kết: {editingCustomerTicket.document_link}</span>
+                        <span>Đã liên kết: {getRequestLinkedData(editingCustomerTicket).linkedCode}</span>
                       </button>
                     )
                   )}

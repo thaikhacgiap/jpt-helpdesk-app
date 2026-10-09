@@ -77,7 +77,7 @@ interface TicketFormModalProps {
 /* ═══════════════════════════════════════════════════════════ */
 /* Options                                                     */
 /* ═══════════════════════════════════════════════════════════ */
-const TT_TYPE_OPTIONS   = ["Xử lý sự cố", "HTKT thông thường", "HTKT nâng cao", "Thay đổi hệ thống", "Tư vấn kỹ thuật", "Bảo Trì", "Triển khai dự án"];
+const TT_TYPE_OPTIONS   = ["Xử Lý Sự Cố", "Hỗ Trợ Kỹ Thuật", "Điều Chỉnh/Thay đổi hệ thống", "Bảo Trì", "Triển Khai Dự Án"];
 const CATEGORY_OPTIONS  = ["Hardware", "Software", "Network", "Security", "Database", "Cloud", "Other"];
 const PRIORITY_OPTIONS  = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
 const TT_STATUS_OPTIONS = ["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"];

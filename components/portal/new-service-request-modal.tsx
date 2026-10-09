@@ -80,8 +80,8 @@ export default function NewServiceRequestModal({
         category: formData.category,
         priority: "Medium",
         contract_no: formData.contract_no,
-        affected_service: (formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi") ? formData.affected_service : undefined,
-        start_time: (formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi")
+        affected_service: (formData.tt_type === "Xử Lý Sự Cố" || formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi") ? formData.affected_service : undefined,
+        start_time: (formData.tt_type === "Xử Lý Sự Cố" || formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi")
           ? new Date(formData.incident_start_time).toISOString()
           : new Date().toISOString()
       });
@@ -178,13 +178,11 @@ export default function NewServiceRequestModal({
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-xs transition cursor-pointer"
               >
                 <option value="">-- Chọn loại yêu cầu --</option>
-                <option value="Xử lý sự cố">Xử lý sự cố</option>
-                <option value="HTKT thông thường">HTKT thông thường</option>
-                <option value="HTKT nâng cao">HTKT nâng cao</option>
-                <option value="Thay đổi hệ thống">Thay đổi hệ thống</option>
-                <option value="Tư vấn kỹ thuật">Tư vấn kỹ thuật</option>
+                <option value="Xử Lý Sự Cố">Xử Lý Sự Cố</option>
+                <option value="Hỗ Trợ Kỹ Thuật">Hỗ Trợ Kỹ Thuật</option>
+                <option value="Điều Chỉnh/Thay đổi hệ thống">Điều Chỉnh/Thay đổi hệ thống</option>
                 <option value="Bảo Trì">Bảo Trì</option>
-                <option value="Triển khai dự án">Triển khai dự án</option>
+                <option value="Triển Khai Dự Án">Triển Khai Dự Án</option>
               </select>
             </div>
 
@@ -211,7 +209,7 @@ export default function NewServiceRequestModal({
           </div>
 
           {/* Conditional Incident Fields */}
-          {(formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi") && (
+          {(formData.tt_type === "Xử Lý Sự Cố" || formData.tt_type === "Xử lý sự cố" || formData.tt_type === "Xử lý lỗi") && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left animate-fade-in">
               <div>
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">

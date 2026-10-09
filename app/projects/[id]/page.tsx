@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import MainLayout from "@/components/layout/main-layout";
@@ -1814,10 +1814,11 @@ export default function ProjectDetailPage() {
       return { ...t, startIdx: Math.max(0, startIdx), endIdx: Math.max(0, endIdx), color };
     });
 
-    return { tasks, days, monthGroups };
+    const todayIdx = days.findIndex(d => d.isToday);
+    return { tasks, days, monthGroups, todayIdx };
   };
 
-  const gantt = calculateGanttData();
+  const gantt = useMemo(() => calculateGanttData(), [project.plan]);
   const COL_W = 28; // px per day column
 
   return (
@@ -3160,18 +3161,20 @@ export default function ProjectDetailPage() {
                         </div>
 
                         {/* Gantt Day Grid + Bar */}
-                        <div className="flex-1 relative flex items-center">
-                          {/* Day gridlines */}
-                          <div className="absolute inset-0 flex pointer-events-none">
-                            {gantt.days.map((d, di) => (
-                              <div key={di}
-                                className={`border-r border-slate-100 h-full ${
-                                  d.isToday ? 'bg-violet-100/60' : d.isWeekend ? 'bg-slate-50/60' : ''
-                                }`}
-                                style={{ width: COL_W, minWidth: COL_W }}
-                              />
-                            ))}
-                          </div>
+                        <div 
+                          className="flex-1 relative flex items-center h-full overflow-hidden"
+                          style={{
+                            backgroundImage: 'linear-gradient(to right, #f1f5f9 1px, transparent 1px)',
+                            backgroundSize: `${COL_W}px 100%`
+                          }}
+                        >
+                          {/* Today column highlight */}
+                          {gantt.todayIdx !== undefined && gantt.todayIdx >= 0 && (
+                            <div 
+                              className="absolute inset-y-0 bg-violet-100/60 pointer-events-none"
+                              style={{ left: gantt.todayIdx * COL_W, width: COL_W }}
+                            />
+                          )}
 
                           {/* Gantt bar */}
                           {task.startIdx >= 0 && task.endIdx >= task.startIdx && (

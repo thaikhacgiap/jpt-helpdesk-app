@@ -370,9 +370,9 @@ export async function updateTicket(ticketId: string, updates: any): Promise<{ su
     if (ticketId.includes('-')) {
       const { data: ticketData, error: fetchError } = await supabase
         .from('tickets')
-        .select('id')
+        .select('id, request_code')
         .eq('ticket_id', ticketId)
-        .single()
+        .maybeSingle()
 
       if (fetchError || !ticketData) {
         return { success: false, error: 'Ticket not found' }
@@ -393,6 +393,32 @@ export async function updateTicket(ticketId: string, updates: any): Promise<{ su
     if (error) {
       console.error('Error updating ticket:', error)
       return { success: false, error: error.message }
+    }
+
+    // Synchronize status and completion time to linked customer request if request_code exists
+    try {
+      const { data: currentTk } = await supabase
+        .from('tickets')
+        .select('request_code')
+        .eq('id', ticketDbId)
+        .maybeSingle();
+
+      if (currentTk?.request_code) {
+        const rc = currentTk.request_code;
+        const reqUpdates: any = { updated_at: new Date().toISOString() };
+        if (updates.ttStatus) reqUpdates.tt_status = updates.ttStatus;
+        if (updates.endTime) {
+          reqUpdates.end_time = updates.endTime;
+          reqUpdates.close_time = updates.endTime;
+          reqUpdates.tt_close_time = updates.endTime;
+        }
+        await supabase
+          .from('tickets')
+          .update(reqUpdates)
+          .or(`ticket_id.eq.${rc},ticket_id.eq.${rc.replace(/^CR-/, "TH-")},ticket_id.eq.${rc.replace(/^TH-/, "CR-")}`);
+      }
+    } catch (syncErr) {
+      console.warn('Error syncing to linked customer request:', syncErr);
     }
 
     // Add ticket update to history
