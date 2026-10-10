@@ -1177,11 +1177,19 @@ function recalculateProgress(project: Project): Project {
     project.progress = 0;
     return project;
   }
-  const totalTasks = project.plan.length;
-  const totalTaskProgress = project.plan.reduce((sum, task) => sum + task.progress, 0);
-  project.progress = Math.round(totalTaskProgress / totalTasks);
+  // If phases exist, overall project progress is average of Phases
+  const phases = project.plan.filter(t => t.level === 'phase' || t.isHeader);
+  if (phases.length > 0) {
+    project.progress = Math.round(phases.reduce((sum, p) => sum + (p.progress || 0), 0) / phases.length);
+    return project;
+  }
+  const tasks = project.plan.filter(t => !t.isHeader);
+  const targetList = tasks.length > 0 ? tasks : project.plan;
+  const totalTaskProgress = targetList.reduce((sum, task) => sum + (task.progress || 0), 0);
+  project.progress = Math.round(totalTaskProgress / targetList.length);
   return project;
 }
+
 
 // ─── Supabase Async Helpers ─────────────────────────────────────
 export async function saveProjectToSupabase(project: Project): Promise<{ success: boolean; error?: string }> {

@@ -874,8 +874,9 @@ export default function ProjectDetailPage() {
       [field]: value
     };
 
-    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
-    updateProjectPlan(project.id, newPlan);
+    const synced = syncPlanProgressHierarchy(newPlan);
+    setProject(prev => prev ? { ...prev, plan: synced } : null);
+    updateProjectPlan(project.id, synced);
   };
 
   const handleInlineTaskStatusChange = (task: ProjectTask, idx: number, newStatus: ProjectTask["status"]) => {
@@ -893,8 +894,9 @@ export default function ProjectDetailPage() {
       actualEndDate: newStatus === "Completed" ? (newPlan[idx].actualEndDate || new Date().toISOString().split("T")[0]) : (newStatus === "Todo" ? "" : newPlan[idx].actualEndDate)
     };
 
-    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
-    updateProjectPlan(project.id, newPlan);
+    const synced = syncPlanProgressHierarchy(newPlan);
+    setProject(prev => prev ? { ...prev, plan: synced } : null);
+    updateProjectPlan(project.id, synced);
   };
 
   const handleInlineTaskProgressChange = (task: ProjectTask, idx: number, progressVal: number) => {
@@ -955,7 +957,8 @@ export default function ProjectDetailPage() {
   const handleSavePlanEdits = () => {
     if (!project) return;
     const reindexed = autoAssignTaskIndices(tempPlan);
-    const updated = updateProjectPlan(project.id, reindexed);
+    const synced = syncPlanProgressHierarchy(reindexed);
+    const updated = updateProjectPlan(project.id, synced);
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",
@@ -1693,25 +1696,97 @@ export default function ProjectDetailPage() {
     return dateStr;
   };
 
-  // Get sub-tasks belonging to a header by position (reliable — no phase string matching)
+  // 1. Get sub-tasks belonging to a header by position (reliable — no phase string matching)
   const getSubTasksForHeader = (plan: ProjectTask[], headerIdx: number): ProjectTask[] => {
     const result: ProjectTask[] = [];
     for (let i = headerIdx + 1; i < plan.length; i++) {
-      if (plan[i].isHeader) break;
+      if (plan[i].isHeader || resolveTaskLevel(plan[i]) === 'Phase') break;
       result.push(plan[i]);
     }
     return result;
   };
 
-  // Compute aggregated stats for a phase header from its sub-tasks
+  // 2. Get sub-tasks belonging to a specific Main task
+  const getSubTasksForMainTask = (plan: ProjectTask[], mainIdx: number): ProjectTask[] => {
+    const mainTask = plan[mainIdx];
+    if (!mainTask) return [];
+    const result: ProjectTask[] = [];
+    const mainIndexStr = String(mainTask.taskIndex || '').trim();
+
+    for (let i = mainIdx + 1; i < plan.length; i++) {
+      const t = plan[i];
+      const lvl = resolveTaskLevel(t);
+      if (lvl === 'Phase' || lvl === 'Main task' || t.isHeader) break;
+
+      if (mainIndexStr && t.taskIndex) {
+        const cleanSub = String(t.taskIndex).trim();
+        if (cleanSub.startsWith(mainIndexStr + '.')) {
+          result.push(t);
+          continue;
+        }
+      }
+      if (lvl === 'Sub task') {
+        result.push(t);
+      }
+    }
+    return result;
+  };
+
+  // 3. Compute stats for a Main task: % của main task = tỷ lệ % của sub task
+  const getMainTaskStats = (plan: ProjectTask[], mainIdx: number) => {
+    const task = plan[mainIdx];
+    if (!task) return { hasSubs: false, progress: 0, subs: [] };
+    const subs = getSubTasksForMainTask(plan, mainIdx);
+    if (subs.length === 0) {
+      return {
+        hasSubs: false,
+        progress: task.progress || 0,
+        subs: []
+      };
+    }
+    const progress = Math.round(subs.reduce((s, t) => s + (t.progress || 0), 0) / subs.length);
+    return {
+      hasSubs: true,
+      progress,
+      subs
+    };
+  };
+
+  // 4. Get all Main tasks directly belonging to a Phase
+  const getMainTasksForPhase = (plan: ProjectTask[], headerIdx: number): { task: ProjectTask; index: number }[] => {
+    const result: { task: ProjectTask; index: number }[] = [];
+    for (let i = headerIdx + 1; i < plan.length; i++) {
+      const t = plan[i];
+      if (t.isHeader || resolveTaskLevel(t) === 'Phase') break;
+      if (resolveTaskLevel(t) === 'Main task') {
+        result.push({ task: t, index: i });
+      }
+    }
+    return result;
+  };
+
+  // 5. Compute stats for a Phase: của Phase = tỷ lệ % của main tasks
   const getPhaseStats = (plan: ProjectTask[], headerIdx: number) => {
     const subs = getSubTasksForHeader(plan, headerIdx);
-    // Assignees: unique union from all sub-tasks
+    const mainTasks = getMainTasksForPhase(plan, headerIdx);
+
+    // Assignees: unique union from all tasks under this phase
     const allNames = subs.flatMap(t => t.assignee ? t.assignee.split(',').map(n => n.trim()).filter(Boolean) : []);
     const assignees = [...new Set(allNames)];
-    // Progress: average of sub-task progress
-    const progress = subs.length > 0 ? Math.round(subs.reduce((s, t) => s + t.progress, 0) / subs.length) : 0;
-    // Start date: earliest planned start date of sub-tasks
+
+    // % của Phase = tỷ lệ % của main tasks
+    let progress = 0;
+    if (mainTasks.length > 0) {
+      const mainSum = mainTasks.reduce((sum, item) => {
+        const mtStats = getMainTaskStats(plan, item.index);
+        return sum + mtStats.progress;
+      }, 0);
+      progress = Math.round(mainSum / mainTasks.length);
+    } else if (subs.length > 0) {
+      progress = Math.round(subs.reduce((s, t) => s + (t.progress || 0), 0) / subs.length);
+    }
+
+    // Start date: earliest planned start date
     const startDates = subs.map(t => t.startDate).filter(Boolean).sort();
     const startDate = startDates[0] || '';
     // Actual end date: latest actualEndDate only when ALL sub-tasks are Completed
@@ -1721,7 +1796,81 @@ export default function ProjectDetailPage() {
     // End date: latest planned end date
     const endDates = subs.map(t => t.endDate).filter(Boolean).sort();
     const endDate = endDates.length > 0 ? endDates[endDates.length - 1] : '';
+
     return { assignees, progress, startDate, endDate, actualEndDate };
+  };
+
+  // 6. Get resolved progress for any task in hierarchy
+  const getResolvedTaskProgress = (plan: ProjectTask[], idx: number): { progress: number; isAuto: boolean } => {
+    const task = plan[idx];
+    if (!task) return { progress: 0, isAuto: false };
+    const lvl = resolveTaskLevel(task);
+
+    if (lvl === 'Phase' || task.isHeader) {
+      return { progress: getPhaseStats(plan, idx).progress, isAuto: true };
+    }
+    if (lvl === 'Main task') {
+      const stats = getMainTaskStats(plan, idx);
+      if (stats.hasSubs) {
+        return { progress: stats.progress, isAuto: true };
+      }
+    }
+    return { progress: task.progress || 0, isAuto: false };
+  };
+
+  // 7. Synchronize progress and status across the 3-level hierarchy:
+  // Sub task -> Main task -> Phase
+  const syncPlanProgressHierarchy = (plan: ProjectTask[]): ProjectTask[] => {
+    const updated = plan.map(t => ({ ...t }));
+
+    // Step A: Update Main tasks from Sub tasks
+    for (let i = 0; i < updated.length; i++) {
+      const t = updated[i];
+      if (resolveTaskLevel(t) === 'Main task' && !t.isHeader) {
+        const subs = getSubTasksForMainTask(updated, i);
+        if (subs.length > 0) {
+          const avg = Math.round(subs.reduce((s, sub) => s + (sub.progress || 0), 0) / subs.length);
+          t.progress = avg;
+          if (avg === 100) {
+            t.status = 'Completed';
+            if (!t.actualEndDate) t.actualEndDate = new Date().toISOString().split('T')[0];
+          } else if (avg > 0) {
+            t.status = 'In Progress';
+          } else {
+            t.status = 'Todo';
+          }
+        }
+      }
+    }
+
+    // Step B: Update Phases from Main tasks
+    for (let i = 0; i < updated.length; i++) {
+      const t = updated[i];
+      if (resolveTaskLevel(t) === 'Phase' || t.isHeader) {
+        const mainTasks = getMainTasksForPhase(updated, i);
+        let avg = 0;
+        if (mainTasks.length > 0) {
+          const sum = mainTasks.reduce((s, mt) => s + (updated[mt.index]?.progress || 0), 0);
+          avg = Math.round(sum / mainTasks.length);
+        } else {
+          const subs = getSubTasksForHeader(updated, i);
+          if (subs.length > 0) {
+            avg = Math.round(subs.reduce((s, sub) => s + (sub.progress || 0), 0) / subs.length);
+          }
+        }
+        t.progress = avg;
+        if (avg === 100) {
+          t.status = 'Completed';
+          if (!t.actualEndDate) t.actualEndDate = new Date().toISOString().split('T')[0];
+        } else if (avg > 0) {
+          t.status = 'In Progress';
+        } else {
+          t.status = 'Todo';
+        }
+      }
+    }
+
+    return updated;
   };
 
   const getStatusLabel = (status: Project["status"]) => {
@@ -2701,30 +2850,32 @@ export default function ProjectDetailPage() {
 
                             {/* Progress % */}
                             <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
-                              {isPhase ? (
-                                <div className="flex items-center justify-center gap-1">
-                                  <span className="w-12 px-1 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-lg font-bold text-right text-blue-700 block">
-                                    {(() => {
-                                      const subs = tempPlan.filter(t => !t.isHeader && t.phase === task.phase);
-                                      if (subs.length === 0) return task.progress;
-                                      return Math.round(subs.reduce((s, t) => s + t.progress, 0) / subs.length);
-                                    })()}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-slate-450">%</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center gap-1">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    value={task.progress}
-                                    onChange={(e) => handleTempTaskChange(idx, "progress", e.target.value)}
-                                    className="w-12 px-1 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-semibold text-right outline-none"
-                                  />
-                                  <span className="text-[10px] font-bold text-slate-450">%</span>
-                                </div>
-                              )}
+                              {(() => {
+                                const resolved = getResolvedTaskProgress(tempPlan, idx);
+                                if (resolved.isAuto) {
+                                  return (
+                                    <div className="flex items-center justify-center gap-1" title={isPhase ? "Tự động tính từ % các Main tasks" : "Tự động tính từ % các Sub tasks"}>
+                                      <span className="w-12 px-1 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-lg font-bold text-right text-blue-700 block">
+                                        {resolved.progress}
+                                      </span>
+                                      <span className="text-[10px] font-bold text-slate-450">%</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={task.progress}
+                                      onChange={(e) => handleTempTaskChange(idx, "progress", e.target.value)}
+                                      className="w-12 px-1 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-semibold text-right outline-none"
+                                    />
+                                    <span className="text-[10px] font-bold text-slate-450">%</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             {/* Status */}
@@ -2958,30 +3109,39 @@ export default function ProjectDetailPage() {
 
                             {/* Progress */}
                             <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
-                              {isPhase ? (
-                                <span className="font-extrabold text-blue-900 text-xs">
-                                  {`${getPhaseStats(project.plan, idx).progress}%`}
-                                </span>
-                              ) : (
-                                <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    defaultValue={task.progress}
-                                    key={`${task.id || idx}-prog-${task.progress}`}
-                                    onBlur={(e) => handleInlineTaskProgressChange(task, idx, parseInt(e.target.value, 10))}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        (e.target as HTMLInputElement).blur();
-                                      }
-                                    }}
-                                    className="w-7 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0"
-                                    title="Bấm để đổi % hoàn thành"
-                                  />
-                                  <span className="text-[10px] font-bold text-slate-400 select-none">%</span>
-                                </div>
-                              )}
+                              {(() => {
+                                const resolved = getResolvedTaskProgress(project.plan, idx);
+                                if (resolved.isAuto) {
+                                  return (
+                                    <div className="flex items-center justify-center gap-0.5" title={isPhase ? "Tự động tính từ tỷ lệ % các Main tasks" : "Tự động tính từ tỷ lệ % các Sub tasks"}>
+                                      <span className={`font-black text-xs ${isPhase ? 'text-blue-900' : 'text-slate-800'}`}>
+                                        {resolved.progress}%
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-semibold select-none">⚙</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      defaultValue={task.progress}
+                                      key={`${task.id || idx}-prog-${task.progress}`}
+                                      onBlur={(e) => handleInlineTaskProgressChange(task, idx, parseInt(e.target.value, 10))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          (e.target as HTMLInputElement).blur();
+                                        }
+                                      }}
+                                      className="w-7 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0"
+                                      title="Bấm để đổi % hoàn thành"
+                                    />
+                                    <span className="text-[10px] font-bold text-slate-400 select-none">%</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             {/* Status */}
@@ -3128,8 +3288,7 @@ export default function ProjectDetailPage() {
                   {gantt.tasks.map((task, idx) => {
                     const isHeader = !!task.isHeader;
                     const rowH = isHeader ? 44 : 36;
-                    const phaseStats = isHeader ? getPhaseStats(project.plan, project.plan.indexOf(task)) : null;
-                    const displayProgress = isHeader ? (phaseStats?.progress ?? task.progress) : task.progress;
+                    const displayProgress = getResolvedTaskProgress(project.plan, project.plan.indexOf(task)).progress;
 
                     return (
                       <div key={task.id || idx}
