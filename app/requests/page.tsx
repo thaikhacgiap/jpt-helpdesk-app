@@ -2877,7 +2877,7 @@ export default function RequestsPage() {
                       </div>
                     </div>
 
-                    {/* 7. Trạng thái & Thời gian hoàn thành */}
+                    {/* 7. Trạng thái & Thời gian hoàn thành DV/Sự cố */}
                     <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -2899,7 +2899,7 @@ export default function RequestsPage() {
 
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian hoàn thành
+                          Thời gian hoàn thành DV/Sự cố
                         </label>
                         <input
                           type="datetime-local"
@@ -3001,7 +3001,7 @@ export default function RequestsPage() {
                       />
                     </div>
 
-                    {/* 5. Thời gian bắt đầu DV/sự cố & Thời gian hoàn thành */}
+                    {/* 5. Thời gian bắt đầu DV/sự cố & Thời gian hoàn thành DV/Sự cố */}
                     <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
@@ -3018,7 +3018,7 @@ export default function RequestsPage() {
 
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian hoàn thành
+                          Thời gian hoàn thành DV/Sự cố
                         </label>
                         <input
                           type="datetime-local"
