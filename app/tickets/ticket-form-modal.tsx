@@ -1118,6 +1118,7 @@ function FooterBar({
   currentStep,
   onsite, setOnsite, showOnsite,
   editing, isStepDone, onEdit, onSave, onConfirm, submitting,
+  hasUnstoppedHold,
   onFullScreen, showFullScreen, extraLeftButtons, extraRightButtons,
 }: {
   currentStep: StepKey;
@@ -1126,6 +1127,7 @@ function FooterBar({
   editing: boolean; isStepDone: boolean;
   onEdit: () => void; onSave: () => void; onConfirm: () => void;
   submitting: boolean;
+  hasUnstoppedHold?: boolean;
   onFullScreen?: () => void; showFullScreen?: boolean;
   extraLeftButtons?: React.ReactNode;
   extraRightButtons?: React.ReactNode;
@@ -1148,32 +1150,34 @@ function FooterBar({
       </div>
       <div className="flex items-center gap-2">
         {extraRightButtons}
-        {showFullScreen && onFullScreen && (
-          <button type="button" onClick={onFullScreen}
-            className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer">
-            <Edit2 size={13} className="text-slate-500" />
-            <span>Update</span>
-          </button>
-        )}
-        {!editing ? (
-          <button type="button" onClick={onEdit}
-            className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer">
-            {currentStep === "troubleshoot" ? <Pause size={13} className="text-slate-500" /> : <Edit2 size={13} className="text-slate-500" />}
-            <span>{currentStep === "troubleshoot" ? "Hold" : "Edit"}</span>
-          </button>
-        ) : (
+        {editing ? (
           <button type="button" onClick={onSave} disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-[#0099cc] text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer">
             <Save size={13} className="text-[#0099cc]" />
             <span>Save</span>
           </button>
+        ) : (
+          currentStep !== "troubleshoot" && (
+            <button type="button" onClick={onEdit}
+              className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition cursor-pointer">
+              <Edit2 size={13} className="text-slate-500" />
+              <span>Edit</span>
+            </button>
+          )
         )}
         {/* Confirm = Save + Mark complete */}
-        <button type="button" onClick={onConfirm} disabled={submitting || isStepDone}
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={submitting || isStepDone || hasUnstoppedHold}
+          title={hasUnstoppedHold ? "Không thể hoàn thành Troubleshoot khi vẫn còn phiên Hold chưa kết thúc (chưa có Stop Time)" : undefined}
           className={`flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold transition shadow-md cursor-pointer disabled:opacity-40 disabled:pointer-events-none
             ${isStepDone
               ? "bg-green-600 text-white border border-green-600 cursor-default"
-              : "bg-blue-600 hover:bg-blue-700 text-white border border-blue-600"}`}>
+              : hasUnstoppedHold
+              ? "bg-slate-300 text-slate-500 border border-slate-300 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700 text-white border border-blue-600"}`}
+        >
           <CheckCircle size={13} />
           <span>{isStepDone ? "Confirmed" : "Confirm"}</span>
         </button>
@@ -3227,6 +3231,8 @@ interface TroubleshootFormProps {
   ticket?: any;
   savedTicketId?: string;
   setUpdatesLog?: React.Dispatch<React.SetStateAction<any[]>>;
+  setTtStatus?: (v: string) => void;
+  createData?: any;
 }
 
 const DEFAULT_RUNBOOKS = [
@@ -3272,6 +3278,7 @@ function TroubleshootForm({
   holdsList, setHoldsList,
   nhanSuList, ticket,
   savedTicketId, setUpdatesLog,
+  setTtStatus, createData,
 }: TroubleshootFormProps) {
   const isOnHold = ttStatus === "On Hold";
   const [isFullScreenRunbook, setIsFullScreenRunbook] = useState(false);
@@ -3363,6 +3370,37 @@ function TroubleshootForm({
       const timeB = new Date(b.created_at || 0).getTime();
       return filterOrder === "asc" ? timeA - timeB : timeB - timeA;
     });
+
+  const formatUDTime = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const pad = (num: number) => String(num).padStart(2, "0");
+      return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const calculateUpdateDuration = (updateTimeStr: string) => {
+    if (!updateTimeStr) return "—";
+    const updateTime = new Date(updateTimeStr).getTime();
+    if (isNaN(updateTime)) return "—";
+    const baseTimeStr = ticket?.start_time || createData?.startTime || ticket?.created_at || (updatesLog.length > 0 ? updatesLog[0]?.created_at : null);
+    if (!baseTimeStr) return "—";
+    const baseTime = new Date(baseTimeStr).getTime();
+    if (isNaN(baseTime)) return "—";
+    const diffMs = updateTime - baseTime;
+    if (diffMs < 0) return "0m";
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMinutes / (24 * 60));
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const mins = totalMinutes % 60;
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h ${mins > 0 ? `${mins}m` : ""}`.trim();
+    return `${mins}m`;
+  };
 
   const formatDate = (dateStr: string) => {
     try {
@@ -3590,6 +3628,8 @@ function TroubleshootForm({
         stopTime: ""
       }
     ]);
+    setTtStatus?.("On Hold");
+    onEdit?.();
   };
 
   const handleDeleteHoldRow = (idx: number) => {
@@ -3683,77 +3723,50 @@ function TroubleshootForm({
                 </div>
               </div>
 
-              {/* Chat Message List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[140px] bg-slate-50/30">
-                {filteredUpdates.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center mb-1.5">
-                      <MessageSquare size={16} className="text-slate-300" />
-                    </div>
-                    <p className="text-xs font-medium">{searchQuery ? "Không tìm thấy kết quả phù hợp" : "Chưa có tiến độ cập nhật nào"}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Nhập nội dung bên dưới để cập nhật nhanh tiến độ</p>
-                  </div>
-                ) : (
-                  filteredUpdates.map((upd, idx) => {
-                    const { datePart, timePart } = splitDateTime(upd.created_at);
-                    const updaterName = resolveUpdaterName(upd);
-                    const isMe = currentUserName && (
-                      updaterName.toLowerCase() === currentUserName.toLowerCase() ||
-                      updaterName.toLowerCase().includes((currentUser?.name || "").toLowerCase()) ||
-                      updaterName.toLowerCase().includes((currentUser?.email || "").toLowerCase())
-                    );
-                    const initials = getInitials(updaterName);
+              {/* Updates Table View */}
+              <div className="flex-1 overflow-auto bg-white p-3 min-h-[160px]">
+                <table className="w-full border-collapse text-xs border border-slate-300">
+                  <thead>
+                    <tr className="bg-[#bce3f7] text-slate-800">
+                      <th className="border border-slate-300 px-3 py-2 text-center font-bold w-48 min-w-[150px]">Name</th>
+                      <th className="border border-slate-300 px-3 py-2 text-center font-bold w-48 min-w-[170px]">UD time</th>
+                      <th className="border border-slate-300 px-3 py-2 text-center font-bold w-24 min-w-[80px]">Duration</th>
+                      <th className="border border-slate-300 px-3 py-2 text-center font-bold">Update</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUpdates.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="border border-slate-300 p-8 text-center text-slate-400 italic">
+                          {searchQuery ? "Không tìm thấy kết quả phù hợp" : "Chưa có tiến độ cập nhật nào"}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUpdates.map((upd, idx) => {
+                        const updaterName = resolveUpdaterName(upd);
+                        const udTime = formatUDTime(upd.created_at);
+                        const duration = calculateUpdateDuration(upd.created_at);
 
-                    return (
-                      <div
-                        key={upd.id || idx}
-                        className={`flex items-start gap-2.5 ${isMe ? "flex-row-reverse" : "flex-row"}`}
-                      >
-                        {/* Avatar */}
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 shadow-2xs ${
-                            isMe
-                              ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white"
-                              : "bg-gradient-to-tr from-slate-600 to-slate-800 text-white"
-                          }`}
-                          title={updaterName}
-                        >
-                          {initials}
-                        </div>
-
-                        {/* Bubble Container */}
-                        <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
-                          {/* Header info */}
-                          <div className={`flex items-center gap-1.5 mb-1 px-1 text-[11px] flex-wrap ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-                            <span className="font-semibold text-slate-800">{updaterName}</span>
-                            {isMe && (
-                              <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 font-bold text-[9px] rounded">
-                                Bạn
-                              </span>
-                            )}
-                            <span className="text-slate-400 text-[10px] font-mono">
-                              {datePart} {timePart}
-                            </span>
-                            <span className="text-blue-600 font-medium text-[10px] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
-                              {upd.new_status ? `(${upd.new_status})` : "(updated)"}
-                            </span>
-                          </div>
-
-                          {/* Message Body */}
-                          <div
-                            className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words shadow-2xs ${
-                              isMe
-                                ? "bg-blue-600 text-white rounded-tr-xs"
-                                : "bg-white text-slate-800 border border-slate-200/90 rounded-tl-xs"
-                            }`}
-                          >
-                            {upd.update_content}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+                        return (
+                          <tr key={upd.id || idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="border border-slate-300 px-3 py-2.5 text-center font-medium text-slate-800">
+                              {updaterName}
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2.5 text-center font-mono text-slate-700">
+                              {udTime}
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2.5 text-center font-semibold text-slate-700">
+                              {duration}
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2.5 text-left text-slate-800 whitespace-pre-wrap break-words">
+                              {upd.update_content}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
                 <div ref={chatBottomRef} />
               </div>
 
@@ -3823,8 +3836,19 @@ function TroubleshootForm({
                   <Pause size={16} className="text-amber-500" />
                   <span>Bảng chi tiết Hold (Tạm dừng)</span>
                 </div>
-                <div className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-                  Tổng thời gian tạm dừng: <span className="text-amber-600 font-bold ml-1">{calculateTotalDuration(holdsList)}</span>
+                <div className="flex items-center gap-3">
+                  <div className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+                    Tổng thời gian tạm dừng: <span className="text-amber-600 font-bold ml-1">{calculateTotalDuration(holdsList)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddHoldRow}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+                    title="Bắt đầu phiên Hold (Tạm dừng) mới"
+                  >
+                    <Pause size={13} />
+                    <span>Hold</span>
+                  </button>
                 </div>
               </div>
 
@@ -3878,16 +3902,48 @@ function TroubleshootForm({
                           </td>
                           <td className="p-2.5 text-center border-r border-slate-200">
                             {editing ? (
-                              <DateTimePicker
-                                value={row.stopTime}
-                                onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
-                                placeholder="Kết thúc tạm dừng..."
-                                className="min-h-[36px] py-1 px-2.5 text-xs"
-                              />
+                              <div className="flex items-center gap-1.5 justify-center">
+                                <DateTimePicker
+                                  value={row.stopTime}
+                                  onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
+                                  placeholder="Kết thúc tạm dừng..."
+                                  className="min-h-[36px] py-1 px-2.5 text-xs flex-1"
+                                />
+                                {!row.stopTime && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const tzoffset = new Date().getTimezoneOffset() * 60000;
+                                      const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
+                                      handleHoldRowChange(idx, "stopTime", localISOTime);
+                                    }}
+                                    className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[11px] font-semibold whitespace-nowrap cursor-pointer"
+                                    title="Đặt giờ hiện tại làm Stop Time"
+                                  >
+                                    Kết thúc
+                                  </button>
+                                )}
+                              </div>
                             ) : (
-                              <span className="px-1.5 text-slate-800 font-mono">
-                                {row.stopTime ? formatDateWithTime(row.stopTime) : (row.startTime ? "Đang tạm dừng..." : "—")}
-                              </span>
+                              <div className="flex items-center gap-1.5 justify-center">
+                                <span className={`px-1.5 font-mono ${!row.stopTime && row.startTime ? "text-amber-600 font-semibold" : "text-slate-800"}`}>
+                                  {row.stopTime ? formatDateWithTime(row.stopTime) : (row.startTime ? "Đang tạm dừng..." : "—")}
+                                </span>
+                                {!row.stopTime && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const tzoffset = new Date().getTimezoneOffset() * 60000;
+                                      const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
+                                      handleHoldRowChange(idx, "stopTime", localISOTime);
+                                    }}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[10px] font-semibold whitespace-nowrap cursor-pointer ml-1"
+                                    title="Kết thúc tạm dừng ngay bây giờ"
+                                  >
+                                    Kết thúc
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="p-2.5 text-center font-bold text-slate-700">
@@ -3910,18 +3966,6 @@ function TroubleshootForm({
                   </tbody>
                 </table>
               </div>
-
-              {editing && (
-                <div className="flex justify-start">
-                  <button
-                    type="button"
-                    onClick={handleAddHoldRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs transition font-semibold cursor-pointer shadow-sm"
-                  >
-                    + Thêm dòng Hold
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -5761,6 +5805,11 @@ export default function TicketFormModal({
 
       } else if (currentStep === "troubleshoot") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
+        const hasUnstoppedHold = holdsList.some((h) => !h.stopTime || !String(h.stopTime).trim());
+        if (hasUnstoppedHold) {
+          alert("Không thể hoàn thành bước Troubleshoot vì vẫn còn phiên Hold chưa có Stop Time (chưa kết thúc tạm dừng)! Vui lòng cập nhật Stop Time cho tất cả các phiên Hold trước khi Confirm.");
+          return;
+        }
         const runbookObj = getUpdatedRunbookObj(runbookSteps, runbooksList, activeRunbookName);
         const lastHold = holdsList[holdsList.length - 1];
         const holdReasonStr = JSON.stringify({ holds: holdsList });
@@ -6236,6 +6285,8 @@ export default function TicketFormModal({
             ticket={ticket}
             savedTicketId={savedTicketId}
             setUpdatesLog={setUpdatesLog}
+            setTtStatus={setTtStatus}
+            createData={createData}
           />
         )}
         {currentStep === "completed" && (
@@ -6280,8 +6331,7 @@ export default function TicketFormModal({
             onSave={handleSave}
             onConfirm={handleConfirm}
             submitting={submitting}
-            showFullScreen={currentStep === "troubleshoot" && activeSubTab !== "runbook"}
-            onFullScreen={() => setIsFullScreenUpdate(true)}
+            hasUnstoppedHold={currentStep === "troubleshoot" && holdsList.some((h) => !h.stopTime || !String(h.stopTime).trim())}
             extraLeftButtons={
               currentStep === "check" ? (
                 <button
