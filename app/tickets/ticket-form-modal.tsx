@@ -943,7 +943,6 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
                 }
                 if (req.category) patch.category = req.category;
                 if (req.ttType) patch.ttType = req.ttType;
-                if (req.requestTime) patch.requestTime = toDatetimeLocalValue(req.requestTime);
                 if (req.startTime) patch.startTime = toDatetimeLocalValue(req.startTime);
               }
               onChange(patch);
@@ -1062,7 +1061,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
         {/* Thời gian nhận yêu cầu */}
         <div className="space-y-1">
           <label className={labelStyle}>
-            Thời gian nhận yêu cầu
+            Thời gian nhận yêu cầu {req}
             <span title="Thời điểm nhận yêu cầu từ khách hàng"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.requestTime)}>
@@ -1071,6 +1070,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
               type={editing ? "datetime-local" : "text"}
               value={editing ? toDatetimeLocalValue(data.requestTime) : formatDisplayDateTime(data.requestTime)}
               readOnly={!editing}
+              required
               onChange={(e) => onChange({ requestTime: e.target.value })}
               placeholder="—"
               className="w-full bg-transparent text-sm text-slate-800 outline-none"
@@ -4564,7 +4564,7 @@ export default function TicketFormModal({
       let initialDescription = ticket?.description || "";
       let initialTtType = ticket?.tt_type || "";
       let initialCategory = ticket?.category || "";
-      let initialRequestTime = toDatetimeLocalValue(ticket?.request_time || (ticket as any)?.requestTime || ticket?.created_at || new Date());
+      let initialRequestTime = ticket?.request_time ? toDatetimeLocalValue(ticket.request_time) : "";
       let initialStartTime = toDatetimeLocalValue(ticket?.start_time || (ticket as any)?.startTime || new Date());
       let initialPriority = ticket?.priority || "";
       let initialCustomerId = ticket?.customer_id || "";
@@ -5305,6 +5305,7 @@ export default function TicketFormModal({
         if (!createData.title.trim())  { alert("Vui lòng nhập Tiêu đề");  return; }
         if (!createData.ttType)        { alert("Vui lòng chọn Loại yêu cầu");   return; }
         if (!createData.category)      { alert("Vui lòng chọn Danh mục");  return; }
+        if (!createData.requestTime || !createData.requestTime.trim()) { alert("Vui lòng chọn Thời gian nhận yêu cầu"); return; }
         if (!createData.priority)      { alert("Vui lòng chọn Priority");  return; }
       } else if (currentStep === "arrange") {
         /* Validate */

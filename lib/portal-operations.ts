@@ -185,12 +185,9 @@ export const fetchServiceTickets = fetchAllTickets;
 
 // Update ticket status or attributes
 export async function updateServiceTicket(id: string, updates: any): Promise<void> {
-  const { error } = await supabase
-    .from("tickets")
-    .update(updates)
-    .eq("id", id);
-
-  if (error) throw error;
+  const { safeTicketUpdate } = await import("@/lib/ticket-operations");
+  const { error } = await safeTicketUpdate(id, updates);
+  if (error) throw new Error(error.message || String(error));
 }
 
 // Delete a service request ticket

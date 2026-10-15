@@ -801,9 +801,7 @@ export default function RequestsPage() {
       console.error("Error setting assignee before creating ticket:", err);
     }
 
-    const { requestTime } = getRequestLinkedData(ticket);
     const incidentTime = (ticket as any).event_time || (ticket as any).incident_start_time || ticket.start_time || "";
-    const reqTime = requestTime || ticket.request_time || ticket.created_at || "";
 
     const query = new URLSearchParams({
       action: "create",
@@ -814,7 +812,6 @@ export default function RequestsPage() {
       category: ticket.category || "",
       ttType: ticket.tt_type || "",
       startTime: incidentTime,
-      requestTime: reqTime,
       requestTicketId: ticket.ticket_id,
       requestDbId: ticket.id
     });
@@ -847,7 +844,6 @@ export default function RequestsPage() {
       category: customerFormData.category || "",
       ttType: customerFormData.tt_type || "",
       startTime: customerFormData.incident_start_time || "",
-      requestTime: customerFormData.receive_time || "",
       requestTicketId: editingCustomerTicket.ticket_id,
       requestDbId: editingCustomerTicket.id
     });

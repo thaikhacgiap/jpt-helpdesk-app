@@ -62,8 +62,8 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
             category: t.category,
             ttType: t.tt_type || "Yêu cầu dịch vụ",
             status: t.tt_status || "New",
-            startTime: t.start_time || t.created_at,
-            requestTime: t.created_at,
+            startTime: t.start_time || undefined,
+            requestTime: undefined,
             source: "customer",
           });
         }
