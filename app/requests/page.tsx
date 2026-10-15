@@ -83,8 +83,12 @@ export default function RequestsPage() {
   // Helper to find linked ticket and resolve synchronized data (Request Time, Status, Complete Time)
   const findLinkedTicket = (t: ServiceTicket) => {
     if (!customerTickets || customerTickets.length === 0) return null;
-    if (t.document_link && t.document_link.startsWith("TK-")) {
-      const found = customerTickets.find(x => x.ticket_id === t.document_link || x.id === t.document_link);
+    if (t.document_link) {
+      const doc = t.document_link.trim();
+      const found = customerTickets.find(x => 
+        (x.ticket_id.startsWith("TK-") || !x.ticket_id.startsWith("TH-")) &&
+        (x.ticket_id.toUpperCase() === doc.toUpperCase() || x.id === doc)
+      );
       if (found) return found;
     }
     const crCode = t.ticket_id.replace(/^TH-/, "CR-").toUpperCase();
@@ -100,7 +104,7 @@ export default function RequestsPage() {
     const foundByRemark = customerTickets.find(x => {
       if (!x.ticket_id.startsWith("TK-")) return false;
       const remark = (x.remark || "").toUpperCase();
-      return remark.includes(crCode) || remark.includes(rawId);
+      return remark.includes(crCode) || remark.includes(rawId) || (t.id && remark.includes(t.id));
     });
     return foundByRemark || null;
   };
@@ -108,7 +112,9 @@ export default function RequestsPage() {
   const getRequestLinkedData = (t: ServiceTicket) => {
     const linked = findLinkedTicket(t);
     const requestTime = linked?.request_time || (linked as any)?.requestTime || t.request_time || (t as any)?.requestTime || t.start_time || t.created_at;
-    const status = linked?.tt_status || t.tt_status || "New";
+    // Trạng thái của yêu cầu bắt buộc lấy theo trạng thái của ticket liên kết.
+    // Nếu chưa có ticket thì yêu cầu luôn ở trạng thái "New" (Chờ tiếp nhận).
+    const status = linked ? (linked.tt_status || "New") : "New";
     const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || (t as any)?.tt_close_time || (t as any)?.close_time || t.end_time || null;
     const linkedCode = linked ? linked.ticket_id : (t.document_link && t.document_link.startsWith("TK-") ? t.document_link : null);
 
@@ -486,8 +492,12 @@ export default function RequestsPage() {
       };
 
       if (editingCustomerTicket) {
+        const linked = findLinkedTicket(editingCustomerTicket);
+        const resolvedStatus = linked ? (customerFormData.tt_status || linked.tt_status || "New") : "New";
+
         await updateServiceTicket(editingCustomerTicket.id, {
           ...updateData,
+          tt_status: resolvedStatus,
           request_time: startTimeValue,
           close_time: endTimeValue,
           tt_close_time: endTimeValue,
@@ -495,7 +505,6 @@ export default function RequestsPage() {
         });
 
         // Sync to linked ticket if present
-        const linked = findLinkedTicket(editingCustomerTicket);
         if (linked) {
           await updateServiceTicket(linked.id, {
             request_time: startTimeValue,
@@ -779,18 +788,17 @@ export default function RequestsPage() {
       const currentUser = getCurrentUser();
       const receiver = currentUser?.name || "Kỹ thuật viên";
       const nowIso = new Date().toISOString();
-      const currentStatus = (ticket.tt_status || "New").toLowerCase();
 
-      if (currentStatus === "new" || !ticket.assigned) {
+      // Chỉ gán người tiếp nhận nếu chưa có, KHÔNG đổi status thành In Progress
+      // vì trạng thái của yêu cầu phải lấy theo ticket sau khi tạo ticket.
+      if (!ticket.assigned) {
         await updateServiceTicket(ticket.id, {
-          tt_status: "In Progress",
-          assigned: ticket.assigned || receiver,
-          start_time: ticket.start_time || nowIso,
+          assigned: receiver,
           updated_at: nowIso
         });
       }
     } catch (err) {
-      console.error("Error auto-receiving ticket before creating:", err);
+      console.error("Error setting assignee before creating ticket:", err);
     }
 
     window.location.href = `/tickets/create?customerId=${ticket.customer_id}&title=${encodeURIComponent(ticket.title)}&description=${encodeURIComponent(ticket.description)}&priority=${ticket.priority}&category=${ticket.category}&requestTicketId=${ticket.ticket_id}&requestDbId=${ticket.id}`;
@@ -802,16 +810,14 @@ export default function RequestsPage() {
       const currentUser = getCurrentUser();
       const receiverName = currentUser?.name || "Kỹ thuật viên";
       const nowIso = new Date().toISOString();
-      if (isPendingStatus(customerFormData.tt_status) || !customerFormData.assigned) {
+      if (!customerFormData.assigned) {
         await updateServiceTicket(editingCustomerTicket.id, {
-          tt_status: "In Progress",
-          assigned: customerFormData.assigned || receiverName,
-          start_time: customerFormData.receive_time ? new Date(customerFormData.receive_time).toISOString() : nowIso,
+          assigned: receiverName,
           updated_at: nowIso
         });
       }
     } catch (err) {
-      console.error("Error auto-receiving ticket in modal before creating:", err);
+      console.error("Error setting assignee in modal before creating ticket:", err);
     }
     window.location.href = `/tickets/create?customerId=${customerFormData.customerId}&title=${encodeURIComponent(customerFormData.title)}&description=${encodeURIComponent(customerFormData.description)}&priority=${customerFormData.priority}&category=${customerFormData.category}&requestTicketId=${editingCustomerTicket.ticket_id}&requestDbId=${editingCustomerTicket.id}`;
   };
@@ -2912,7 +2918,8 @@ export default function RequestsPage() {
                           name="tt_status"
                           value={customerFormData.tt_status}
                           onChange={handleCustomerInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium"
+                          disabled={!getRequestLinkedData(editingCustomerTicket).linked}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium disabled:bg-slate-50 disabled:text-slate-500"
                         >
                           <option value="New">Chờ tiếp nhận</option>
                           <option value="In Progress">Đang xử lý</option>
@@ -2920,6 +2927,9 @@ export default function RequestsPage() {
                           <option value="Resolved">Hoàn thành</option>
                           <option value="Rejected">Hủy bỏ</option>
                         </select>
+                        {!getRequestLinkedData(editingCustomerTicket).linked && (
+                          <p className="text-[10px] text-slate-400 mt-1">Chưa có ticket: Yêu cầu ở trạng thái Chờ tiếp nhận</p>
+                        )}
                       </div>
 
                       <div>
