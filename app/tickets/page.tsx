@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
 import { fetchTickets, deleteTicket, getTicketRequestCode, getTicketRequestStatus } from "@/lib/ticket-operations";
 import { fetchAllAvailableRequests } from "@/components/common/request-search-select";
+import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import { fetchContracts, Contract } from "@/lib/contract-operations";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
-  Ticket, GripVertical, Layout
+  Ticket, GripVertical, Layout, Calendar, Building2, User, FileText, Check
 } from "lucide-react";
 import ColumnConfigModal, {
   DEFAULT_COLUMN_ORDER, COLUMN_LABELS, DEFAULT_COL_WIDTHS, SYSTEM_TEMPLATES, ColumnTemplate
@@ -79,6 +81,13 @@ interface Filters {
   priority: string;
   tt_status: string;
   sla_status: string;
+  customer: string;
+  contract: string;
+  creator: string;
+  createdAtFrom: string;
+  createdAtTo: string;
+  closedAtFrom: string;
+  closedAtTo: string;
 }
 
 /* ─── Dropdown component ───────────────────────────────────── */
@@ -598,7 +607,18 @@ export default function TicketsPage() {
     priority: "",
     tt_status: "",
     sla_status: "",
+    customer: "",
+    contract: "",
+    creator: "",
+    createdAtFrom: "",
+    createdAtTo: "",
+    closedAtFrom: "",
+    closedAtTo: "",
   });
+
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
+  const [dbContracts, setDbContracts] = useState<Contract[]>([]);
 
   // Column Orders, Visibility, Widths, and Templates
   const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
@@ -865,7 +885,11 @@ export default function TicketsPage() {
     setDragOverColKey(null);
   };
 
-  useEffect(() => { loadTickets(); }, []);
+  useEffect(() => {
+    loadTickets();
+    fetchCustomers().then(setDbCustomers).catch((err) => console.error("Error loading customers:", err));
+    fetchContracts().then(setDbContracts).catch((err) => console.error("Error loading contracts:", err));
+  }, []);
 
   // Check query params for on-behalf ticket creation or ticket search
   useEffect(() => {
@@ -1021,6 +1045,42 @@ export default function TicketsPage() {
   const setFilter = (key: keyof Filters) => (val: string) =>
     setFilters((f) => ({ ...f, [key]: val }));
 
+  // Options for advanced filters
+  const availableCustomers = useMemo(() => {
+    const map = new Map<string, string>();
+    dbCustomers.forEach((c) => {
+      if (c.name) map.set(c.name, c.name);
+    });
+    tickets.forEach((t) => {
+      if (t.customer_name) map.set(t.customer_name, t.customer_name);
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [dbCustomers, tickets]);
+
+  const availableContracts = useMemo(() => {
+    const map = new Map<string, { code: string; desc?: string }>();
+    dbContracts.forEach((c) => {
+      const code = c.contract_no || c.code;
+      if (code) {
+        map.set(code, { code, desc: c.service || c.description });
+      }
+    });
+    tickets.forEach((t) => {
+      if (t.contract_no && !map.has(t.contract_no)) {
+        map.set(t.contract_no, { code: t.contract_no });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [dbContracts, tickets]);
+
+  const availableCreators = useMemo(() => {
+    const set = new Set<string>();
+    tickets.forEach((t) => {
+      if (t.creator_name?.trim()) set.add(t.creator_name.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [tickets]);
+
   // Filter out requests (CR-, TH-, SR-, TR-) and maintenance plans (BTR-, Maintenance)
   const filtered = tickets.filter((t) => {
     const tid = (t.ticket_id || '').toUpperCase();
@@ -1043,14 +1103,111 @@ export default function TicketsPage() {
     if (filters.priority && t.priority !== filters.priority) return false;
     if (filters.tt_status && t.tt_status !== filters.tt_status) return false;
     if (filters.sla_status && getTicketSlaInfo(t).status !== filters.sla_status) return false;
+
+    // Advanced Filters
+    if (filters.customer) {
+      const targetCust = filters.customer.toLowerCase().trim();
+      const matchCust =
+        (t.customer_name && t.customer_name.toLowerCase().trim() === targetCust) ||
+        (t.customer_id && t.customer_id.toLowerCase().trim() === targetCust);
+      if (!matchCust) return false;
+    }
+
+    if (filters.contract) {
+      const targetContract = filters.contract.toLowerCase().trim();
+      const matchContract = t.contract_no && t.contract_no.toLowerCase().trim().includes(targetContract);
+      if (!matchContract) return false;
+    }
+
+    if (filters.creator) {
+      const targetCreator = filters.creator.toLowerCase().trim();
+      const matchCreator = t.creator_name && t.creator_name.toLowerCase().trim() === targetCreator;
+      if (!matchCreator) return false;
+    }
+
+    if (filters.createdAtFrom) {
+      const cDate = parseServerDate(t.created_at || t.created_time, true);
+      if (!cDate) return false;
+      const fromDate = new Date(`${filters.createdAtFrom}T00:00:00`);
+      if (cDate < fromDate) return false;
+    }
+
+    if (filters.createdAtTo) {
+      const cDate = parseServerDate(t.created_at || t.created_time, true);
+      if (!cDate) return false;
+      const toDate = new Date(`${filters.createdAtTo}T23:59:59.999`);
+      if (cDate > toDate) return false;
+    }
+
+    if (filters.closedAtFrom) {
+      const rDate = parseServerDate(getTicketResolveTime(t));
+      if (!rDate) return false;
+      const fromDate = new Date(`${filters.closedAtFrom}T00:00:00`);
+      if (rDate < fromDate) return false;
+    }
+
+    if (filters.closedAtTo) {
+      const rDate = parseServerDate(getTicketResolveTime(t));
+      if (!rDate) return false;
+      const toDate = new Date(`${filters.closedAtTo}T23:59:59.999`);
+      if (rDate > toDate) return false;
+    }
+
     return true;
   });
 
-  const activeFiltersCount = Object.values(filters).filter(Boolean).length + (search.trim() ? 1 : 0);
+  const advancedFiltersCount = [
+    filters.customer,
+    filters.contract,
+    filters.creator,
+    filters.createdAtFrom,
+    filters.createdAtTo,
+    filters.closedAtFrom,
+    filters.closedAtTo,
+  ].filter(Boolean).length;
+
+  const basicFiltersCount = [
+    filters.tt_type,
+    filters.contract_scope,
+    filters.category,
+    filters.priority,
+    filters.tt_status,
+    filters.sla_status,
+  ].filter(Boolean).length;
+
+  const activeFiltersCount = basicFiltersCount + advancedFiltersCount + (search.trim() ? 1 : 0);
 
   const clearAllFilters = () => {
-    setFilters({ tt_type: "", contract_scope: "", category: "", priority: "", tt_status: "", sla_status: "" });
+    setFilters({
+      tt_type: "",
+      contract_scope: "",
+      category: "",
+      priority: "",
+      tt_status: "",
+      sla_status: "",
+      customer: "",
+      contract: "",
+      creator: "",
+      createdAtFrom: "",
+      createdAtTo: "",
+      closedAtFrom: "",
+      closedAtTo: "",
+    });
     setSearch("");
+    setCurrentPage(1);
+  };
+
+  const clearAdvancedFilters = () => {
+    setFilters((prev) => ({
+      ...prev,
+      customer: "",
+      contract: "",
+      creator: "",
+      createdAtFrom: "",
+      createdAtTo: "",
+      closedAtFrom: "",
+      closedAtTo: "",
+    }));
     setCurrentPage(1);
   };
 
@@ -1574,25 +1731,386 @@ export default function TicketsPage() {
         />
         
         <div className="relative w-full flex gap-2">
-          <button className="flex-1 h-[44px] flex items-center justify-between gap-1 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg px-3 text-sm font-normal text-slate-600 transition shadow-2xs">
-            <div className="flex items-center gap-1.5">
-              <SlidersHorizontal size={13} className="text-slate-400" />
-              <span>Bộ lọc nâng cao</span>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={`flex-1 h-[44px] flex items-center justify-between gap-1 border rounded-xl px-3 text-sm font-medium transition shadow-2xs cursor-pointer ${
+              showAdvancedFilters || advancedFiltersCount > 0
+                ? "border-teal-500 bg-teal-50/40 text-teal-800"
+                : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+            }`}
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              <SlidersHorizontal size={14} className={advancedFiltersCount > 0 ? "text-teal-600" : "text-slate-400"} />
+              <span className="truncate">Bộ lọc nâng cao</span>
+              {advancedFiltersCount > 0 && (
+                <span className="px-1.5 py-0.2 text-[10px] font-bold bg-teal-600 text-white rounded-full shrink-0">
+                  {advancedFiltersCount}
+                </span>
+              )}
             </div>
-            <ChevronDown size={13} className="text-slate-400" />
+            <ChevronDown size={13} className={`text-slate-400 shrink-0 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
           </button>
           
           {activeFiltersCount > 0 && (
             <button
+              type="button"
               onClick={() => { clearAllFilters(); setCurrentPage(1); }}
-              className="h-[44px] px-3 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200/50 text-teal-700 flex items-center justify-center transition shadow-2xs"
-              title="Đặt lại bộ lọc"
+              className="h-[44px] px-3 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200/50 text-teal-700 flex items-center justify-center transition shadow-2xs cursor-pointer"
+              title="Đặt lại tất cả bộ lọc"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
             </button>
           )}
         </div>
       </div>
+
+      {/* Advanced Filters Panel */}
+      {showAdvancedFilters && (
+        <div className="mb-3.5 bg-white border border-teal-200/80 rounded-2xl p-4 shadow-md animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200/60 flex items-center justify-center text-teal-700">
+                <SlidersHorizontal size={15} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Bộ lọc nâng cao</h3>
+                <p className="text-xs text-slate-400">Lọc chi tiết danh sách ticket theo hợp đồng, khách hàng, người tạo và khoảng thời gian</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {advancedFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAdvancedFilters}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition border border-slate-200 hover:border-red-200 cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw size={12} />
+                  <span>Xóa bộ lọc nâng cao</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFilters(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                title="Đóng bộ lọc"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {/* 1. Khách hàng */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+                <Building2 size={13} className="text-teal-600" />
+                <span>Khách hàng</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={filters.customer}
+                  onChange={(e) => { setFilter("customer")(e.target.value); setCurrentPage(1); }}
+                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
+                >
+                  <option value="">-- Tất cả khách hàng --</option>
+                  {availableCustomers.map((cust) => (
+                    <option key={cust} value={cust}>{cust}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 2. Hợp đồng */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+                <FileText size={13} className="text-teal-600" />
+                <span>Hợp đồng</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={filters.contract}
+                  onChange={(e) => { setFilter("contract")(e.target.value); setCurrentPage(1); }}
+                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
+                >
+                  <option value="">-- Tất cả hợp đồng --</option>
+                  {availableContracts.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} {c.desc ? `(${c.desc})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 3. Người tạo */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1">
+                <User size={13} className="text-teal-600" />
+                <span>Người tạo ticket</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={filters.creator}
+                  onChange={(e) => { setFilter("creator")(e.target.value); setCurrentPage(1); }}
+                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
+                >
+                  <option value="">-- Tất cả người tạo --</option>
+                  {availableCreators.map((creator) => (
+                    <option key={creator} value={creator}>{creator}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 4. Khoảng thời gian tạo */}
+            <div className="space-y-1 sm:col-span-2 lg:col-span-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200/70">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <Calendar size={13} className="text-teal-600" />
+                  <span>Khoảng thời gian tạo</span>
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, createdAtFrom: today, createdAtTo: today }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    Hôm nay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, createdAtFrom: sevenDaysAgo, createdAtTo: now.toISOString().slice(0, 10) }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    7 ngày qua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, createdAtFrom: firstDayOfMonth, createdAtTo: now.toISOString().slice(0, 10) }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    Tháng này
+                  </button>
+                  {(filters.createdAtFrom || filters.createdAtTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilters((p) => ({ ...p, createdAtFrom: "", createdAtTo: "" }));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:text-red-600 transition cursor-pointer"
+                    >
+                      Xóa
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0 w-16">Từ ngày:</span>
+                  <input
+                    type="date"
+                    value={filters.createdAtFrom}
+                    onChange={(e) => { setFilter("createdAtFrom")(e.target.value); setCurrentPage(1); }}
+                    className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0 w-16">Đến ngày:</span>
+                  <input
+                    type="date"
+                    value={filters.createdAtTo}
+                    onChange={(e) => { setFilter("createdAtTo")(e.target.value); setCurrentPage(1); }}
+                    className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Khoảng thời gian đóng (Thời gian đóng) */}
+            <div className="space-y-1 sm:col-span-2 lg:col-span-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200/70">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <Calendar size={13} className="text-teal-600" />
+                  <span>Khoảng thời gian đóng (Hoàn thành ticket)</span>
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, closedAtFrom: today, closedAtTo: today }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    Hôm nay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, closedAtFrom: sevenDaysAgo, closedAtTo: now.toISOString().slice(0, 10) }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    7 ngày qua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+                      setFilters((p) => ({ ...p, closedAtFrom: firstDayOfMonth, closedAtTo: now.toISOString().slice(0, 10) }));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-teal-50 hover:text-teal-700 border border-slate-200 rounded-md transition cursor-pointer"
+                  >
+                    Tháng này
+                  </button>
+                  {(filters.closedAtFrom || filters.closedAtTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilters((p) => ({ ...p, closedAtFrom: "", closedAtTo: "" }));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:text-red-600 transition cursor-pointer"
+                    >
+                      Xóa
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0 w-16">Từ ngày:</span>
+                  <input
+                    type="date"
+                    value={filters.closedAtFrom}
+                    onChange={(e) => { setFilter("closedAtFrom")(e.target.value); setCurrentPage(1); }}
+                    className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0 w-16">Đến ngày:</span>
+                  <input
+                    type="date"
+                    value={filters.closedAtTo}
+                    onChange={(e) => { setFilter("closedAtTo")(e.target.value); setCurrentPage(1); }}
+                    className="w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Chips */}
+      {activeFiltersCount > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3 px-1">
+          <span className="text-xs font-semibold text-slate-500 mr-1">Đang lọc:</span>
+          {filters.customer && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+              <Building2 size={11} className="text-teal-600" />
+              <span>Khách hàng: <b>{filters.customer}</b></span>
+              <button type="button" onClick={() => setFilter("customer")("")} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.contract && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+              <FileText size={11} className="text-teal-600" />
+              <span>Hợp đồng: <b>{filters.contract}</b></span>
+              <button type="button" onClick={() => setFilter("contract")("")} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.creator && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+              <User size={11} className="text-teal-600" />
+              <span>Người tạo: <b>{filters.creator}</b></span>
+              <button type="button" onClick={() => setFilter("creator")("")} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {(filters.createdAtFrom || filters.createdAtTo) && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+              <Calendar size={11} className="text-teal-600" />
+              <span>Tạo: <b>{filters.createdAtFrom || "..."} → {filters.createdAtTo || "..."}</b></span>
+              <button type="button" onClick={() => setFilters(p => ({ ...p, createdAtFrom: "", createdAtTo: "" }))} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {(filters.closedAtFrom || filters.closedAtTo) && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+              <Calendar size={11} className="text-teal-600" />
+              <span>Đóng: <b>{filters.closedAtFrom || "..."} → {filters.closedAtTo || "..."}</b></span>
+              <button type="button" onClick={() => setFilters(p => ({ ...p, closedAtFrom: "", closedAtTo: "" }))} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.tt_type && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Loại: <b>{filters.tt_type}</b></span>
+              <button type="button" onClick={() => setFilter("tt_type")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.tt_status && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Trạng thái: <b>{filters.tt_status}</b></span>
+              <button type="button" onClick={() => setFilter("tt_status")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.priority && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Ưu tiên: <b>{filters.priority}</b></span>
+              <button type="button" onClick={() => setFilter("priority")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.category && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Danh mục: <b>{filters.category}</b></span>
+              <button type="button" onClick={() => setFilter("category")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.contract_scope && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Scope: <b>{filters.contract_scope}</b></span>
+              <button type="button" onClick={() => setFilter("contract_scope")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          {filters.sla_status && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>SLA: <b>{filters.sla_status}</b></span>
+              <button type="button" onClick={() => setFilter("sla_status")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="text-xs text-red-600 hover:underline font-medium ml-1 cursor-pointer"
+          >
+            Xóa tất cả
+          </button>
+        </div>
+      )}
 
       {/* Selected Items Action Bar */}
       {selectedRowIds.length > 0 && (
