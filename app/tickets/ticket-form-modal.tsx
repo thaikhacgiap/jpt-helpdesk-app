@@ -3374,8 +3374,10 @@ function TroubleshootForm({
   const formatUDTime = (dateStr: string) => {
     if (!dateStr) return "—";
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
+      const { datePart, timePart } = splitDateTime(dateStr);
+      if (datePart && timePart) return `${datePart} ${timePart}`;
+      const d = parseServerDate(dateStr, true);
+      if (!d) return dateStr;
       const pad = (num: number) => String(num).padStart(2, "0");
       return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     } catch {
@@ -3385,20 +3387,70 @@ function TroubleshootForm({
 
   const calculateUpdateDuration = (updateTimeStr: string) => {
     if (!updateTimeStr) return "—";
-    const updateTime = new Date(updateTimeStr).getTime();
-    if (isNaN(updateTime)) return "—";
-    const baseTimeStr = ticket?.start_time || createData?.startTime || ticket?.created_at || (updatesLog.length > 0 ? updatesLog[0]?.created_at : null);
+    const updateDate = parseServerDate(updateTimeStr, true);
+    if (!updateDate) return "—";
+
+    // Thời gian bắt đầu xử lý ticket (start_time -> request_time -> created_at)
+    const baseTimeStr = ticket?.start_time || createData?.startTime || ticket?.request_time || createData?.requestTime || ticket?.created_at;
     if (!baseTimeStr) return "—";
-    const baseTime = new Date(baseTimeStr).getTime();
-    if (isNaN(baseTime)) return "—";
-    const diffMs = updateTime - baseTime;
-    if (diffMs < 0) return "0m";
-    const totalMinutes = Math.floor(diffMs / 60000);
-    const days = Math.floor(totalMinutes / (24 * 60));
-    const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const startDate = parseServerDate(baseTimeStr);
+    if (!startDate) return "—";
+
+    const updateMs = updateDate.getTime();
+    const startMs = startDate.getTime();
+    const grossMs = updateMs - startMs;
+    if (grossMs < 0) return "0m";
+
+    // Tính tổng thời gian tạm dừng (Hold) đã diễn ra trước thời điểm cập nhật này
+    let holdMs = 0;
+    if (Array.isArray(holdsList) && holdsList.length > 0) {
+      const intervals: { start: number; end: number }[] = [];
+      holdsList.forEach((h: any) => {
+        if (!h || !h.startTime) return;
+        const hs = parseServerDate(h.startTime);
+        if (!hs) return;
+        const s = Math.max(hs.getTime(), startMs);
+        const he = h.stopTime ? parseServerDate(h.stopTime) : null;
+        const e = Math.min(he ? he.getTime() : updateMs, updateMs);
+        if (s < e) {
+          intervals.push({ start: s, end: e });
+        }
+      });
+
+      if (intervals.length > 0) {
+        intervals.sort((a, b) => a.start - b.start);
+        const merged: { start: number; end: number }[] = [];
+        intervals.forEach((interval) => {
+          if (merged.length === 0) {
+            merged.push({ ...interval });
+          } else {
+            const last = merged[merged.length - 1];
+            if (interval.start <= last.end) {
+              last.end = Math.max(last.end, interval.end);
+            } else {
+              merged.push({ ...interval });
+            }
+          }
+        });
+        merged.forEach((i) => (holdMs += (i.end - i.start)));
+      }
+    }
+
+    // Thời gian xử lý thực của ticket tính tại thời điểm cập nhật (trừ hold)
+    const netMs = Math.max(0, grossMs - holdMs);
+    const totalMinutes = Math.floor(netMs / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
     const mins = totalMinutes % 60;
-    if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h ${mins > 0 ? `${mins}m` : ""}`.trim();
+
+    if (days > 0) {
+      if (hours > 0) return `${days}d ${hours}h`;
+      return `${days}d`;
+    }
+    if (hours > 0) {
+      if (mins > 0) return `${hours}h ${mins}m`;
+      return `${hours}h`;
+    }
     return `${mins}m`;
   };
 
