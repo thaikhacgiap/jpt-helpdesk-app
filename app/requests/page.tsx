@@ -111,11 +111,11 @@ export default function RequestsPage() {
 
   const getRequestLinkedData = (t: ServiceTicket) => {
     const linked = findLinkedTicket(t);
-    const requestTime = linked?.request_time || (linked as any)?.requestTime || t.request_time || (t as any)?.requestTime || t.start_time || t.created_at;
+    const requestTime = linked?.request_time || (linked as any)?.requestTime || null;
     // Trạng thái của yêu cầu bắt buộc lấy theo trạng thái của ticket liên kết.
     // Nếu chưa có ticket thì yêu cầu luôn ở trạng thái "New" (Chờ tiếp nhận).
     const status = linked ? (linked.tt_status || "New") : "New";
-    const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || (t as any)?.tt_close_time || (t as any)?.close_time || t.end_time || null;
+    const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || null;
     const linkedCode = linked ? linked.ticket_id : (t.document_link && t.document_link.startsWith("TK-") ? t.document_link : null);
 
     return { linked, requestTime, status, completeTime, linkedCode };
@@ -493,25 +493,33 @@ export default function RequestsPage() {
 
       if (editingCustomerTicket) {
         const linked = findLinkedTicket(editingCustomerTicket);
-        const resolvedStatus = linked ? (customerFormData.tt_status || linked.tt_status || "New") : "New";
+        const resolvedStatus = linked ? (linked.tt_status || "New") : "New";
+        const completeTimeIso = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || null;
+        const requestTimeIso = linked?.request_time || (linked as any)?.requestTime || null;
 
         await updateServiceTicket(editingCustomerTicket.id, {
-          ...updateData,
+          title: customerFormData.title.trim(),
+          description: finalDescription,
+          tt_type: customerFormData.tt_type,
+          category: customerFormData.category,
+          priority: customerFormData.priority,
+          remark: remarkParts.length > 0 ? remarkParts.join(" | ") : null,
+          hold_reason: customerFormData.affected_service || null,
+          assigned: customerFormData.assigned || null,
+          creator_name: customerFormData.requester.trim() || null,
+          start_time: startTimeValue,
+          event_time: eventTimeValue,
           tt_status: resolvedStatus,
-          request_time: startTimeValue,
-          close_time: endTimeValue,
-          tt_close_time: endTimeValue,
+          request_time: requestTimeIso || undefined,
+          end_time: completeTimeIso || undefined,
+          close_time: completeTimeIso || undefined,
+          tt_close_time: completeTimeIso || undefined,
           customer_id: customerFormData.customerId
         });
 
         // Sync to linked ticket if present
         if (linked) {
           await updateServiceTicket(linked.id, {
-            request_time: startTimeValue,
-            tt_status: customerFormData.tt_status,
-            end_time: endTimeValue,
-            close_time: endTimeValue,
-            tt_close_time: endTimeValue,
             tt_type: customerFormData.tt_type,
             category: customerFormData.category
           });
@@ -1106,14 +1114,18 @@ export default function RequestsPage() {
 
   // Status/Priority Helpers for customer tickets
   const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "New": return "Chờ tiếp nhận";
-      case "In Progress": return "Đang xử lý";
-      case "On Hold": return "Tạm dừng";
-      case "Resolved":
-      case "Completed": return "Hoàn thành";
-      case "Rejected": return "Hủy bỏ";
-      case "Closed": return "Đã đóng";
+    const s = (status || "").toLowerCase().trim();
+    switch (s) {
+      case "new": return "Chờ tiếp nhận";
+      case "in progress": return "Đang xử lý";
+      case "on hold": return "Tạm dừng";
+      case "reporting": return "Báo cáo";
+      case "resolved":
+      case "completed": return "Hoàn thành";
+      case "cancel":
+      case "cancelled":
+      case "rejected": return "Hủy bỏ";
+      case "closed": return "Đã đóng";
       default: return status || "Chờ tiếp nhận";
     }
   };
@@ -1342,7 +1354,7 @@ export default function RequestsPage() {
                 <th className="px-4 py-1.5 min-w-[180px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Mô tả HĐ</th>
                 <th className="px-4 py-1.5 min-w-[140px] whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Khách hàng</th>
                 <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Người tiếp nhận</th>
-                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian yêu cầu</th>
+                <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian nhận yêu cầu</th>
                 <th className="px-4 py-1.5 w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thời gian hoàn thành</th>
                 <th className="px-4 py-1.5 w-28 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Ticket liên kết</th>
                 <th className="px-4 py-1.5 text-center w-36 whitespace-nowrap sticky top-0 bg-slate-50 z-10 font-normal">Thao tác</th>
@@ -2879,19 +2891,21 @@ export default function RequestsPage() {
                       />
                     </div>
 
-                    {/* 5. Thời gian yêu cầu & Thời gian bắt đầu dịch vụ/sự cố */}
+                    {/* 5. Thời gian nhận yêu cầu & Thời gian bắt đầu dịch vụ/sự cố */}
                     <div className="grid grid-cols-2 gap-2.5 text-left">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                          Thời gian yêu cầu
+                          Thời gian nhận yêu cầu
                         </label>
                         <input
                           type="datetime-local"
                           name="receive_time"
                           value={customerFormData.receive_time || ""}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
+                          disabled
+                          readOnly
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none text-xs sm:text-sm bg-slate-100/70 text-slate-500 cursor-not-allowed"
                         />
+                        <p className="text-[10px] text-slate-400 mt-0.5">Lấy từ ticket (không thể chỉnh sửa)</p>
                       </div>
 
                       <div>
@@ -2944,22 +2958,14 @@ export default function RequestsPage() {
                         <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                           Trạng thái <span className="text-red-500">*</span>
                         </label>
-                        <select
-                          name="tt_status"
-                          value={customerFormData.tt_status}
-                          onChange={handleCustomerInputChange}
-                          disabled={!getRequestLinkedData(editingCustomerTicket).linked}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium disabled:bg-slate-50 disabled:text-slate-500"
-                        >
-                          <option value="New">Chờ tiếp nhận</option>
-                          <option value="In Progress">Đang xử lý</option>
-                          <option value="On Hold">Tạm dừng</option>
-                          <option value="Resolved">Hoàn thành</option>
-                          <option value="Rejected">Hủy bỏ</option>
-                        </select>
-                        {!getRequestLinkedData(editingCustomerTicket).linked && (
-                          <p className="text-[10px] text-slate-400 mt-1">Chưa có ticket: Yêu cầu ở trạng thái Chờ tiếp nhận</p>
-                        )}
+                        <input
+                          type="text"
+                          value={getStatusLabel(customerFormData.tt_status)}
+                          disabled
+                          readOnly
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none text-xs sm:text-sm bg-slate-100/70 text-slate-700 font-medium cursor-not-allowed"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-0.5">Lấy từ ticket (không thể chỉnh sửa)</p>
                       </div>
 
                       <div>
@@ -2970,9 +2976,11 @@ export default function RequestsPage() {
                           type="datetime-local"
                           name="end_time"
                           value={customerFormData.end_time || ""}
-                          onChange={handleCustomerInputChange}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white text-slate-700 cursor-pointer"
+                          disabled
+                          readOnly
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none text-xs sm:text-sm bg-slate-100/70 text-slate-500 cursor-not-allowed"
                         />
+                        <p className="text-[10px] text-slate-400 mt-0.5">Lấy từ ticket (không thể chỉnh sửa)</p>
                       </div>
                     </div>
                   </div>
