@@ -8,6 +8,8 @@ import { fetchTickets, deleteTicket, getTicketRequestCode, getTicketRequestStatu
 import { fetchAllAvailableRequests } from "@/components/common/request-search-select";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import { fetchContracts, Contract } from "@/lib/contract-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
+import ContractSearchSelect from "@/components/common/contract-search-select";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
@@ -1046,31 +1048,41 @@ export default function TicketsPage() {
     setFilters((f) => ({ ...f, [key]: val }));
 
   // Options for advanced filters
-  const availableCustomers = useMemo(() => {
-    const map = new Map<string, string>();
-    dbCustomers.forEach((c) => {
-      if (c.name) map.set(c.name, c.name);
-    });
+  const allFilterCustomers = useMemo(() => {
+    const list: Customer[] = [...dbCustomers];
+    const existingNames = new Set(
+      dbCustomers.map((c) => (c.name || "").toLowerCase().trim()).filter(Boolean)
+    );
     tickets.forEach((t) => {
-      if (t.customer_name) map.set(t.customer_name, t.customer_name);
+      const name = (t.customer_name || "").trim();
+      if (name && !existingNames.has(name.toLowerCase())) {
+        existingNames.add(name.toLowerCase());
+        list.push({
+          id: t.customer_id || `cust-${name}`,
+          name: name,
+        } as Customer);
+      }
     });
-    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+    return list;
   }, [dbCustomers, tickets]);
 
-  const availableContracts = useMemo(() => {
-    const map = new Map<string, { code: string; desc?: string }>();
-    dbContracts.forEach((c) => {
-      const code = c.contract_no || c.code;
-      if (code) {
-        map.set(code, { code, desc: c.service || c.description });
-      }
-    });
+  const allFilterContracts = useMemo(() => {
+    const list: Contract[] = [...dbContracts];
+    const existingCodes = new Set(
+      dbContracts.map((c) => (c.contract_no || c.code || "").toLowerCase().trim()).filter(Boolean)
+    );
     tickets.forEach((t) => {
-      if (t.contract_no && !map.has(t.contract_no)) {
-        map.set(t.contract_no, { code: t.contract_no });
+      const code = (t.contract_no || "").trim();
+      if (code && !existingCodes.has(code.toLowerCase())) {
+        existingCodes.add(code.toLowerCase());
+        list.push({
+          id: `contract-${code}`,
+          contract_no: code,
+          code: code,
+        } as Contract);
       }
     });
-    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+    return list;
   }, [dbContracts, tickets]);
 
   const availableCreators = useMemo(() => {
@@ -1807,19 +1819,18 @@ export default function TicketsPage() {
                 <Building2 size={13} className="text-teal-600" />
                 <span>Khách hàng</span>
               </label>
-              <div className="relative">
-                <select
-                  value={filters.customer}
-                  onChange={(e) => { setFilter("customer")(e.target.value); setCurrentPage(1); }}
-                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
-                >
-                  <option value="">-- Tất cả khách hàng --</option>
-                  {availableCustomers.map((cust) => (
-                    <option key={cust} value={cust}>{cust}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
+              <CustomerSearchSelect
+                value={filters.customer}
+                valueKey="name"
+                customers={allFilterCustomers}
+                allowAll={true}
+                allLabel="-- Tất cả khách hàng --"
+                placeholder="Tìm và chọn khách hàng..."
+                onChange={(val, cust) => {
+                  setFilter("customer")(cust?.name || val || "");
+                  setCurrentPage(1);
+                }}
+              />
             </div>
 
             {/* 2. Hợp đồng */}
@@ -1828,21 +1839,17 @@ export default function TicketsPage() {
                 <FileText size={13} className="text-teal-600" />
                 <span>Hợp đồng</span>
               </label>
-              <div className="relative">
-                <select
-                  value={filters.contract}
-                  onChange={(e) => { setFilter("contract")(e.target.value); setCurrentPage(1); }}
-                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
-                >
-                  <option value="">-- Tất cả hợp đồng --</option>
-                  {availableContracts.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code} {c.desc ? `(${c.desc})` : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
+              <ContractSearchSelect
+                value={filters.contract}
+                contracts={allFilterContracts}
+                allowAll={true}
+                allLabel="-- Tất cả hợp đồng --"
+                placeholder="Tìm và chọn hợp đồng..."
+                onChange={(val) => {
+                  setFilter("contract")(val || "");
+                  setCurrentPage(1);
+                }}
+              />
             </div>
 
             {/* 3. Người tạo */}
