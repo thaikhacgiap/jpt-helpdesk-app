@@ -774,8 +774,45 @@ export default function RequestsPage() {
     }
   };
 
-  const handleModalCreateTicket = () => {
+  const handleCustomerReceiveAndCreate = async (ticket: ServiceTicket) => {
+    try {
+      const currentUser = getCurrentUser();
+      const receiver = currentUser?.name || "Kỹ thuật viên";
+      const nowIso = new Date().toISOString();
+      const currentStatus = (ticket.tt_status || "New").toLowerCase();
+
+      if (currentStatus === "new" || !ticket.assigned) {
+        await updateServiceTicket(ticket.id, {
+          tt_status: "In Progress",
+          assigned: ticket.assigned || receiver,
+          start_time: ticket.start_time || nowIso,
+          updated_at: nowIso
+        });
+      }
+    } catch (err) {
+      console.error("Error auto-receiving ticket before creating:", err);
+    }
+
+    window.location.href = `/tickets/create?customerId=${ticket.customer_id}&title=${encodeURIComponent(ticket.title)}&description=${encodeURIComponent(ticket.description)}&priority=${ticket.priority}&category=${ticket.category}&requestTicketId=${ticket.ticket_id}&requestDbId=${ticket.id}`;
+  };
+
+  const handleModalCreateTicket = async () => {
     if (!editingCustomerTicket) return;
+    try {
+      const currentUser = getCurrentUser();
+      const receiverName = currentUser?.name || "Kỹ thuật viên";
+      const nowIso = new Date().toISOString();
+      if (isPendingStatus(customerFormData.tt_status) || !customerFormData.assigned) {
+        await updateServiceTicket(editingCustomerTicket.id, {
+          tt_status: "In Progress",
+          assigned: customerFormData.assigned || receiverName,
+          start_time: customerFormData.receive_time ? new Date(customerFormData.receive_time).toISOString() : nowIso,
+          updated_at: nowIso
+        });
+      }
+    } catch (err) {
+      console.error("Error auto-receiving ticket in modal before creating:", err);
+    }
     window.location.href = `/tickets/create?customerId=${customerFormData.customerId}&title=${encodeURIComponent(customerFormData.title)}&description=${encodeURIComponent(customerFormData.description)}&priority=${customerFormData.priority}&category=${customerFormData.category}&requestTicketId=${editingCustomerTicket.ticket_id}&requestDbId=${editingCustomerTicket.id}`;
   };
 
@@ -1398,26 +1435,14 @@ export default function RequestsPage() {
                       {/* Thao tác */}
                       <td className="px-4 py-1 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
-                          {isPending && (
-                            <button
-                              onClick={() => handleCustomerReceive(t)}
-                              className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition shadow-xs cursor-pointer whitespace-nowrap"
-                              title="Tiếp nhận yêu cầu này để chuyển sang Đang xử lý"
-                            >
-                              <Check size={11} />
-                              <span>Tiếp nhận</span>
-                            </button>
-                          )}
-
                           {!hasLinkedTicket ? (
                             <button
-                              onClick={() => {
-                                window.location.href = `/tickets/create?customerId=${t.customer_id}&title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}&priority=${t.priority}&category=${t.category}&requestTicketId=${t.ticket_id}&requestDbId=${t.id}`;
-                              }}
+                              onClick={() => handleCustomerReceiveAndCreate(t)}
                               className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-normal transition shadow-xs cursor-pointer whitespace-nowrap"
+                              title="Tiếp nhận yêu cầu và tạo Ticket xử lý"
                             >
                               <Plus size={10} />
-                              <span>Tạo Ticket</span>
+                              <span>Tiếp nhận & Tạo ticket</span>
                             </button>
                           ) : (
                             <span className="text-slate-400 text-xs italic">Đã liên kết</span>
@@ -3084,30 +3109,17 @@ export default function RequestsPage() {
                 ) : <div />}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Nút Tiếp nhận trong Form */}
-                  {editingCustomerTicket && (customerFormData.tt_status === "New" || !customerFormData.assigned) && (
-                    <button
-                      type="button"
-                      onClick={handleModalCustomerReceive}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                      title="Bấm để nhận tiếp nhận yêu cầu này"
-                    >
-                      <Check size={14} />
-                      <span>Tiếp Nhận</span>
-                    </button>
-                  )}
-
-                  {/* Nút Tạo Ticket trong Form */}
+                  {/* Nút Tiếp nhận & Tạo Ticket trong Form */}
                   {editingCustomerTicket && (
                     !getRequestLinkedData(editingCustomerTicket).linkedCode ? (
                       <button
                         type="button"
                         onClick={handleModalCreateTicket}
                         className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        title="Tạo Ticket kỹ thuật từ yêu cầu này"
+                        title="Tiếp nhận và tạo Ticket kỹ thuật từ yêu cầu này"
                       >
                         <Plus size={14} />
-                        <span>Tạo Ticket</span>
+                        <span>Tiếp nhận & Tạo ticket</span>
                       </button>
                     ) : (
                       <button
