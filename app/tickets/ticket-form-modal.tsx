@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
-import { fetchContractsByCustomer } from "@/lib/contract-operations";
+import { fetchContractsByCustomer, isContractValid } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
 import { NhanSu, fetchNhanSu } from "@/lib/nhan-su-operations";
@@ -529,72 +529,363 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
   onChange: (c: Contract | null) => void; loading: boolean; disabled: boolean; readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref             = useRef<HTMLDivElement>(null);
-  const btnRef          = useRef<HTMLButtonElement>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"valid" | "all">("valid");
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
     if (disabled) setOpen(false);
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearchQuery("");
+      }
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [disabled]);
 
+  const validContracts = useMemo(() => {
+    return contracts.filter((c) => isContractValid(c));
+  }, [contracts]);
+
+  // If there are contracts but none valid, default to 'all' so list isn't empty
+  useEffect(() => {
+    if (contracts.length > 0 && validContracts.length === 0) {
+      setFilterMode("all");
+    }
+  }, [contracts.length, validContracts.length]);
+
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!open && btnRef.current) {
+      setRect(btnRef.current.getBoundingClientRect());
+      setTimeout(() => searchInputRef.current?.focus(), 60);
+    }
+    setOpen((o) => !o);
+  };
+
+  const handleSelect = (c: Contract | null) => {
+    onChange(c);
+    setOpen(false);
+    setSearchQuery("");
+  };
+
+  // Filtered list by tab & search
+  const filteredContracts = useMemo(() => {
+    let list = filterMode === "valid" ? validContracts : contracts;
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter((c) => {
+      const cNo = (c.contract_no || "").toLowerCase();
+      const cCode = (c.code || c.project_id || "").toLowerCase();
+      const cName = (c.name || c.description || "").toLowerCase();
+      const cService = (c.service || "").toLowerCase();
+      return cNo.includes(q) || cCode.includes(q) || cName.includes(q) || cService.includes(q);
+    });
+  }, [filterMode, validContracts, contracts, searchQuery]);
+
   if (readOnly) {
+    if (!value) {
+      return (
+        <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 h-10 text-sm text-slate-400 bg-slate-50 w-full">
+          <FileText size={14} className="shrink-0 text-slate-400" />
+          <span>—</span>
+        </div>
+      );
+    }
+    const cNo = value.contract_no || value.code || "—";
+    const cCode = (value.project_id && value.project_id !== cNo) ? value.project_id : (value.code && value.code !== cNo ? value.code : "");
+    const cName = value.name || (value as any).description || (value as any).service || "";
+
     return (
-      <div className="flex items-center gap-2 border border-[#0099cc] rounded px-4 h-10 text-sm text-[#0099cc] bg-[#fafeff] w-full">
-        <FileText size={13} className="shrink-0" />
-        <span>{value?.contract_no || value?.code || "—"}</span>
+      <div className="flex items-center gap-2 border border-[#0099cc] rounded-xl px-3.5 h-10 text-sm text-[#0099cc] bg-[#fafeff] w-full min-w-0">
+        <FileText size={14} className="shrink-0" />
+        <span className="font-bold truncate">{cNo}</span>
+        {cCode && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+            Mã: {cCode}
+          </span>
+        )}
+        {cName && <span className="text-slate-600 truncate text-xs">— {cName}</span>}
       </div>
     );
   }
 
-  const label = loading ? "Đang tải..." : disabled ? "Chọn KH trước" : value
-    ? (value.contract_no || value.code)
-    : "Chọn số HĐ...";
+  const selectedNo = value?.contract_no || value?.code || "";
+  const selectedCode = value?.project_id && value.project_id !== selectedNo ? value.project_id : (value?.code && value.code !== selectedNo ? value.code : "");
+  const selectedName = value?.name || (value as any)?.description || (value as any)?.service || "";
 
   return (
     <div ref={ref} className="relative w-full">
-      <button ref={btnRef} type="button" disabled={disabled}
-        onClick={() => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); setOpen((o) => !o); }}
-        className={`w-full flex items-center gap-2 border rounded h-10 px-4 text-sm transition
-          ${disabled ? "border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed" : ""}
-          ${!disabled && value ? "border-[#0099cc] bg-[#f0faff] text-[#0099cc]" : ""}
-          ${!disabled && !value ? "border-[#0099cc] text-slate-400 bg-white hover:bg-[#f0faff]" : ""}`}
+      {/* Trigger Button */}
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={handleToggle}
+        className={`w-full flex items-center justify-between gap-2 border rounded-xl h-10 px-3.5 text-xs sm:text-sm transition outline-none cursor-pointer ${
+          disabled
+            ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+            : open
+            ? "border-teal-500 ring-2 ring-teal-500/10 shadow-xs bg-white"
+            : value
+            ? "border-[#0099cc] bg-[#f0faff] text-[#0099cc] hover:bg-[#e6f6fc]"
+            : "border-slate-200 text-slate-400 bg-white hover:border-slate-300"
+        }`}
       >
-        <FileText size={13} className="shrink-0" />
-        <span className="flex-1 text-left truncate">{label}</span>
-        {!disabled && (
-          <ChevronDown size={13} className={`shrink-0 text-[#0099cc] transition ${open ? "rotate-180" : ""}`} />
-        )}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <FileText size={14} className={`shrink-0 ${value ? "text-[#0099cc]" : "text-slate-400"}`} />
+          {loading ? (
+            <span className="text-slate-400 italic">Đang tải hợp đồng...</span>
+          ) : disabled ? (
+            <span className="text-slate-400">Chọn khách hàng trước</span>
+          ) : value ? (
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate text-left">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm shrink-0">{selectedNo}</span>
+              {selectedCode && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-100 text-purple-700 border border-purple-200 shrink-0">
+                  Mã: {selectedCode}
+                </span>
+              )}
+              {selectedName && (
+                <span className="text-slate-600 truncate text-xs hidden sm:inline">
+                  — {selectedName}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-slate-400 truncate">Chọn số HĐ, mã HĐ, tên HĐ...</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0 ml-1">
+          {value && !disabled && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(null);
+              }}
+              className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
+              title="Xóa lựa chọn"
+            >
+              <X size={13} />
+            </span>
+          )}
+          {!disabled && (
+            <ChevronDown
+              size={14}
+              className={`text-[#0099cc] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            />
+          )}
+        </div>
       </button>
-      {value && !disabled && (
-        <button type="button" onClick={() => onChange(null)}
-          className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400">
-          <X size={11} />
-        </button>
-      )}
+
+      {/* Dropdown Menu */}
       {open && !disabled && rect && (
-        <div style={{ position: "fixed", top: rect.bottom + 2, left: rect.left, width: rect.width, zIndex: 9999 }}
-          className="bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden">
-          <div className="max-h-48 overflow-y-auto">
-            {[
-              { id: "no-contract", contract_no: "No Contract", code: "No Contract", name: "Không hợp đồng" },
-              ...contracts
-            ].map((c) => (
-              <button key={c.id} type="button"
-                onClick={() => { onChange(c as any); setOpen(false); }}
-                className={`w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-[#f0faff] border-b border-slate-50 last:border-0 transition ${value?.id === c.id ? "bg-[#e6f6fc]" : ""}`}>
-                <FileText size={11} className={c.id === "no-contract" ? "text-slate-400 shrink-0" : "text-emerald-500 shrink-0"} />
-                <div className="flex-1 min-w-0">
-                  <span className="font-bold text-slate-800 text-sm">{c.contract_no || c.code}</span>
-                  <p className="text-[10px] text-slate-400 truncate">{c.name}</p>
-                </div>
-                {value?.id === c.id && <Check size={11} className="text-[#0099cc]" />}
+        <div
+          style={{
+            position: "fixed",
+            top: `${rect.bottom + 4}px`,
+            left: `${Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 420) - 8))}px`,
+            width: `${Math.max(rect.width, 420)}px`,
+            maxHeight: "380px",
+            zIndex: 99999,
+          }}
+          className="bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-150"
+        >
+          {/* Header: Search Box */}
+          <div className="p-2.5 border-b border-slate-100 bg-slate-50/80 space-y-2">
+            <div className="relative flex items-center">
+              <Search size={13} className="absolute left-3 text-slate-400 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm số hợp đồng, mã HĐ, tên HĐ..."
+                className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Tabs: Còn hạn vs Tất cả */}
+            <div className="flex items-center gap-1.5 p-0.5 bg-slate-200/60 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setFilterMode("valid")}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  filterMode === "valid"
+                    ? "bg-white text-emerald-700 shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <span>Hợp đồng còn hạn</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${filterMode === "valid" ? "bg-emerald-100 text-emerald-800" : "bg-slate-300/60 text-slate-700"}`}>
+                  {validContracts.length}
+                </span>
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setFilterMode("all")}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  filterMode === "all"
+                    ? "bg-white text-teal-800 shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <span>Tất cả hợp đồng</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${filterMode === "all" ? "bg-teal-100 text-teal-800" : "bg-slate-300/60 text-slate-700"}`}>
+                  {contracts.length}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Contract List */}
+          <div className="overflow-y-auto flex-1 p-1.5 space-y-1">
+            {/* Option: Không hợp đồng */}
+            <button
+              type="button"
+              onClick={() =>
+                handleSelect({
+                  id: "no-contract",
+                  contract_no: "No Contract",
+                  code: "No Contract",
+                  name: "Không hợp đồng",
+                } as any)
+              }
+              className={`w-full text-left p-2 rounded-xl text-xs transition flex items-center justify-between cursor-pointer border ${
+                value?.id === "no-contract"
+                  ? "bg-teal-50 border-teal-300 text-teal-900 font-semibold"
+                  : "hover:bg-slate-50 border-transparent text-slate-600"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <FileText size={14} className="text-slate-400 shrink-0" />
+                <span className="font-semibold text-slate-700">Không có hợp đồng (No Contract)</span>
+              </div>
+              {value?.id === "no-contract" && <Check size={14} className="text-teal-600 shrink-0" />}
+            </button>
+
+            {filteredContracts.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                {filterMode === "valid" ? (
+                  <div>
+                    <p className="font-medium text-slate-600 mb-1">Không có hợp đồng còn hạn nào</p>
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode("all")}
+                      className="text-teal-600 underline text-[11px] hover:text-teal-800 cursor-pointer"
+                    >
+                      Bấm để xem tất cả hợp đồng ({contracts.length})
+                    </button>
+                  </div>
+                ) : (
+                  <span>Không tìm thấy hợp đồng nào phù hợp</span>
+                )}
+              </div>
+            ) : (
+              filteredContracts.map((c) => {
+                const cNo = c.contract_no || c.code || "";
+                const cCode = (c.project_id && c.project_id !== cNo) ? c.project_id : (c.code && c.code !== cNo ? c.code : "");
+                const cName = c.name || (c as any).description || (c as any).service || "";
+                const isValid = isContractValid(c);
+                const isSelected = value?.id === c.id || (cNo && value?.contract_no === cNo);
+
+                return (
+                  <button
+                    key={c.id || cNo}
+                    type="button"
+                    onClick={() => handleSelect(c)}
+                    className={`w-full text-left p-2.5 rounded-xl text-xs transition flex items-start justify-between gap-2.5 cursor-pointer border ${
+                      isSelected
+                        ? "bg-teal-50 border-teal-300 shadow-xs"
+                        : "hover:bg-slate-50/80 border-transparent text-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <FileText
+                        size={15}
+                        className={`shrink-0 mt-0.5 ${
+                          isValid ? "text-emerald-500" : "text-slate-400"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {/* Row 1: Số HĐ, Mã HĐ, Trạng thái hạn */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-800 text-[13px]">{cNo}</span>
+                          {cCode && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                              Mã: {cCode}
+                            </span>
+                          )}
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                              isValid
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
+                            }`}
+                          >
+                            {isValid ? "Còn hạn" : "Hết hạn"}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Tên hợp đồng */}
+                        <p className="text-xs text-slate-700 font-medium line-clamp-2" title={cName}>
+                          {cName || <span className="text-slate-400 italic">Chưa có tên hợp đồng</span>}
+                        </p>
+
+                        {/* Row 3: Dịch vụ & Hạn */}
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 flex-wrap">
+                          {c.service && c.service !== cName && (
+                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                              Dịch vụ: {c.service}
+                            </span>
+                          )}
+                          {(c.expiry_date || c.end_date) && (
+                            <span>Hạn: {c.expiry_date || c.end_date}</span>
+                          )}
+                          {(c.am || (c as any).owner_name) && (
+                            <span>• AM: {c.am || (c as any).owner_name}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && <Check size={15} className="text-teal-600 shrink-0 mt-1" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-2 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between text-[11px] text-slate-400 px-3">
+            <span>
+              Hiển thị: <b>{filteredContracts.length}</b> / {contracts.length} hợp đồng
+            </span>
+            {value && (
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                className="text-red-500 hover:text-red-700 font-semibold cursor-pointer"
+              >
+                Bỏ chọn
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1196,11 +1487,11 @@ function CheckContractForm({
               setSelectedContract(found);
               /* Propagate auto-filled fields to parent so they display */
               onChange({
-                contractName:   found.name           || "",
-                saleResp:       found.owner_name      || "",
-                contractStart:  found.start_date      || "",
-                contractEnd:    found.end_date        || "",
-                contractStatus: found.status          || "",
+                contractName:   found.name || (found as any).description || (found as any).service || "",
+                saleResp:       found.owner_name || (found as any).am || "",
+                contractStart:  found.start_date || (found as any).signed_date || "",
+                contractEnd:    found.end_date || (found as any).expiry_date || "",
+                contractStatus: found.status || "",
               });
             }
           }
@@ -1256,11 +1547,11 @@ function CheckContractForm({
     onChange({
       contractId:     c?.id           || "",
       contractNo:     c?.contract_no  || c?.code || "",
-      contractName:   c?.name         || "",
-      saleResp:       (c as any)?.owner_name   || "",
-      contractStart:  (c as any)?.start_date   || "",
-      contractEnd:    (c as any)?.end_date     || "",
-      contractStatus: (c as any)?.status       || "",
+      contractName:   c?.name || (c as any)?.description || (c as any)?.service || "",
+      saleResp:       (c as any)?.owner_name || (c as any)?.am || "",
+      contractStart:  (c as any)?.start_date || (c as any)?.signed_date || "",
+      contractEnd:    (c as any)?.end_date || (c as any)?.expiry_date || "",
+      contractStatus: (c as any)?.status || "",
       healthCheckRound: "",
     });
   };
@@ -1395,7 +1686,9 @@ function CheckContractForm({
         <div className="flex items-center gap-3">
           <label className={labelCls}>Contract Name</label>
           <div className="flex-1 border border-slate-200/80 rounded-xl px-3.5 h-10 flex items-center text-slate-700 bg-slate-50/30 truncate font-semibold">
-            {data.contractName || <span className="text-slate-400 font-normal italic">Chưa có tên hợp đồng</span>}
+            {data.contractName || selectedContract?.name || (selectedContract as any)?.description || (selectedContract as any)?.service || (
+              <span className="text-slate-400 font-normal italic">Chưa có tên hợp đồng</span>
+            )}
           </div>
         </div>
 

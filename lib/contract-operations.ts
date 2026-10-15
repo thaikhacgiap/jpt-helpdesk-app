@@ -68,14 +68,57 @@ function normalizeContract(c: any): Contract {
     team: c?.team || "",
     fy: c?.fy || "",
     // Compat fields
-    code: contract_no,
-    name: service || contract_no,
+    code: c?.project_id || c?.code || contract_no,
+    name: c?.name || c?.description || service || contract_no,
     customer_name: customer,
     start_date: signed_date,
     end_date: expiry_date,
     owner_name: am,
     phu_trach: am,
   };
+}
+
+/** Check if contract is still active/valid (not expired or cancelled) */
+export function isContractValid(c: Partial<Contract>): boolean {
+  if (!c) return false;
+  if (c.id === "no-contract") return true;
+
+  const s = (c.status || "").toLowerCase().trim();
+  if (
+    s === "hết hạn" ||
+    s === "expired" ||
+    s === "hủy" ||
+    s === "cancelled" ||
+    s === "thanh lý" ||
+    s === "tạm dừng" ||
+    s.includes("hết hạn") ||
+    s.includes("quá hạn")
+  ) {
+    return false;
+  }
+
+  const expStr = c.expiry_date || c.end_date;
+  if (expStr) {
+    let expDate: Date | null = null;
+    if (expStr.includes("/")) {
+      const parts = expStr.split("/");
+      if (parts.length === 3) {
+        expDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+      }
+    } else {
+      expDate = new Date(expStr);
+    }
+
+    if (expDate && !isNaN(expDate.getTime())) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expDate < today) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 // ─── Fetch All Contracts (Uncapped with Chunked Pagination) ──

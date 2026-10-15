@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Search, FileText, ChevronDown, Check, X, Loader2 } from "lucide-react";
-import { Contract, fetchContracts } from "@/lib/contract-operations";
+import { Contract, fetchContracts, isContractValid } from "@/lib/contract-operations";
 
 export interface ContractSearchSelectProps {
   value?: string | null;
@@ -37,6 +37,7 @@ export default function ContractSearchSelect({
 }: ContractSearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"valid" | "all">("valid");
   const [internalContracts, setInternalContracts] = useState<Contract[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
@@ -104,6 +105,18 @@ export default function ContractSearchSelect({
     };
   }, [isOpen]);
 
+  // Compute valid contracts
+  const validContracts = useMemo(() => {
+    return internalContracts.filter((c) => isContractValid(c));
+  }, [internalContracts]);
+
+  // If no valid contracts, default to 'all' so user sees contracts
+  useEffect(() => {
+    if (internalContracts.length > 0 && validContracts.length === 0) {
+      setFilterMode("all");
+    }
+  }, [internalContracts.length, validContracts.length]);
+
   // Find currently selected contract
   const isAllSelected = allowAll && (!value || value === allValue);
   const selectedContract = useMemo(() => {
@@ -117,20 +130,23 @@ export default function ContractSearchSelect({
     );
   }, [internalContracts, value, isAllSelected]);
 
-  // Filter contracts by query
+  // Filter contracts by mode & query
   const filteredContracts = useMemo(() => {
-    if (!searchQuery.trim()) return internalContracts;
+    let list = filterMode === "valid" ? validContracts : internalContracts;
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
-    return internalContracts.filter(
+    return list.filter(
       (c) =>
         (c.contract_no && c.contract_no.toLowerCase().includes(q)) ||
         (c.code && c.code.toLowerCase().includes(q)) ||
+        (c.project_id && c.project_id.toLowerCase().includes(q)) ||
+        (c.name && c.name.toLowerCase().includes(q)) ||
         (c.service && c.service.toLowerCase().includes(q)) ||
         (c.description && c.description.toLowerCase().includes(q)) ||
         (c.customer && c.customer.toLowerCase().includes(q)) ||
         (c.customer_name && c.customer_name.toLowerCase().includes(q))
     );
-  }, [internalContracts, searchQuery]);
+  }, [filterMode, validContracts, internalContracts, searchQuery]);
 
   const handleToggle = () => {
     if (disabled) return;
@@ -166,10 +182,17 @@ export default function ContractSearchSelect({
 
   // Determine display label
   let displayText = "";
+  let displayCode = "";
+  let displayName = "";
+
   if (isAllSelected) {
     displayText = allLabel;
   } else if (selectedContract) {
     displayText = selectedContract.contract_no || selectedContract.code || "";
+    if (selectedContract.project_id && selectedContract.project_id !== displayText) {
+      displayCode = selectedContract.project_id;
+    }
+    displayName = selectedContract.name || (selectedContract as any).description || (selectedContract as any).service || "";
   } else if (value) {
     displayText = value;
   }
@@ -218,10 +241,15 @@ export default function ContractSearchSelect({
           />
           {displayText ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
-              <span className="font-medium text-slate-800 truncate">{displayText}</span>
-              {selectedContract?.service && (
-                <span className="shrink-0 text-xs text-slate-400 truncate hidden sm:inline">
-                  ({selectedContract.service})
+              <span className="font-bold text-slate-800 text-xs sm:text-sm shrink-0">{displayText}</span>
+              {displayCode && (
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                  Mã: {displayCode}
+                </span>
+              )}
+              {displayName && (
+                <span className="shrink-0 text-xs text-slate-500 truncate hidden sm:inline">
+                  — {displayName}
                 </span>
               )}
             </div>
@@ -262,8 +290,8 @@ export default function ContractSearchSelect({
               ? {
                   position: "fixed",
                   top: `${dropdownRect.bottom + 6}px`,
-                  left: `${dropdownRect.left}px`,
-                  width: `${Math.max(dropdownRect.width, 360)}px`,
+                  left: `${Math.max(8, Math.min(dropdownRect.left, window.innerWidth - Math.max(dropdownRect.width, 390) - 8))}px`,
+                  width: `${Math.max(dropdownRect.width, 390)}px`,
                   zIndex: 999999,
                 }
               : undefined
@@ -272,10 +300,10 @@ export default function ContractSearchSelect({
             dropdownPosition === "absolute"
               ? "absolute top-full left-0 right-0 mt-1.5 z-50 min-w-[340px]"
               : ""
-          } bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col max-h-80`}
+          } bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 flex flex-col max-h-96`}
         >
-          {/* Search Box */}
-          <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+          {/* Header: Search Box & Tabs */}
+          <div className="p-2.5 border-b border-slate-100 bg-slate-50/80 space-y-2">
             <div className="relative flex items-center">
               <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
               <input
@@ -283,18 +311,62 @@ export default function ContractSearchSelect({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm số hợp đồng, dịch vụ, khách hàng..."
-                className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
+                placeholder="Tìm số HĐ, mã HĐ, tên HĐ, khách hàng..."
+                className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <X size={12} />
                 </button>
               )}
+            </div>
+
+            {/* Filter Tabs: Còn hạn vs Tất cả */}
+            <div className="flex items-center gap-1.5 p-0.5 bg-slate-200/60 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setFilterMode("valid")}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  filterMode === "valid"
+                    ? "bg-white text-emerald-700 shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <span>Hợp đồng còn hạn</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    filterMode === "valid"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-300/60 text-slate-700"
+                  }`}
+                >
+                  {validContracts.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode("all")}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  filterMode === "all"
+                    ? "bg-white text-teal-800 shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <span>Tất cả hợp đồng</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    filterMode === "all"
+                      ? "bg-teal-100 text-teal-800"
+                      : "bg-slate-300/60 text-slate-700"
+                  }`}
+                >
+                  {internalContracts.length}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -305,14 +377,14 @@ export default function ContractSearchSelect({
               <button
                 type="button"
                 onClick={() => handleSelect(null, true)}
-                className={`w-full text-left p-2 rounded-lg text-xs transition flex items-center justify-between cursor-pointer ${
+                className={`w-full text-left p-2 rounded-xl text-xs transition flex items-center justify-between cursor-pointer border ${
                   isAllSelected
-                    ? "bg-teal-50 text-teal-800 font-semibold"
-                    : "hover:bg-slate-50 text-slate-700 font-medium"
+                    ? "bg-teal-50 border-teal-200 text-teal-900 font-semibold"
+                    : "hover:bg-slate-50 border-transparent text-slate-700 font-medium"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded bg-teal-100/60 text-teal-700 flex items-center justify-center font-bold text-[10px]">
+                  <div className="w-5 h-5 rounded-md bg-teal-100/60 text-teal-700 flex items-center justify-center font-bold text-[10px]">
                     All
                   </div>
                   <span>{allLabel}</span>
@@ -322,11 +394,22 @@ export default function ContractSearchSelect({
             )}
 
             {filteredContracts.length === 0 ? (
-              <div className="py-6 text-center px-4 text-xs text-slate-400">
+              <div className="py-8 text-center px-4 text-xs text-slate-400">
                 {isLoading ? (
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 size={16} className="animate-spin text-teal-600" />
                     <span>Đang tải danh sách hợp đồng...</span>
+                  </div>
+                ) : filterMode === "valid" ? (
+                  <div>
+                    <p className="font-medium text-slate-600 mb-1">Không có hợp đồng còn hạn nào</p>
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode("all")}
+                      className="text-teal-600 underline text-[11px] hover:text-teal-800 cursor-pointer"
+                    >
+                      Bấm để xem tất cả hợp đồng ({internalContracts.length})
+                    </button>
                   </div>
                 ) : (
                   <span>Không tìm thấy hợp đồng nào phù hợp</span>
@@ -335,6 +418,9 @@ export default function ContractSearchSelect({
             ) : (
               filteredContracts.map((c) => {
                 const contractNo = c.contract_no || c.code || "";
+                const contractCode = (c.project_id && c.project_id !== contractNo) ? c.project_id : (c.code && c.code !== contractNo ? c.code : "");
+                const contractName = c.name || (c as any).description || (c as any).service || "";
+                const isValid = isContractValid(c);
                 const isSelected = selectedContract?.id === c.id || (contractNo && value === contractNo);
 
                 return (
@@ -342,30 +428,52 @@ export default function ContractSearchSelect({
                     key={c.id || contractNo}
                     type="button"
                     onClick={() => handleSelect(c)}
-                    className={`w-full text-left p-2 rounded-lg text-xs transition flex items-start justify-between gap-2 cursor-pointer ${
+                    className={`w-full text-left p-2.5 rounded-xl text-xs transition flex items-start justify-between gap-2.5 cursor-pointer border ${
                       isSelected
-                        ? "bg-teal-50 border border-teal-200/80 text-teal-950 font-medium"
-                        : "hover:bg-slate-50 text-slate-700 border border-transparent"
+                        ? "bg-teal-50 border-teal-300 text-teal-950 font-medium shadow-xs"
+                        : "hover:bg-slate-50 text-slate-700 border-transparent"
                     }`}
                   >
-                    <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      {/* Row 1: Số HĐ, Mã HĐ, Trạng thái hạn */}
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="font-mono font-bold text-[12px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                           {contractNo}
                         </span>
-                        {(c.customer || c.customer_name) && (
-                          <span className="text-[11px] text-slate-500 truncate max-w-[150px]">
-                            {c.customer || c.customer_name}
+                        {contractCode && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-50 text-purple-700 border border-purple-200">
+                            Mã: {contractCode}
                           </span>
                         )}
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                            isValid
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          }`}
+                        >
+                          {isValid ? "Còn hạn" : "Hết hạn"}
+                        </span>
                       </div>
-                      {(c.service || c.description) && (
-                        <p className="text-[11px] text-slate-600 truncate" title={c.service || c.description}>
-                          {c.service || c.description}
-                        </p>
-                      )}
+
+                      {/* Row 2: Tên hợp đồng */}
+                      <p className="text-xs text-slate-700 font-medium line-clamp-2" title={contractName}>
+                        {contractName || <span className="text-slate-400 italic">Chưa có tên hợp đồng</span>}
+                      </p>
+
+                      {/* Row 3: Khách hàng / Dịch vụ / Ngày hết hạn */}
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 flex-wrap">
+                        {(c.customer || c.customer_name) && (
+                          <span className="text-slate-500 truncate max-w-[150px]">
+                            KH: {c.customer || c.customer_name}
+                          </span>
+                        )}
+                        {(c.expiry_date || c.end_date) && (
+                          <span>Hạn: {c.expiry_date || c.end_date}</span>
+                        )}
+                      </div>
                     </div>
-                    {isSelected && <Check size={14} className="text-teal-600 shrink-0 mt-1" />}
+                    {isSelected && <Check size={15} className="text-teal-600 shrink-0 mt-1" />}
                   </button>
                 );
               })
@@ -373,15 +481,17 @@ export default function ContractSearchSelect({
           </div>
 
           {/* Quick Footer */}
-          <div className="p-1.5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-[11px] text-slate-400 px-3">
-            <span>Tổng: {internalContracts.length} hợp đồng</span>
+          <div className="p-2 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between text-[11px] text-slate-400 px-3">
+            <span>
+              Hiển thị: <b>{filteredContracts.length}</b> / {internalContracts.length} hợp đồng
+            </span>
             {value && (
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-teal-600 hover:underline cursor-pointer"
+                className="text-red-500 hover:text-red-700 font-semibold cursor-pointer"
               >
-                Bỏ chọn
+                Xóa chọn
               </button>
             )}
           </div>
