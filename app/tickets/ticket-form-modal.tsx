@@ -78,7 +78,7 @@ interface TicketFormModalProps {
 /* Options                                                     */
 /* ═══════════════════════════════════════════════════════════ */
 const TT_TYPE_OPTIONS   = ["Xử Lý Sự Cố", "Hỗ Trợ Kỹ Thuật", "Điều Chỉnh/Thay đổi hệ thống", "Bảo Trì", "Triển Khai Dự Án"];
-export const CATEGORY_OPTIONS  = ["Phần mềm", "Phần cứng", "Database", "Network", "Security", "Cloud", "Khác"];
+const CATEGORY_OPTIONS  = ["Phần mềm", "Phần cứng", "Database", "Network", "Security", "Cloud", "Khác"];
 const PRIORITY_OPTIONS  = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
 const TT_STATUS_OPTIONS = ["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"];
 const SCOPE_OPTIONS     = ["In scope", "Out scope", "Presale"];
@@ -5350,24 +5350,22 @@ export default function TicketFormModal({
                 let targetRequestId = linkedRequestDbId;
                 if (!targetRequestId && reqCode) {
                   const allReqs = await fetchServiceTickets();
+                  const reqCodeUpper = reqCode.toUpperCase();
                   const foundReq = allReqs.find(r => 
-                    r.ticket_id.toUpperCase() === reqCode.toUpperCase() ||
-                    r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCode.toUpperCase()
+                    r.ticket_id.toUpperCase() === reqCodeUpper ||
+                    r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCodeUpper
                   );
                   if (foundReq) targetRequestId = foundReq.id;
                 }
 
                 if (targetRequestId) {
                   const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
-                  const requestTimeIso = createData.requestTime ? new Date(createData.requestTime).toISOString() : null;
                   await updateServiceTicket(targetRequestId, {
                     document_link: res.ticketId,
                     title: createData.title || undefined,
                     tt_type: createData.ttType || undefined,
                     category: createData.category || undefined,
                     start_time: startTimeIso || undefined,
-                    event_time: startTimeIso || undefined,
-                    request_time: requestTimeIso || undefined,
                     tt_status: "In Progress"
                   });
                   console.log("Two-way synced created ticket", res.ticketId, "to request", targetRequestId);
@@ -5406,25 +5404,24 @@ export default function TicketFormModal({
           if (error) { alert("Lỗi cập nhật ticket: " + (error.message || String(error))); return; }
 
           // Đồng bộ 2 chiều: nếu ticket gắn mã yêu cầu (CR-/TH-), cập nhật sang yêu cầu đó
-          if (createData.requestCode) {
+          const targetReqCode = createData.requestCode;
+          if (targetReqCode) {
             import("@/lib/portal-operations").then(async ({ updateServiceTicket, fetchServiceTickets }) => {
               try {
                 const allReqs = await fetchServiceTickets();
+                const reqCodeUpper = targetReqCode.toUpperCase();
                 const foundReq = allReqs.find(r => 
-                  r.ticket_id.toUpperCase() === createData.requestCode.toUpperCase() ||
-                  r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === createData.requestCode.toUpperCase()
+                  r.ticket_id.toUpperCase() === reqCodeUpper ||
+                  r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCodeUpper
                 );
                 if (foundReq) {
                   const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
-                  const requestTimeIso = createData.requestTime ? new Date(createData.requestTime).toISOString() : null;
                   await updateServiceTicket(foundReq.id, {
                     document_link: ticket?.ticket_id || null,
                     title: createData.title || undefined,
                     tt_type: createData.ttType || undefined,
                     category: createData.category || undefined,
                     start_time: startTimeIso || undefined,
-                    event_time: startTimeIso || undefined,
-                    request_time: requestTimeIso || undefined,
                     tt_status: ttStatus || undefined
                   });
                 }

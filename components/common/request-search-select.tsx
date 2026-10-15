@@ -42,7 +42,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
   try {
     const { data: portalTickets, error } = await supabase
       .from("tickets")
-      .select("id, ticket_id, title, description, customer_id, customer_name, priority, category, tt_type, tt_status, start_time, event_time, request_time, created_at")
+      .select("id, ticket_id, title, description, customer_id, customer_name, priority, category, tt_type, tt_status, start_time, created_at")
       .or("ticket_id.ilike.CR-%,ticket_id.ilike.TH-%,ticket_id.ilike.SR-%,ticket_id.ilike.TR-%")
       .order("created_at", { ascending: false });
 
@@ -62,8 +62,8 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
             category: t.category,
             ttType: t.tt_type || "Yêu cầu dịch vụ",
             status: t.tt_status || "New",
-            startTime: t.event_time || t.start_time,
-            requestTime: t.request_time || t.created_at,
+            startTime: t.start_time || t.created_at,
+            requestTime: t.created_at,
             source: "customer",
           });
         }

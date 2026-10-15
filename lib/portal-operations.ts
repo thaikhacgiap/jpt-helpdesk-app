@@ -180,6 +180,9 @@ export async function fetchAllTickets(): Promise<ServiceTicket[]> {
   return data || [];
 }
 
+// Alias for backwards compatibility with service request ticket fetching
+export const fetchServiceTickets = fetchAllTickets;
+
 // Update ticket status or attributes
 export async function updateServiceTicket(id: string, updates: any): Promise<void> {
   const { error } = await supabase
