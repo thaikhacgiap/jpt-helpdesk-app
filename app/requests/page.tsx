@@ -801,7 +801,25 @@ export default function RequestsPage() {
       console.error("Error setting assignee before creating ticket:", err);
     }
 
-    window.location.href = `/tickets/create?customerId=${ticket.customer_id}&title=${encodeURIComponent(ticket.title)}&description=${encodeURIComponent(ticket.description)}&priority=${ticket.priority}&category=${ticket.category}&requestTicketId=${ticket.ticket_id}&requestDbId=${ticket.id}`;
+    const { requestTime } = getRequestLinkedData(ticket);
+    const incidentTime = (ticket as any).event_time || (ticket as any).incident_start_time || ticket.start_time || "";
+    const reqTime = requestTime || ticket.request_time || ticket.created_at || "";
+
+    const query = new URLSearchParams({
+      action: "create",
+      customerId: ticket.customer_id || "",
+      title: ticket.title || "",
+      description: ticket.description || "",
+      priority: ticket.priority || "",
+      category: ticket.category || "",
+      ttType: ticket.tt_type || "",
+      startTime: incidentTime,
+      requestTime: reqTime,
+      requestTicketId: ticket.ticket_id,
+      requestDbId: ticket.id
+    });
+
+    window.location.href = `/tickets/create?${query.toString()}`;
   };
 
   const handleModalCreateTicket = async () => {
@@ -819,7 +837,22 @@ export default function RequestsPage() {
     } catch (err) {
       console.error("Error setting assignee in modal before creating ticket:", err);
     }
-    window.location.href = `/tickets/create?customerId=${customerFormData.customerId}&title=${encodeURIComponent(customerFormData.title)}&description=${encodeURIComponent(customerFormData.description)}&priority=${customerFormData.priority}&category=${customerFormData.category}&requestTicketId=${editingCustomerTicket.ticket_id}&requestDbId=${editingCustomerTicket.id}`;
+
+    const query = new URLSearchParams({
+      action: "create",
+      customerId: customerFormData.customerId || "",
+      title: customerFormData.title || "",
+      description: customerFormData.description || "",
+      priority: customerFormData.priority || "",
+      category: customerFormData.category || "",
+      ttType: customerFormData.tt_type || "",
+      startTime: customerFormData.incident_start_time || "",
+      requestTime: customerFormData.receive_time || "",
+      requestTicketId: editingCustomerTicket.ticket_id,
+      requestDbId: editingCustomerTicket.id
+    });
+
+    window.location.href = `/tickets/create?${query.toString()}`;
   };
 
   const handleInternalReceive = async (req: RequestTask) => {
@@ -2824,11 +2857,12 @@ export default function RequestsPage() {
                           className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                         >
                           <option value="">-- Danh mục --</option>
-                          <option value="Phần cứng">Phần cứng</option>
                           <option value="Phần mềm">Phần mềm</option>
+                          <option value="Phần cứng">Phần cứng</option>
                           <option value="Database">Database</option>
                           <option value="Network">Network</option>
                           <option value="Security">Security</option>
+                          <option value="Cloud">Cloud</option>
                           <option value="Khác">Khác</option>
                         </select>
                       </div>
@@ -2996,11 +3030,12 @@ export default function RequestsPage() {
                           className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer"
                         >
                           <option value="">-- Danh mục --</option>
-                          <option value="Phần cứng">Phần cứng</option>
                           <option value="Phần mềm">Phần mềm</option>
+                          <option value="Phần cứng">Phần cứng</option>
                           <option value="Database">Database</option>
                           <option value="Network">Network</option>
                           <option value="Security">Security</option>
+                          <option value="Cloud">Cloud</option>
                           <option value="Khác">Khác</option>
                         </select>
                       </div>

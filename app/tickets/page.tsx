@@ -889,6 +889,9 @@ export default function TicketsPage() {
         const description = params.get("description") || "";
         const priority = params.get("priority") || "";
         const category = params.get("category") || "";
+        const ttType = params.get("ttType") || "";
+        const startTime = params.get("startTime") || "";
+        const requestTime = params.get("requestTime") || "";
         const requestDbId = params.get("requestDbId") || "";
 
         setLinkedRequestDbId(requestDbId);
@@ -915,7 +918,10 @@ export default function TicketsPage() {
             priority: priority === "Critical" ? "L1(Critical)" : 
                       priority === "High" ? "L2(Major)" : 
                       priority === "Medium" ? "L3(Minor)" : "L4(Warning)",
-            category: category === "Technical" ? "Software" : "Other",
+            category: category || "Khác",
+            tt_type: ttType || "",
+            start_time: startTime || undefined,
+            request_time: requestTime || undefined,
             remark: `Tạo từ yêu cầu: ${requestTicketId}`,
           } as any);
 

@@ -78,7 +78,7 @@ interface TicketFormModalProps {
 /* Options                                                     */
 /* ═══════════════════════════════════════════════════════════ */
 const TT_TYPE_OPTIONS   = ["Xử Lý Sự Cố", "Hỗ Trợ Kỹ Thuật", "Điều Chỉnh/Thay đổi hệ thống", "Bảo Trì", "Triển Khai Dự Án"];
-const CATEGORY_OPTIONS  = ["Hardware", "Software", "Network", "Security", "Database", "Cloud", "Other"];
+export const CATEGORY_OPTIONS  = ["Phần mềm", "Phần cứng", "Database", "Network", "Security", "Cloud", "Khác"];
 const PRIORITY_OPTIONS  = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
 const TT_STATUS_OPTIONS = ["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"];
 const SCOPE_OPTIONS     = ["In scope", "Out scope", "Presale"];
@@ -943,6 +943,8 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
                 }
                 if (req.category) patch.category = req.category;
                 if (req.ttType) patch.ttType = req.ttType;
+                if (req.requestTime) patch.requestTime = toDatetimeLocalValue(req.requestTime);
+                if (req.startTime) patch.startTime = toDatetimeLocalValue(req.startTime);
               }
               onChange(patch);
               if (onRequestSelect) {
@@ -960,10 +962,10 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
         )}
       </div>
 
-      {/* TK Title */}
+      {/* Tiêu đề */}
       <div className="space-y-1">
         <div className="flex justify-between items-center">
-          <label className={labelStyle}>TK Title {req}</label>
+          <label className={labelStyle}>Tiêu đề {req}</label>
           <span className="text-[10px] font-semibold text-slate-400">{(data.title || "").length}/200</span>
         </div>
         <div className={inputWrapperStyle(!!data.title)}>
@@ -1005,10 +1007,10 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
 
       {/* TT Type and Category */}
       <div className="grid grid-cols-2 gap-6">
-        {/* TT Type */}
+        {/* Loại yêu cầu */}
         <div className="space-y-1">
           <label className={labelStyle}>
-            TT Type {req}
+            Loại yêu cầu {req}
             <span title="Loại yêu cầu hỗ trợ kỹ thuật"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.ttType)}>
@@ -1019,7 +1021,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
               onChange={(e) => onChange({ ttType: e.target.value })}
               className="w-full bg-transparent text-sm text-slate-800 outline-none appearance-none cursor-pointer pr-6"
             >
-              <option value="" disabled>-- Chọn TT Type --</option>
+              <option value="" disabled>-- Chọn Loại yêu cầu --</option>
               {TT_TYPE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
@@ -1028,10 +1030,10 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
           </div>
         </div>
 
-        {/* Category */}
+        {/* Danh mục */}
         <div className="space-y-1">
           <label className={labelStyle}>
-            Category {req}
+            Danh mục {req}
             <span title="Phân mục lỗi hoặc yêu cầu"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.category)}>
@@ -1042,10 +1044,13 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
               onChange={(e) => onChange({ category: e.target.value })}
               className="w-full bg-transparent text-sm text-slate-800 outline-none appearance-none cursor-pointer pr-6"
             >
-              <option value="" disabled>-- Chọn Category --</option>
+              <option value="" disabled>-- Chọn Danh mục --</option>
               {CATEGORY_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
+              {data.category && !CATEGORY_OPTIONS.includes(data.category) && (
+                <option value={data.category}>{data.category}</option>
+              )}
             </select>
             <ChevronDown size={14} className="text-slate-400 absolute right-3.5 pointer-events-none" />
           </div>
@@ -1054,10 +1059,10 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
 
       {/* Request Time and Start Time */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Request Time */}
+        {/* Thời gian nhận yêu cầu */}
         <div className="space-y-1">
           <label className={labelStyle}>
-            Request time
+            Thời gian nhận yêu cầu
             <span title="Thời điểm nhận yêu cầu từ khách hàng"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.requestTime)}>
@@ -1073,10 +1078,10 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
           </div>
         </div>
 
-        {/* Start Time */}
+        {/* Thời gian bắt đầu DV/Sự cố */}
         <div className="space-y-1">
           <label className={labelStyle}>
-            Start time
+            Thời gian bắt đầu DV/Sự cố
             <span title="Thời điểm bắt đầu phát sinh sự cố / tiếp nhận"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           <div className={inputWrapperStyle(!!data.startTime)}>
@@ -4588,8 +4593,26 @@ export default function TicketFormModal({
                             priority === "High" ? "L2(Major)" : 
                             priority === "Medium" ? "L3(Minor)" : "L4(Warning)";
           
-          const category = params.get("category") || "";
-          initialCategory = category === "Technical" ? "Software" : "Other";
+          const paramCat = params.get("category");
+          if (paramCat) {
+            initialCategory = paramCat;
+          }
+
+          const paramTtType = params.get("ttType");
+          if (paramTtType) {
+            initialTtType = paramTtType;
+          }
+
+          const paramStartTime = params.get("startTime");
+          if (paramStartTime) {
+            initialStartTime = toDatetimeLocalValue(paramStartTime);
+          }
+
+          const paramRequestTime = params.get("requestTime");
+          if (paramRequestTime) {
+            initialRequestTime = toDatetimeLocalValue(paramRequestTime);
+          }
+
           initialRemark = `Tạo từ yêu cầu: ${initialRequestCode}`;
 
           const requestDbId = params.get("requestDbId");
@@ -5279,9 +5302,9 @@ export default function TicketFormModal({
       if (currentStep === "create") {
         /* Validate */
         if (!createData.requestCode || !createData.requestCode.trim()) { alert("Vui lòng chọn hoặc nhập Mã yêu cầu"); return; }
-        if (!createData.title.trim())  { alert("Vui lòng nhập TK Title");  return; }
-        if (!createData.ttType)        { alert("Vui lòng chọn TT Type");   return; }
-        if (!createData.category)      { alert("Vui lòng chọn Category");  return; }
+        if (!createData.title.trim())  { alert("Vui lòng nhập Tiêu đề");  return; }
+        if (!createData.ttType)        { alert("Vui lòng chọn Loại yêu cầu");   return; }
+        if (!createData.category)      { alert("Vui lòng chọn Danh mục");  return; }
         if (!createData.priority)      { alert("Vui lòng chọn Priority");  return; }
       } else if (currentStep === "arrange") {
         /* Validate */
@@ -5319,19 +5342,43 @@ export default function TicketFormModal({
 
           if (typeof window !== "undefined") {
             const linkedRequestDbId = sessionStorage.getItem("jpt_linked_request_db_id");
-            if (linkedRequestDbId) {
-              import("@/lib/portal-operations").then(async ({ updateServiceTicket }) => {
-                try {
-                  await updateServiceTicket(linkedRequestDbId, { document_link: res.ticketId });
-                  console.log("Linked new ticket ID", res.ticketId, "to request", linkedRequestDbId);
-                } catch (err) {
-                  console.error("Failed to link ticket automatically:", err);
-                } finally {
-                  sessionStorage.removeItem("jpt_linked_request_db_id");
-                  sessionStorage.removeItem("jpt_linked_customer_id");
+            const reqCode = createData.requestCode;
+
+            // Đồng bộ 2 chiều: cập nhật ngược lại thông tin cho Yêu cầu
+            import("@/lib/portal-operations").then(async ({ updateServiceTicket, fetchServiceTickets }) => {
+              try {
+                let targetRequestId = linkedRequestDbId;
+                if (!targetRequestId && reqCode) {
+                  const allReqs = await fetchServiceTickets();
+                  const foundReq = allReqs.find(r => 
+                    r.ticket_id.toUpperCase() === reqCode.toUpperCase() ||
+                    r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCode.toUpperCase()
+                  );
+                  if (foundReq) targetRequestId = foundReq.id;
                 }
-              });
-            }
+
+                if (targetRequestId) {
+                  const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+                  const requestTimeIso = createData.requestTime ? new Date(createData.requestTime).toISOString() : null;
+                  await updateServiceTicket(targetRequestId, {
+                    document_link: res.ticketId,
+                    title: createData.title || undefined,
+                    tt_type: createData.ttType || undefined,
+                    category: createData.category || undefined,
+                    start_time: startTimeIso || undefined,
+                    event_time: startTimeIso || undefined,
+                    request_time: requestTimeIso || undefined,
+                    tt_status: "In Progress"
+                  });
+                  console.log("Two-way synced created ticket", res.ticketId, "to request", targetRequestId);
+                }
+              } catch (err) {
+                console.error("Failed to link/sync ticket automatically:", err);
+              } finally {
+                sessionStorage.removeItem("jpt_linked_request_db_id");
+                sessionStorage.removeItem("jpt_linked_customer_id");
+              }
+            });
           }
         } else {
           /* Update existing ticket */
@@ -5357,6 +5404,35 @@ export default function TicketFormModal({
           };
           const { error } = await safeTicketUpdate(dbId, updatePayload);
           if (error) { alert("Lỗi cập nhật ticket: " + (error.message || String(error))); return; }
+
+          // Đồng bộ 2 chiều: nếu ticket gắn mã yêu cầu (CR-/TH-), cập nhật sang yêu cầu đó
+          if (createData.requestCode) {
+            import("@/lib/portal-operations").then(async ({ updateServiceTicket, fetchServiceTickets }) => {
+              try {
+                const allReqs = await fetchServiceTickets();
+                const foundReq = allReqs.find(r => 
+                  r.ticket_id.toUpperCase() === createData.requestCode.toUpperCase() ||
+                  r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === createData.requestCode.toUpperCase()
+                );
+                if (foundReq) {
+                  const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+                  const requestTimeIso = createData.requestTime ? new Date(createData.requestTime).toISOString() : null;
+                  await updateServiceTicket(foundReq.id, {
+                    document_link: ticket?.ticket_id || null,
+                    title: createData.title || undefined,
+                    tt_type: createData.ttType || undefined,
+                    category: createData.category || undefined,
+                    start_time: startTimeIso || undefined,
+                    event_time: startTimeIso || undefined,
+                    request_time: requestTimeIso || undefined,
+                    tt_status: ttStatus || undefined
+                  });
+                }
+              } catch (e) {
+                console.error("Error two-way sync on ticket update:", e);
+              }
+            });
+          }
         }
 
       } else if (currentStep === "check") {
