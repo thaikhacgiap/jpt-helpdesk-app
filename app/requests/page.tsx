@@ -642,7 +642,7 @@ export default function RequestsPage() {
           if (isSRorTR) {
             const deletedIds = getDeletedRequestIds();
             if (payload.eventType === "INSERT") {
-              if (newTicket && !deletedIds.has(newTicket.id) && !deletedIds.has(newTicket.ticket_id)) {
+              if (newTicket) {
                 const reqItem = ticketRowToRequest(newTicket);
                 setRequests((prev) => {
                   if (prev.some(r => r.id === reqItem.id || r.code === reqItem.code)) {

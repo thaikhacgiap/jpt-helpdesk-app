@@ -109,6 +109,17 @@ export function addDeletedRequestId(idOrCode: string) {
   }
 }
 
+export function removeDeletedRequestId(idOrCode: string) {
+  if (!isClient() || !idOrCode) return;
+  const current = getDeletedRequestIds();
+  current.delete(idOrCode);
+  try {
+    localStorage.setItem(DELETED_KEY, JSON.stringify(Array.from(current)));
+  } catch (e) {
+    console.error("Error updating deleted request id", e);
+  }
+}
+
 // ─── Data conversion helpers: Supabase tickets row <-> RequestTask ───────
 
 export function ticketRowToRequest(row: any): RequestTask {
@@ -125,7 +136,9 @@ export function ticketRowToRequest(row: any): RequestTask {
     }
   }
 
-  const isTask = row.ticket_id?.startsWith('TR-') || row.tt_type === 'Yêu cầu công việc';
+  const isTask = row.ticket_id?.startsWith('TR-') || 
+                 row.tt_type === 'Yêu cầu công việc' ||
+                 ['Ticket', 'Triển khai', 'Bảo Trì', 'Khác', 'Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(row.category || '');
 
   return {
     id: row.id,
@@ -242,8 +255,6 @@ export function setStoredRequests(requests: RequestTask[]) {
 // ─── Fetch requests: Supabase as single source of truth ───────
 
 export async function fetchRequests(): Promise<RequestTask[]> {
-  const deletedIds = getDeletedRequestIds();
-
   if (isClient()) {
     try {
       const { data, error } = await supabase
@@ -253,16 +264,7 @@ export async function fetchRequests(): Promise<RequestTask[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data !== null) {
-        // Clean up any records in Supabase that were deleted locally
-        const deletedInDb = data.filter(r => deletedIds.has(r.id) || deletedIds.has(r.ticket_id));
-        if (deletedInDb.length > 0) {
-          deletedInDb.forEach(r => {
-            supabase.from('tickets').delete().or(`id.eq.${r.id},ticket_id.eq.${r.ticket_id}`).then(() => {});
-          });
-        }
-
-        const validDbRows = data.filter(r => !deletedIds.has(r.id) && !deletedIds.has(r.ticket_id));
-        const dbRequests = validDbRows.map(ticketRowToRequest);
+        const dbRequests = data.map(ticketRowToRequest);
 
         // Mark initialized so empty table is respected
         localStorage.setItem('jpt_requests_initialized', 'true');
@@ -276,6 +278,7 @@ export async function fetchRequests(): Promise<RequestTask[]> {
     }
   }
 
+  const deletedIds = getDeletedRequestIds();
   return getStoredRequests().filter(r => !deletedIds.has(r.id) && !deletedIds.has(r.code));
 }
 
@@ -294,8 +297,8 @@ export async function createRequest(formData: Omit<RequestTask, 'id' | 'code'> &
 
   const isTask = formData.type === 'Yêu cầu công việc' || 
                  Boolean(formData.code && formData.code.startsWith('TR-')) ||
-                 Boolean(formData.taskCategory && ['Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.taskCategory)) ||
-                 ['Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.type || '');
+                 Boolean(formData.taskCategory && ['Ticket', 'Triển khai', 'Bảo Trì', 'Khác', 'Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.taskCategory)) ||
+                 ['Ticket', 'Triển khai', 'Bảo Trì', 'Khác', 'Mã ticket', 'Mã dự án', 'Mã bảo trì', 'Yêu cầu khác'].includes(formData.type || '');
   const prefix = isTask ? `TR-${dateStr}-` : `SR-${dateStr}-`;
   
   // Find highest sequence number from Supabase to prevent collisions across different browsers
@@ -368,6 +371,8 @@ export async function createRequest(formData: Omit<RequestTask, 'id' | 'code'> &
   const currentList = getStoredRequests().filter(r => r.id !== newRequest.id && r.code !== newRequest.code);
   currentList.unshift(newRequest);
   setStoredRequests(currentList);
+  removeDeletedRequestId(code);
+  removeDeletedRequestId(newRequest.id);
   if (isClient()) {
     localStorage.setItem('jpt_requests_initialized', 'true');
   }
