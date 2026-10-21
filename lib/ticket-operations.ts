@@ -146,6 +146,21 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
     }
 
     const dbId = data?.[0]?.id || ''
+    if (requestCode || insertPayload.request_code) {
+      try {
+        await syncTicketToRequest(dbId || ticketId, {
+          ttStatus: insertPayload.tt_status || 'In progress',
+          endTime: insertPayload.end_time,
+          closeTime: insertPayload.tt_close_time || insertPayload.close_time,
+          startTime: insertPayload.start_time,
+          title: insertPayload.title,
+          ttType: insertPayload.tt_type,
+          category: insertPayload.category,
+        });
+      } catch (syncErr) {
+        console.warn('createTicket syncTicketToRequest warning:', syncErr);
+      }
+    }
     return { success: true, ticketId, dbId }
   } catch (error) {
     console.error('Error creating ticket:', error)
@@ -195,7 +210,24 @@ export async function safeTicketUpdate(dbId: string, payload: any): Promise<{ da
       .eq('id', dbId)
       .select();
 
-    if (!error) return { data, error: null };
+    if (!error) {
+      if (updatePayload.tt_status || updatePayload.end_time || updatePayload.tt_close_time || updatePayload.close_time || updatePayload.title) {
+        try {
+          await syncTicketToRequest(dbId, {
+            ttStatus: updatePayload.tt_status,
+            endTime: updatePayload.end_time || updatePayload.tt_close_time || updatePayload.close_time,
+            closeTime: updatePayload.close_time || updatePayload.tt_close_time,
+            startTime: updatePayload.start_time,
+            title: updatePayload.title,
+            ttType: updatePayload.tt_type,
+            category: updatePayload.category,
+          });
+        } catch (syncErr) {
+          console.warn('safeTicketUpdate syncTicketToRequest warning:', syncErr);
+        }
+      }
+      return { data, error: null };
+    }
 
     const match = error.message?.match(/Could not find the '([^']+)' column/) ||
                   error.message?.match(/column "([^"]+)" of relation/) ||
@@ -272,13 +304,13 @@ export async function syncTicketToRequest(
   try {
     const { data: tk, error: tkErr } = await supabase
       .from('tickets')
-      .select('id, ticket_id, request_code, tt_status, start_time, end_time, close_time, tt_close_time, title, tt_type, category')
+      .select('id, ticket_id, request_code, tt_status, start_time, end_time, close_time, tt_close_time, title, tt_type, category, remark, document_link')
       .or(`id.eq.${ticketIdOrDbId},ticket_id.eq.${ticketIdOrDbId}`)
       .maybeSingle();
 
     if (tkErr || !tk) return false;
 
-    const rc = tk.request_code;
+    const rc = tk.request_code || getTicketRequestCode(tk);
     if (!rc) return false;
 
     let status = extraUpdates?.ttStatus || tk.tt_status || 'In progress';
@@ -412,6 +444,11 @@ export async function fetchTickets(): Promise<Ticket[]> {
         reqStatus = requestStatusMap.get(reqCode.toUpperCase())
           || requestStatusMap.get((t.request_id || '').toUpperCase())
           || '';
+      }
+      // If linked request status is New or unset, but the ticket itself has already progressed,
+      // the request status must follow the ticket's active status (In progress, Completed, etc.)
+      if (reqCode && t.tt_status && (!reqStatus || reqStatus.toLowerCase() === 'new' || reqStatus === 'Chờ tiếp nhận')) {
+        reqStatus = t.tt_status;
       }
       if (!reqStatus && reqCode && t.tt_status) {
         reqStatus = t.tt_status;

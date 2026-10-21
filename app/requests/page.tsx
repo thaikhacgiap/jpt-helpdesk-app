@@ -47,7 +47,7 @@ import {
   Briefcase
 } from "lucide-react";
 
-export const TT_TYPE_OPTIONS = [
+const TT_TYPE_OPTIONS = [
   "Xử Lý Sự Cố",
   "Hỗ Trợ Kỹ Thuật",
   "Điều Chỉnh/Thay đổi hệ thống",

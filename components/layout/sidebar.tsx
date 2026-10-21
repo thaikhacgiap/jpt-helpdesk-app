@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { fetchRequests } from "@/lib/request-operations";
+import { getTicketRequestCode } from "@/lib/ticket-operations";
 
 interface MenuItemProps {
   isActive: boolean;
@@ -46,14 +47,38 @@ export default function Sidebar() {
         // 1. Fetch tickets from Supabase for customer requests
         const { data, error } = await supabase
           .from("tickets")
-          .select("ticket_id, tt_type, tt_status");
+          .select("ticket_id, tt_type, tt_status, request_code, document_link, remark");
         
         let pendingCustomer = 0;
         if (!error && data) {
+          // Identify tickets that have already progressed beyond 'New'
+          const activeTicketCodes = new Set<string>();
+          data.forEach((t) => {
+            const tid = (t.ticket_id || '').toUpperCase();
+            if (tid.startsWith('TK-')) {
+              const st = (t.tt_status || '').toLowerCase().trim();
+              if (st !== 'new' && st !== 'chờ tiếp nhận') {
+                const rc = getTicketRequestCode(t);
+                if (rc) {
+                  const upper = rc.toUpperCase();
+                  activeTicketCodes.add(upper);
+                  activeTicketCodes.add(upper.replace(/^CR-/, 'TH-'));
+                  activeTicketCodes.add(upper.replace(/^TH-/, 'CR-'));
+                }
+              }
+            }
+          });
+
           pendingCustomer = data.filter((t) => {
             const tid = (t.ticket_id || '').toUpperCase();
             if (tid.startsWith('CR-') || tid.startsWith('TH-')) {
-              return t.tt_status === 'New' || t.tt_status === 'Chờ tiếp nhận';
+              const st = (t.tt_status || '').toLowerCase().trim();
+              const isRawPending = st === 'new' || st === 'chờ tiếp nhận';
+              if (!isRawPending) return false;
+              // If an active ticket exists for this request, it is NOT pending
+              if (activeTicketCodes.has(tid)) return false;
+              if (t.document_link && t.document_link.toUpperCase().startsWith('TK-')) return false;
+              return true;
             }
             return false;
           }).length;
