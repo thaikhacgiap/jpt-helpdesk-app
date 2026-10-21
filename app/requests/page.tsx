@@ -275,12 +275,13 @@ export default function RequestsPage() {
 
             // Tự động load bổ sung người thực hiện / người theo dõi từ ticket nếu chưa có trong query
             if (ticketIdParam && (!assigneeParam || !followerParam)) {
-              supabase
-                .from("tickets")
-                .select("assigned, following, customer_id, customer_name, start_time, description")
-                .or(`ticket_id.eq.${ticketIdParam},id.eq.${ticketIdParam}`)
-                .maybeSingle()
-                .then(({ data: tkData }) => {
+              (async () => {
+                try {
+                  const { data: tkData } = await supabase
+                    .from("tickets")
+                    .select("assigned, following, customer_id, customer_name, start_time, description")
+                    .or(`ticket_id.eq.${ticketIdParam},id.eq.${ticketIdParam}`)
+                    .maybeSingle();
                   if (tkData) {
                     setFormData(prev => ({
                       ...prev,
@@ -292,8 +293,10 @@ export default function RequestsPage() {
                       description: prev.description || tkData.description || "",
                     }));
                   }
-                })
-                .catch((e) => console.warn("Error loading ticket staff data:", e));
+                } catch (e) {
+                  console.warn("Error loading ticket staff data:", e);
+                }
+              })();
             }
 
             setError("");
