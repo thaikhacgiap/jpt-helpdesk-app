@@ -644,8 +644,11 @@ export default function TicketsPage() {
       const list = await fetchAllAvailableRequests();
       const map: Record<string, string> = {};
       list.forEach((r) => {
-        if (r.code) map[r.code.toUpperCase()] = r.status || "New";
-        if (r.id) map[r.id.toUpperCase()] = r.status || "New";
+        let s = r.status || "New";
+        if (s.toLowerCase() === "resolved") s = "Completed";
+        if (s.toLowerCase() === "in progress") s = "In progress";
+        if (r.code) map[r.code.toUpperCase()] = s;
+        if (r.id) map[r.id.toUpperCase()] = s;
       });
       setRequestStatusMap(map);
     } catch (err) {
@@ -654,7 +657,14 @@ export default function TicketsPage() {
   };
 
   const getTicketStatus = (ticket: Ticket): string => {
-    return getTicketRequestStatus(ticket, requestStatusMap);
+    let s = getTicketRequestStatus(ticket, requestStatusMap);
+    if (!s && ticket.request_code && ticket.tt_status) {
+      s = ticket.tt_status;
+    }
+    if (!s) return "";
+    if (s.toLowerCase() === "resolved") return "Completed";
+    if (s.toLowerCase() === "in progress") return "In progress";
+    return s;
   };
 
   // On-behalf ticket linking states

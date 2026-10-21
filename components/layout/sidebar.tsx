@@ -21,6 +21,7 @@ import {
   Inbox,
   Server,
   Bell,
+  BookOpen,
 } from "lucide-react";
 
 import { fetchRequests } from "@/lib/request-operations";
@@ -266,11 +267,19 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* LOGOUT */}
-      <div className="pt-4 border-t border-slate-700">
+      {/* GUIDE & LOGOUT */}
+      <div className="pt-3 border-t border-slate-700 space-y-1">
+        <Link
+          href="/guide"
+          className={menuItemClass({ isActive: pathname.startsWith("/guide") })}
+        >
+          <BookOpen size={18} className="shrink-0 text-cyan-400" />
+          <span className="truncate">Hướng dẫn sử dụng</span>
+        </Link>
+
         <button
           onClick={handleLogoutClick}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition-all text-sm font-medium cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition-all text-sm font-medium cursor-pointer"
         >
           <LogOut size={18} />
           Đăng xuất

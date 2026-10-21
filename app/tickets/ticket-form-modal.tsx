@@ -8,7 +8,7 @@ import {
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
   Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, Upload, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
 } from "lucide-react";
-import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode } from "@/lib/ticket-operations";
+import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode, syncTicketToRequest } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer, isContractValid } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
@@ -928,6 +928,12 @@ function ProcessPanel({
   setTtStatus,
   ticketId,
   ticketTitle,
+  assigned,
+  following,
+  customerId,
+  customerName,
+  startTime,
+  description,
 }: {
   currentStep: StepKey;
   completedSteps: Set<StepKey>;
@@ -938,16 +944,33 @@ function ProcessPanel({
   setTtStatus: (v: string) => void;
   ticketId?: string;
   ticketTitle?: string;
+  assigned?: string;
+  following?: string;
+  customerId?: string;
+  customerName?: string;
+  startTime?: string;
+  description?: string;
 }) {
   const handleCreateTaskRequest = () => {
     if (!ticketId) {
       alert("Vui lòng lưu thông tin ticket trước để có mã ticket tạo yêu cầu!");
       return;
     }
-    // Tách riêng TT ID và TT Title, khi tạo không chèn tiêu đề TT vào tiêu đề request, chuyển trang và mở form trên cùng tab với 1-time token
     const token = Date.now().toString();
-    const url = `/requests?tab=task&create=task&ticketId=${encodeURIComponent(ticketId)}&ttTitle=${encodeURIComponent(ticketTitle || "")}&token=${token}`;
-    window.location.href = url;
+    const query = new URLSearchParams({
+      tab: "task",
+      create: "task",
+      ticketId: ticketId,
+      ttTitle: ticketTitle || "",
+      assignee: assigned || "",
+      follower: following || "",
+      customerId: customerId || "",
+      customerName: customerName || "",
+      startTime: startTime || "",
+      description: description || "",
+      token: token,
+    });
+    window.location.href = `/requests?${query.toString()}`;
   };
 
   const handleViewRelatedRequests = () => {
@@ -5731,42 +5754,19 @@ export default function TicketFormModal({
           setSavedTicketId(res.dbId || "");
 
           if (typeof window !== "undefined") {
-            const linkedRequestDbId = sessionStorage.getItem("jpt_linked_request_db_id");
             const reqCode = createData.requestCode;
-
-            // Đồng bộ 2 chiều: cập nhật ngược lại thông tin cho Yêu cầu
-            import("@/lib/portal-operations").then(async ({ updateServiceTicket, fetchServiceTickets }) => {
-              try {
-                let targetRequestId = linkedRequestDbId;
-                if (!targetRequestId && reqCode) {
-                  const allReqs = await fetchServiceTickets();
-                  const reqCodeUpper = reqCode.toUpperCase();
-                  const foundReq = allReqs.find(r => 
-                    r.ticket_id.toUpperCase() === reqCodeUpper ||
-                    r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCodeUpper
-                  );
-                  if (foundReq) targetRequestId = foundReq.id;
-                }
-
-                if (targetRequestId) {
-                  const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
-                  await updateServiceTicket(targetRequestId, {
-                    document_link: res.ticketId,
-                    title: createData.title || undefined,
-                    tt_type: createData.ttType || undefined,
-                    category: createData.category || undefined,
-                    start_time: startTimeIso || undefined,
-                    tt_status: "In Progress"
-                  });
-                  console.log("Two-way synced created ticket", res.ticketId, "to request", targetRequestId);
-                }
-              } catch (err) {
-                console.error("Failed to link/sync ticket automatically:", err);
-              } finally {
-                sessionStorage.removeItem("jpt_linked_request_db_id");
-                sessionStorage.removeItem("jpt_linked_customer_id");
-              }
-            });
+            if (reqCode) {
+              const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+              syncTicketToRequest(res.ticketId || res.dbId || "", {
+                ttStatus: ttStatus || "In progress",
+                startTime: startTimeIso || undefined,
+                title: createData.title || undefined,
+                ttType: createData.ttType || undefined,
+                category: createData.category || undefined,
+              }).catch((e) => console.warn("Failed to sync ticket to request:", e));
+            }
+            sessionStorage.removeItem("jpt_linked_request_db_id");
+            sessionStorage.removeItem("jpt_linked_customer_id");
           }
         } else {
           /* Update existing ticket */
@@ -5796,29 +5796,14 @@ export default function TicketFormModal({
           // Đồng bộ 2 chiều: nếu ticket gắn mã yêu cầu (CR-/TH-), cập nhật sang yêu cầu đó
           const targetReqCode = createData.requestCode;
           if (targetReqCode) {
-            import("@/lib/portal-operations").then(async ({ updateServiceTicket, fetchServiceTickets }) => {
-              try {
-                const allReqs = await fetchServiceTickets();
-                const reqCodeUpper = targetReqCode.toUpperCase();
-                const foundReq = allReqs.find(r => 
-                  r.ticket_id.toUpperCase() === reqCodeUpper ||
-                  r.ticket_id.replace(/^TH-/, "CR-").toUpperCase() === reqCodeUpper
-                );
-                if (foundReq) {
-                  const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
-                  await updateServiceTicket(foundReq.id, {
-                    document_link: ticket?.ticket_id || null,
-                    title: createData.title || undefined,
-                    tt_type: createData.ttType || undefined,
-                    category: createData.category || undefined,
-                    start_time: startTimeIso || undefined,
-                    tt_status: ttStatus || undefined
-                  });
-                }
-              } catch (e) {
-                console.error("Error two-way sync on ticket update:", e);
-              }
-            });
+            const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+            syncTicketToRequest(ticket?.ticket_id || dbId, {
+              ttStatus: ttStatus || undefined,
+              title: createData.title || undefined,
+              ttType: createData.ttType || undefined,
+              category: createData.category || undefined,
+              startTime: startTimeIso || undefined,
+            }).catch((e) => console.warn("Error syncTicketToRequest on info step:", e));
           }
         }
 
@@ -5920,6 +5905,21 @@ export default function TicketFormModal({
           updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
+      }
+
+      // Đồng bộ trạng thái và thông tin hoàn thành sang Yêu cầu liên kết (CR-, TH-)
+      const targetSyncTicketId = ticket?.ticket_id || savedTicketId || dbId;
+      if (targetSyncTicketId) {
+        const finalStatus = currentStep === "completed" ? (ttStatus || finishedData.ticketStatus || "Completed") : ttStatus;
+        const finalEndTime = currentStep === "completed" ? (closeTime || finishedData.resolveTime) : undefined;
+        syncTicketToRequest(targetSyncTicketId, {
+          ttStatus: finalStatus,
+          endTime: finalEndTime,
+          startTime: createData.startTime,
+          title: createData.title,
+          ttType: createData.ttType,
+          category: createData.category,
+        }).catch((e) => console.warn("Background syncTicketToRequest failed:", e));
       }
 
       setCompletedSteps(nextCompleted);
@@ -6257,6 +6257,20 @@ export default function TicketFormModal({
         setTtStatus={setTtStatus}
         ticketId={ticket?.ticket_id || savedTicketId}
         ticketTitle={ticket?.title || createData.title}
+        assigned={
+          arrangeData.assigned.length > 0
+            ? arrangeData.assigned.join(", ")
+            : (ticket?.assigned || "")
+        }
+        following={
+          arrangeData.following.length > 0
+            ? arrangeData.following.join(", ")
+            : (ticket?.following || "")
+        }
+        customerId={checkData.customerId || ticket?.customer_id}
+        customerName={checkData.customerName || ticket?.customer_name}
+        startTime={createData.startTime || ticket?.start_time}
+        description={createData.description || ticket?.description}
       />
 
       {/* RIGHT */}

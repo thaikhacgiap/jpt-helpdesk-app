@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Tài Liệu Hướng Dẫn Sử Dụng - JPT Helpdesk & Project Management Portal v4.0</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm 15mm 18mm 15mm;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1e293b;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+    }
+    .avoid-break {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    /* COVER PAGE */
+    .cover-container {
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 20px 20px 20px;
+    }
+    .cover-header {
+      border-bottom: 3px solid #0d9488;
+      padding-bottom: 25px;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: #0d9488;
+      color: white;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      margin-bottom: 16px;
+    }
+    .cover-title {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.2;
+      margin: 0 0 10px 0;
+      letter-spacing: -0.5px;
+    }
+    .cover-subtitle {
+      font-size: 20px;
+      font-weight: 600;
+      color: #0d9488;
+      margin: 0 0 15px 0;
+    }
+    .cover-desc {
+      font-size: 14px;
+      color: #64748b;
+      max-width: 650px;
+    }
+    .cover-meta {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 40px;
+    }
+    .cover-meta table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .cover-meta td {
+      padding: 8px 12px;
+      font-size: 13px;
+      border-bottom: 1px solid #edf2f7;
+    }
+    .cover-meta td:first-child {
+      font-weight: 600;
+      color: #475569;
+      width: 180px;
+    }
+    .cover-meta td:last-child {
+      color: #0f172a;
+      font-weight: 500;
+    }
+    .cover-meta tr:last-child td {
+      border-bottom: none;
+    }
+    .cover-footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    /* TYPOGRAPHY */
+    h1 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+      border-bottom: 2px solid #0d9488;
+      padding-bottom: 8px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      page-break-after: avoid;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      border-left: 4px solid #0d9488;
+      padding-left: 10px;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+      margin-top: 18px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+    p {
+      margin: 0 0 10px 0;
+      color: #334155;
+    }
+    ul, ol {
+      margin: 0 0 12px 0;
+      padding-left: 22px;
+      color: #334155;
+    }
+    li {
+      margin-bottom: 5px;
+    }
+
+    /* BADGES */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 4px;
+    }
+    .badge-admin { background: #fee2e2; color: #991b1b; }
+    .badge-pm { background: #e0e7ff; color: #3730a3; }
+    .badge-tech { background: #ccfbf1; color: #115e59; }
+    .badge-cust { background: #fef3c7; color: #92400e; }
+    
+    .badge-l1 { background: #fee2e2; color: #991b1b; font-weight: 700; }
+    .badge-l2 { background: #ffedd5; color: #9a3412; font-weight: 700; }
+    .badge-l3 { background: #fef9c3; color: #854d0e; font-weight: 700; }
+    .badge-l4 { background: #dbeafe; color: #1e40af; font-weight: 700; }
+
+    /* TABLES */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px 0;
+      font-size: 12px;
+    }
+    table.data-table th, table.data-table td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    table.data-table th {
+      background: #f1f5f9;
+      color: #0f172a;
+      font-weight: 700;
+      border-bottom: 2px solid #94a3b8;
+    }
+    table.data-table tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    /* CALLOUT BOXES */
+    .callout {
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 12px;
+      page-break-inside: avoid;
+    }
+    .callout-info {
+      background: #f0fdfa;
+      border-left: 4px solid #0d9488;
+      color: #134e4a;
+    }
+    .callout-warning {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      color: #78350f;
+    }
+    .callout-tip {
+      background: #f0f9ff;
+      border-left: 4px solid #0284c7;
+      color: #0c4a6e;
+    }
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* WORKFLOW STEPS */
+    .workflow-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 14px 0;
+      page-break-inside: avoid;
+    }
+    .workflow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .step-number {
+      background: #0d9488;
+      color: white;
+      font-weight: 800;
+      font-size: 11px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-title {
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .step-desc {
+      font-size: 12px;
+      color: #475569;
+      margin: 0;
+    }
+
+    /* TOC */
+    .toc-list {
+      list-style: none;
+      padding: 0;
+      margin: 15px 0;
+    }
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px dotted #cbd5e1;
+      font-size: 13px;
+    }
+    .toc-item strong {
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- COVER PAGE -->
+  <div class="cover-container">
+    <div class="cover-header">
+      <span class="cover-badge">Tài Liệu Hướng Dẫn Vận Hành</span>
+      <h1 class="cover-title">HỆ THỐNG PHẦN MỀM JPT HELPDESK &amp; PROJECT MANAGEMENT</h1>
+      <div class="cover-subtitle">Portal Quản Lý Toàn Diện Dịch Vụ IT, Dự Án &amp; Bảo Trì Doanh Nghiệp</div>
+      <p class="cover-desc">
+        Tài liệu chuẩn hóa quy trình nghiệp vụ tiếp nhận yêu cầu, giải quyết sự cố cam kết SLA, quản lý tiến độ dự án phân cấp, điều hành kế hoạch bảo trì định kỳ và vận hành Cổng tương tác khách hàng.
+      </p>
+    </div>
+
+    <div class="cover-meta">
+      <table>
+        <tr>
+          <td>Mã tài liệu:</td>
+          <td><strong>HDSD-JPT-V4.0</strong></td>
+        </tr>
+        <tr>
+          <td>Phiên bản phần mềm:</td>
+          <td><strong>v4.0.0 (Bản chính thức)</strong></td>
+        </tr>
+        <tr>
+          <td>Đơn vị phát triển:</td>
+          <td><strong>JPROTECH COMPANY</strong></td>
+        </tr>
+        <tr>
+          <td>Ngày ban hành:</td>
+          <td><strong>Tháng 10/2026</strong></td>
+        </tr>
+        <tr>
+          <td>Địa chỉ truy cập:</td>
+          <td><code>https://jpt-helpdesk-app.vercel.app</code></td>
+        </tr>
+        <tr>
+          <td>Đối tượng sử dụng:</td>
+          <td>Ban Giám Đốc, Quản lý Dự án (PM), Đội Kỹ thuật IT Support, Khách hàng Doanh nghiệp</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="cover-footer">
+      <span>&copy; 2026 JPROTECH COMPANY. Bảo lưu mọi quyền.</span>
+      <span>Tài liệu nội bộ &amp; Hướng dẫn đối tác</span>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- TABLE OF CONTENTS -->
+  <h1>MỤC LỤC TỔNG QUAN</h1>
+  <ul class="toc-list">
+    <li class="toc-item"><span><strong>1. Giới thiệu tổng quan hệ thống JPT Helpdesk</strong></span><span>Trang 3</span></li>
+    <li class="toc-item"><span><strong>2. Phân quyền và các nhóm tài khoản người dùng</strong></span><span>Trang 3</span></li>
+    <li class="toc-item"><span><strong>3. Hướng dẫn đăng nhập &amp; Bố cục giao diện chung</strong></span><span>Trang 4</span></li>
+    <li class="toc-item"><span><strong>4. Bảng điều khiển (Dashboard) &amp; Báo cáo KPI</strong></span><span>Trang 4</span></li>
+    <li class="toc-item"><span><strong>5. Phân hệ Dịch Vụ (Service Operations)</strong></span><span>Trang 5</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>5.1. Tiếp nhận và xử lý Yêu cầu (Requests)</span><span>Trang 5</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>5.2. Quản lý Ticket Hỗ trợ theo chuẩn ITIL (Tickets)</span><span>Trang 6</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>5.3. Dịch vụ Bảo trì định kỳ (Maintenance)</span><span>Trang 7</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>5.4. Quản lý Triển khai Dự án (Project Management v4.0)</span><span>Trang 8</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>5.5. Hệ thống Thông báo (Notifications)</span><span>Trang 9</span></li>
+    <li class="toc-item"><span><strong>6. Phân hệ Quản Lý Thông Tin (Master Data)</strong></span><span>Trang 10</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>6.1. Khách hàng, Cơ hội, Hợp đồng &amp; Đồng bộ Google Sheets</span><span>Trang 10</span></li>
+    <li class="toc-item" style="padding-left: 20px;"><span>6.2. Danh bạ Liên hệ, Nhân sự &amp; Cấu hình SLA</span><span>Trang 11</span></li>
+    <li class="toc-item"><span><strong>7. Cổng Thông Tin Khách Hàng (Customer Portal)</strong></span><span>Trang 12</span></li>
+    <li class="toc-item"><span><strong>8. Quản Trị Hệ Thống (Administration &amp; Backup)</strong></span><span>Trang 13</span></li>
+    <li class="toc-item"><span><strong>9. Quy trình Vận hành Tiêu chuẩn (SOPs)</strong></span><span>Trang 14</span></li>
+    <li class="toc-item"><span><strong>10. Giải đáp câu hỏi thường gặp (FAQ)</strong></span><span>Trang 15</span></li>
+  </ul>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Lưu ý trước khi sử dụng</div>
+    Toàn bộ người dùng khi được cấp tài khoản cần thực hiện đổi mật khẩu ngay trong lần đăng nhập đầu tiên và tuân thủ các quy định về an toàn bảo mật thông tin khách hàng.
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 1 & 2 -->
+  <h1>1. GIỚI THIỆU TỔNG QUAN HỆ THỐNG</h1>
+  <p>
+    <strong>JPT Helpdesk Application v4.0</strong> là giải pháp phần mềm quản trị tập trung toàn diện cho doanh nghiệp hoạt động trong lĩnh vực dịch vụ công nghệ thông tin, tích hợp hệ thống, triển khai hạ tầng và bảo trì phần mềm.
+  </p>
+  <p>Hệ thống giải quyết 4 bài toán cốt lõi:</p>
+  <ul>
+    <li><strong>Minh bạch hóa Cổng khách hàng:</strong> Khách hàng tự tạo phiếu hỗ trợ, tra cứu tiến độ xử lý và theo dõi biểu đồ Gantt dự án theo thời gian thực.</li>
+    <li><strong>Chuẩn hóa xử lý sự cố theo ITIL:</strong> Phân cấp mức độ ưu tiên L1 - L4, giám sát thời hạn phản hồi và xử lý theo cam kết SLA hợp đồng.</li>
+    <li><strong>Quản lý Dự án phân cấp (v4.0):</strong> Bảng kế hoạch chi tiết tự động tính toán tiến độ giai đoạn, phân bổ đa nhân sự và biểu đồ Gantt 3 cột trực quan.</li>
+    <li><strong>Quản trị dữ liệu tập trung:</strong> Đồng bộ 2 chiều dữ liệu Khách hàng, Cơ hội, Hợp đồng từ Google Sheets / Excel lên nền tảng đám mây Supabase PostgreSQL.</li>
+  </ul>
+
+  <h1>2. PHÂN QUYỀN VÀ CÁC NHÓM NGƯỜI DÙNG (RBAC)</h1>
+  <p>Hệ thống thiết lập 4 nhóm vai trò với phạm vi trách nhiệm và quyền hạn phân định rõ:</p>
+
+  <table class="data-table avoid-break">
+    <thead>
+      <tr>
+        <th style="width: 130px;">Nhóm vai trò</th>
+        <th style="width: 80px;">Mã quyền</th>
+        <th>Phạm vi chức năng</th>
+        <th>Tài khoản mẫu</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Ban Giám Đốc</strong></td>
+        <td><span class="badge badge-admin">Admin</span></td>
+        <td>Toàn quyền hệ thống: Báo cáo Dashboard, Quản lý người dùng, Phân quyền nhóm, Sao lưu &amp; Phục hồi dữ liệu, Xem nhật ký hoạt động.</td>
+        <td><code>admin@jpt.vn</code><br><small>Pass: 123</small></td>
+      </tr>
+      <tr>
+        <td><strong>Quản lý Dự án</strong></td>
+        <td><span class="badge badge-pm">PM</span></td>
+        <td>Quản lý kế hoạch dự án, phân công nhân sự, quản lý cơ hội, khách hàng, hợp đồng, theo dõi tiến độ Gantt, ticket và yêu cầu dịch vụ.</td>
+        <td><code>pm@jpt.vn</code><br><small>Pass: 123</small></td>
+      </tr>
+      <tr>
+        <td><strong>Đội Kỹ thuật</strong></td>
+        <td><span class="badge badge-tech">Technical</span></td>
+        <td>Tiếp nhận và giải quyết Ticket, Bấm giờ xử lý/Tạm dừng (Hold) để bảo vệ SLA, Thực hiện các chu kỳ bảo trì định kỳ.</td>
+        <td><code>technical@jpt.vn</code><br><small>Pass: 123</small></td>
+      </tr>
+      <tr>
+        <td><strong>Khách hàng</strong></td>
+        <td><span class="badge badge-cust">Customer</span></td>
+        <td>Truy cập riêng vào Customer Portal (<code>/portal</code>): Tạo yêu cầu hỗ trợ, xem trạng thái, xem tiến độ kế hoạch &amp; Gantt dự án của doanh nghiệp mình.</td>
+        <td><code>customer@vpbank.vn</code><br><small>Pass: 123</small></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 3 & 4 -->
+  <h1>3. HƯỚNG DẪN ĐĂNG NHẬP &amp; GIAO DIỆN CHUNG</h1>
+  <h2>3.1. Đăng nhập hệ thống</h2>
+  <ol>
+    <li>Truy cập đường dẫn: <code>https://jpt-helpdesk-app.vercel.app/login</code>.</li>
+    <li>Nhập <strong>Email</strong> và <strong>Mật khẩu</strong> đã được cấp.</li>
+    <li>Nhấn nút <strong>Đăng nhập</strong>. Hệ thống tự động chuyển hướng:
+      <ul>
+        <li>Tài khoản <code>Customer</code> &rarr; Cổng thông tin khách hàng (<code>/portal</code>).</li>
+        <li>Tài khoản nội bộ (<code>Admin</code>, <code>PM</code>, <code>Technical</code>) &rarr; Bảng điều khiển (<code>/dashboard</code>).</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h2>3.2. Cấu trúc Thanh điều hướng bên trái (Sidebar)</h2>
+  <ul>
+    <li><strong>Logo JPT Helpdesk:</strong> Nằm trên cùng, nhận diện thương hiệu.</li>
+    <li><strong>Dashboard:</strong> Truy cập nhanh bảng điều khiển báo cáo.</li>
+    <li><strong>Khối DỊCH VỤ:</strong>
+      <ul>
+        <li><code>Yêu cầu</code>: Tiếp nhận và xử lý yêu cầu (kèm số đếm ticket mới).</li>
+        <li><code>Quản Lý Ticket</code>: Xử lý vé sự cố theo chuẩn ITIL.</li>
+        <li><code>Dịch Vụ Bảo Trì</code>: Quản lý kế hoạch bảo dưỡng định kỳ.</li>
+        <li><code>Triển khai dự án</code>: Điều hành dự án công nghệ, kế hoạch &amp; Gantt.</li>
+        <li><code>Thông báo</code>: Trung tâm phát tin nội bộ và tin tới khách hàng.</li>
+      </ul>
+    </li>
+    <li><strong>Khối THÔNG TIN:</strong>
+      <ul>
+        <li><code>Quản Lý Thông Tin</code>: 5 tab Khách hàng, Cơ hội, Liên hệ, Nhân sự, Hợp đồng.</li>
+        <li><code>Quản lý SLA</code>: Định cấu hình cam kết mức độ dịch vụ.</li>
+      </ul>
+    </li>
+    <li><strong>Khối HỆ THỐNG:</strong> Người dùng, Phân quyền nhóm, Cấu hình &amp; Sao lưu.</li>
+    <li><strong>Đăng xuất:</strong> Thoát tài khoản an toàn ở chân thanh menu.</li>
+  </ul>
+
+  <h1>4. BẢNG ĐIỀU KHIỂN (DASHBOARD &amp; KPI)</h1>
+  <p>Dashboard cung cấp số liệu tổng hợp thời gian thực thông qua 5 tab nghiệp vụ chuyên sâu:</p>
+  <ul>
+    <li><strong>1. Báo cáo tổng hợp (Synthesis):</strong> Các thẻ KPI lớn về tổng số ticket tiếp nhận, tỷ lệ giải quyết đúng hạn SLA (%), số dự án đang chạy, biểu đồ xu hướng theo tuần/tháng.</li>
+    <li><strong>2. Khối lượng công việc nhân sự (Staff Workload):</strong> Thống kê số lượng ticket và nhiệm vụ đang gán cho từng kỹ sư, lọc theo phòng ban, cảnh báo nhân sự đang bị quá tải công việc.</li>
+    <li><strong>3. Báo cáo sự cố chung (General Incidents):</strong> Tỷ lệ các mức độ ưu tiên L1 - L4, danh sách sự cố vi phạm SLA và phân tích nguyên nhân.</li>
+    <li><strong>4. Báo cáo bảo trì (Maintenance):</strong> Tiến độ thực hiện các đợt bảo dưỡng định kỳ theo hợp đồng của từng đối tác.</li>
+    <li><strong>5. Báo cáo dự án (Deployment):</strong> Tỷ lệ hoàn thành % các dự án công nghệ và các mốc nghiệm thu sắp tới.</li>
+  </ul>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Mẹo xem nhanh báo cáo</div>
+    Sử dụng bộ chọn thời gian ở góc trên bên phải màn hình để linh hoạt chuyển đổi giữa <strong>Tuần này (Week)</strong>, <strong>Tháng này (Month)</strong> hoặc <strong>Cả năm (Year)</strong>.
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 5: DỊCH VỤ -->
+  <h1>5. HƯỚNG DẪN PHÂN HỆ DỊCH VỤ (SERVICE OPERATIONS)</h1>
+
+  <h2>5.1. Quản lý Yêu cầu (Requests)</h2>
+  <p>Là đầu mối tiếp nhận tập trung mọi luồng thông tin trước khi chuyển thành Ticket chính thức hoặc nhiệm vụ nội bộ.</p>
+  <ul>
+    <li><strong>Tab Yêu cầu từ khách hàng (Customer Requests):</strong> Các yêu cầu do đối tác gửi từ Cổng Portal với mã bắt đầu bằng <code>CR-</code> hoặc <code>TH-</code>.</li>
+    <li><strong>Tab Yêu cầu dịch vụ (Service Requests):</strong> Yêu cầu thay đổi, cấu hình từ các phòng ban nội bộ công ty.</li>
+    <li><strong>Tab Yêu cầu công việc (Task Requests):</strong> Nhiệm vụ kỹ thuật phát sinh đột xuất cần điều phối nhanh.</li>
+  </ul>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Cách chuyển đổi Yêu cầu thành Ticket</div>
+    Mở yêu cầu ở trạng thái <code>Chờ tiếp nhận</code> &rarr; Nhấn <strong>Chuyển thành Ticket</strong>. Hệ thống sẽ tự động sao chép toàn bộ thông tin khách hàng, phạm vi hợp đồng và nội dung mô tả sang Ticket mới để kỹ sư tiến hành xử lý kỹ thuật.
+  </div>
+
+  <h2>5.2. Quản lý Ticket Hỗ trợ (Tickets)</h2>
+  <p>Quy trình xử lý sự cố chuẩn ITIL được thiết kế thành 5 bước liền mạch:</p>
+
+  <div class="workflow-container">
+    <div class="workflow-step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">Tạo Ticket (Create Ticket)</div>
+        <div class="step-desc">Khởi tạo mã phiếu tự động, chọn Khách hàng, Hợp đồng, Loại yêu cầu (Xử lý sự cố, Hỗ trợ kỹ thuật, Thay đổi hệ thống, Bảo trì, Dự án) và mức ưu tiên L1 - L4.</div>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">Kiểm tra Hợp đồng (Check Contract Scope)</div>
+        <div class="step-desc">Xác định tính chất hạng mục: <code>In scope</code> (Trong hợp đồng), <code>Out scope</code> (Ngoài hợp đồng, có tính phí), hoặc <code>Presale</code> (Trước bán hàng).</div>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Điều phối Nhân sự (Arrange Resource)</div>
+        <div class="step-desc">Gán Kỹ sư phụ trách chính (Assigned) và Người cùng theo dõi (Following) từ danh sách Nhân sự hệ thống.</div>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">Xử lý Kỹ thuật &amp; Tạm dừng bảo vệ SLA (Troubleshooting)</div>
+        <div class="step-desc">Chuyển sang <code>In progress</code> để bắt đầu tính giờ SLA. Nếu cần chờ phản hồi từ đối tác: Chọn <code>On Hold</code> kèm lý do để đóng băng đồng hồ SLA.</div>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-title">Nghiệm thu &amp; Đóng vé (Completed / Closed)</div>
+        <div class="step-desc">Cập nhật nguyên nhân gốc rễ (Root Cause), giải pháp xử lý, đính kèm biên bản và chuyển trạng thái hoàn tất để thông báo cho khách hàng.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Tùy biến cột hiển thị (Column Settings)</h3>
+  <p>
+    Tại góc phải thanh công cụ của danh sách Ticket, nhấn biểu tượng <strong>Tùy chỉnh cột (Settings)</strong> để kéo thả đổi vị trí cột, ẩn/hiện thông tin theo thói quen sử dụng của cá nhân.
+  </p>
+
+  <div class="page-break"></div>
+
+  <h2>5.3. Dịch vụ Bảo trì Định kỳ (Maintenance)</h2>
+  <p>Quản lý các đợt bảo dưỡng thiết bị máy chủ, sao lưu cơ sở dữ liệu và bảo trì phần mềm định kỳ theo kỳ hạn hợp đồng.</p>
+  <ul>
+    <li><strong>Chu kỳ bảo trì:</strong> Hỗ trợ thiết lập theo Tháng (Monthly), Quý (Quarterly) hoặc Năm (Yearly).</li>
+    <li><strong>Cây công việc phân cấp:</strong> Mỗi chu kỳ chia nhỏ thành các hạng mục cha và công việc con (ví dụ: Kiểm tra ổ cứng, kiểm tra nhiệt độ phòng máy, backup database, cập nhật bản vá bảo mật).</li>
+    <li><strong>Tự động tính tiến độ:</strong> % Hoàn thành của kỳ bảo dưỡng được tự động tính toán dựa trên số lượng đầu việc con đã được đánh dấu hoàn thành.</li>
+  </ul>
+
+  <h2>5.4. Quản lý Triển khai Dự án (Project Management - Điểm nhấn v4.0)</h2>
+  <p>Phân hệ dự án v4.0 cung cấp môi trường điều hành dự án công nghệ chuyên nghiệp:</p>
+
+  <table class="data-table avoid-break">
+    <thead>
+      <tr>
+        <th style="width: 140px;">Phân hệ con</th>
+        <th>Chức năng và quy cách vận hành</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tổng quan (Overview)</strong></td>
+        <td>Header hiển thị PM, Khách hàng, Tiến độ %, Thời gian. Bảng SOW (Phạm vi công việc) và Khung Lưu ý kỹ thuật bảo mật/Rollback.</td>
+      </tr>
+      <tr>
+        <td><strong>Kế hoạch (Plan)</strong></td>
+        <td>
+          Bảng kế hoạch 3 cấp (Phase &rarr; Công việc chính &rarr; Công việc con).<br>
+          • <strong>Tự động tính toán Phase:</strong> % Hoàn thành, Người thực hiện, Ngày bắt đầu sớm nhất, Ngày kết thúc muộn nhất.<br>
+          • <strong>Đa nhân sự:</strong> Chọn nhiều kỹ sư thực hiện dưới dạng thẻ tag màu trực quan.<br>
+          • <strong>Đổi vị trí linh hoạt:</strong> Kéo thả chuột hoặc gõ số thứ tự dòng để di chuyển task nhanh.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Biểu đồ Gantt</strong></td>
+        <td>
+          Thiết kế 3 cột chuyên nghiệp: <code>[Tên công việc]</code> | <code>[Tiến độ % + Thanh Bar 2 màu]</code> | <code>[Lưới Lịch Ngày &amp; Tháng]</code>.<br>
+          Tự động highlight <strong>Ngày hôm nay (Today)</strong> để theo dõi trực quan công việc đúng hạn/chậm tiến độ.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Mốc thời gian (Milestones)</strong></td>
+        <td>Quản lý các mốc quan trọng: Họp khởi động (Kick-off), Nghiệm thu thiết kế, Cắt chuyển Go-live, Nghiệm thu chính thức.</td>
+      </tr>
+      <tr>
+        <td><strong>Tài liệu dự án (Docs)</strong></td>
+        <td>Lưu trữ hồ sơ hợp đồng, biên bản khảo sát hiện trạng, tài liệu đặc tả URD, bản vẽ kiến trúc hệ thống.</td>
+      </tr>
+      <tr>
+        <td><strong>Nhật ký dự án (Diary)</strong></td>
+        <td>Ghi nhật ký hàng ngày: Các vướng mắc phát sinh (Issue), giải pháp xử lý và ý kiến chỉ đạo.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>5.5. Hệ thống Thông báo (Notifications)</h2>
+  <ul>
+    <li><strong>Thông báo khách hàng:</strong> Phát thông báo lịch bảo trì, thông báo nâng cấp hệ thống tới Cổng Portal của khách hàng.</li>
+    <li><strong>Thông báo nội bộ:</strong> Gửi thông báo đến toàn công ty hoặc đích danh theo phòng ban (Ban Giám Đốc, Quản lý dự án, Kỹ thuật).</li>
+    <li><strong>Thông báo của tôi:</strong> Quản lý danh sách các thông báo cá nhân, đánh dấu đã đọc hoặc chưa đọc.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 6: MASTER DATA -->
+  <h1>6. PHÂN HỆ QUẢN LÝ THÔNG TIN (MASTER DATA)</h1>
+  <p>Tập trung tại thanh menu <strong>Quản Lý Thông Tin</strong>, bao gồm 5 tab dữ liệu danh mục kết nối đồng bộ:</p>
+
+  <h2>6.1. Khách hàng &amp; Cơ hội Kinh doanh</h2>
+  <ul>
+    <li><strong>Khách hàng (Customers):</strong> Quản lý mã khách hàng, tên doanh nghiệp, mã số thuế, địa chỉ, cán bộ phụ trách kinh doanh và kỹ thuật. Hỗ trợ nhập danh sách từ file Excel.</li>
+    <li><strong>Cơ hội (Opportunities):</strong> Quản lý phễu cơ hội bán hàng qua các giai đoạn (Khảo sát &rarr; Báo giá &rarr; Đấu thầu &rarr; Thành công), ước tính doanh số và ngày chốt hợp đồng.</li>
+    <li><strong>Tự động đồng bộ 2 chiều (Google Sheets Auto-Sync):</strong> Hệ thống tự động kết nối và đồng bộ dữ liệu mới nhất từ bảng tính Google Sheets định kỳ mỗi 15 phút hoặc khi bấm nút <strong>Đồng bộ ngay</strong>.</li>
+  </ul>
+
+  <h2>6.2. Hợp đồng Dịch vụ (Contracts) &amp; Cảnh báo Hết hạn</h2>
+  <ul>
+    <li>Theo dõi số hợp đồng, ngày ký, ngày hết hạn, giá trị hợp đồng và phạm vi dịch vụ (SLA, bảo trì thiết bị, nhân sự trực Onsite).</li>
+    <li><strong>Cảnh báo thông minh:</strong> Hệ thống tự động tô màu đỏ với hợp đồng đã hết hạn và màu vàng với hợp đồng sắp hết hạn trong vòng 30 ngày, giúp bộ phận kinh doanh chủ động liên hệ tái tục.</li>
+  </ul>
+
+  <h2>6.3. Hồ sơ Nhân sự &amp; Danh bạ Liên hệ</h2>
+  <ul>
+    <li><strong>Nhân sự (Staff):</strong> Quản lý toàn bộ danh sách kỹ sư, cán bộ PM của công ty JPT kèm chức danh, số điện thoại, email và phòng ban. Nguồn dữ liệu này dùng để phân công trong Ticket và Dự án.</li>
+    <li><strong>Liên hệ (Contacts):</strong> Danh bạ các đầu mối phụ trách phía khách hàng (IT Manager, Helpdesk Lead, Kế toán) để liên hệ khi xảy ra sự cố.</li>
+  </ul>
+
+  <h2>6.4. Cấu hình Cam kết Chất lượng Dịch vụ (SLA)</h2>
+  <p>Hệ thống hỗ trợ cấu hình tiêu chuẩn thời gian xử lý gắn theo từng khách hàng và hợp đồng:</p>
+
+  <table class="data-table avoid-break">
+    <thead>
+      <tr>
+        <th style="width: 140px;">Mức ưu tiên</th>
+        <th style="width: 150px;">Thời gian phản hồi (Response)</th>
+        <th style="width: 150px;">Thời gian giải quyết (Resolution)</th>
+        <th>Ví dụ điển hình</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-l1">L1 - Critical</span></td>
+        <td>&le; 15 - 30 phút</td>
+        <td>&le; 2 - 4 giờ</td>
+        <td>Máy chủ Core gián đoạn, sập toàn bộ đường truyền dữ liệu chính.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-l2">L2 - Major</span></td>
+        <td>&le; 1 giờ</td>
+        <td>&le; 8 giờ</td>
+        <td>Lỗi tính năng quan trọng nhưng vẫn còn đường truyền dự phòng.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-l3">L3 - Minor</span></td>
+        <td>&le; 2 giờ</td>
+        <td>&le; 24 giờ</td>
+        <td>Lỗi giao diện, lỗi in báo cáo hoặc trục trặc trên máy trạm đơn lẻ.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-l4">L4 - Warning</span></td>
+        <td>&le; 4 giờ</td>
+        <td>&le; 48 giờ</td>
+        <td>Yêu cầu tư vấn kỹ thuật, hướng dẫn sử dụng, thay đổi cấu hình nhỏ.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 7 & 8 -->
+  <h1>7. HƯỚNG DẪN CỔNG KHÁCH HÀNG (CUSTOMER PORTAL)</h1>
+  <p>Địa chỉ truy cập: <code>https://jpt-helpdesk-app.vercel.app/portal</code> (Dành riêng cho đại diện khách hàng).</p>
+
+  <h2>7.1. Gửi yêu cầu hỗ trợ mới</h2>
+  <ol>
+    <li>Khách hàng đăng nhập vào Cổng Portal.</li>
+    <li>Bấm nút xanh nổi bật <strong>+ Tạo yêu cầu hỗ trợ</strong> tại góc phải.</li>
+    <li>Điền đầy đủ thông tin:
+      <ul>
+        <li><strong>Loại yêu cầu:</strong> Xử lý sự cố, Hỗ trợ kỹ thuật, Thay đổi hệ thống, Bảo trì...</li>
+        <li><strong>Danh mục ảnh hưởng:</strong> Phần cứng, Phần mềm, Database, Mạng, Bảo mật.</li>
+        <li><strong>Mô tả chi tiết:</strong> Hiện tượng lỗi, thời điểm bắt đầu phát sinh.</li>
+        <li><strong>Đính kèm:</strong> Tải lên ảnh chụp màn hình hoặc file tài liệu lỗi.</li>
+      </ul>
+    </li>
+    <li>Nhấn <strong>Gửi yêu cầu</strong>. Phiếu sẽ xuất hiện ngay lập tức trên hệ thống nội bộ của JPT.</li>
+  </ol>
+
+  <h2>7.2. Giám sát Kế hoạch &amp; Biểu đồ Gantt Dự án</h2>
+  <p>
+    Khách hàng chuyển sang mục <strong>Theo dõi tiến độ dự án</strong> để xem trực tiếp Bảng kế hoạch chi tiết và Biểu đồ Gantt các dự án đang triển khai tại đơn vị mình, nắm bắt chuẩn xác từng mốc bàn giao mà không cần phải chờ báo cáo giấy.
+  </p>
+
+  <h1>8. QUẢN TRỊ HỆ THỐNG (ADMINISTRATION &amp; BACKUP)</h1>
+  <p>Dành riêng cho Quản trị viên cấp cao (<code>Admin</code>) tại menu <strong>Quản lý hệ thống</strong>:</p>
+
+  <h2>8.1. Quản lý Người dùng (Users)</h2>
+  <ul>
+    <li><strong>Tạo tài khoản mới:</strong> Nhập Tên, Email, Mật khẩu, Chọn vai trò (Admin, PM, Technical, Customer). Nếu là Customer, bắt buộc liên kết với Khách hàng tương ứng.</li>
+    <li><strong>Khóa / Mở khóa tài khoản:</strong> Tạm ngưng quyền truy cập khi nhân sự chuyển công tác mà vẫn giữ nguyên lịch sử dữ liệu.</li>
+    <li><strong>Đặt lại mật khẩu:</strong> Khôi phục mật khẩu khi người dùng quên mật khẩu.</li>
+  </ul>
+
+  <h2>8.2. Cấu hình Nhóm &amp; Phân quyền (Settings &amp; Groups)</h2>
+  <p>Tích chọn hoặc bỏ chọn từng màn hình/đường dẫn phân hệ để cấp phát hoặc thu hồi quyền truy cập đối với từng nhóm người dùng.</p>
+
+  <h2>8.3. Sao lưu &amp; Phục hồi Cơ sở dữ liệu (System &amp; Backup)</h2>
+  <ul>
+    <li><strong>Sao lưu (Backup):</strong> Xuất toàn bộ dữ liệu cơ sở dữ liệu Supabase ra file JSON an toàn về máy tính định kỳ.</li>
+    <li><strong>Phục hồi (Restore):</strong> Khôi phục dữ liệu từ tệp sao lưu khi có tình huống khẩn cấp.</li>
+    <li><strong>Dọn dẹp bản ghi trùng (Cleanup Duplicates):</strong> Công cụ tự động quét và chuẩn hóa các bản ghi trùng lặp trong hệ thống.</li>
+    <li><strong>Cấu hình Lưu trữ (Storage):</strong> Tích hợp lưu trữ đám mây Google Drive / Cloudflare R2 / Supabase Storage.</li>
+    <li><strong>Nhật ký hoạt động (Audit Logs):</strong> Truy vết chi tiết lịch sử ai đã thêm, sửa, xóa dữ liệu nào vào thời gian nào.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 9 & 10 -->
+  <h1>9. QUY TRÌNH VẬN HÀNH TIÊU CHUẨN (STANDARD OPERATING PROCEDURES - SOP)</h1>
+
+  <h2>SOP 1: Quy trình xử lý sự cố khẩn cấp (L1 - Critical)</h2>
+  <ol>
+    <li><strong>Tiếp nhận:</strong> Khi phát sinh sự cố L1 (Hệ thống ngân hàng gián đoạn, sập máy chủ Core), Kỹ sư trực ca lập tức chuyển trạng thái sang <code>In progress</code>. Hệ thống đếm ngược SLA giải quyết tối đa 2 giờ.</li>
+    <li><strong>Điều tra:</strong> Kỹ sư phối hợp với đầu mối khách hàng kiểm tra nhật ký lỗi, khoanh vùng nguyên nhân.</li>
+    <li><strong>Đóng băng giờ SLA (On Hold):</strong> Nếu phải chờ khách hàng mở kênh VPN hoặc bàn giao thiết bị thay thế, Kỹ sư <strong>BẮT BUỘC</strong> phải chuyển trạng thái sang <code>On Hold</code> và chọn đúng lý do. Lúc này đồng hồ SLA tạm dừng.</li>
+    <li><strong>Khôi phục &amp; Đóng vé:</strong> Sau khi khắc phục xong, cập nhật giải pháp, đính kèm biên bản và chuyển sang <code>Completed</code>.</li>
+  </ol>
+
+  <h2>SOP 2: Quy trình lập và giám sát Dự án Triển khai (PM)</h2>
+  <ol>
+    <li>PM tạo dự án mới &rarr; Khai báo Khách hàng, Hợp đồng liên kết, PM phụ trách và thời gian thực hiện.</li>
+    <li>Tại tab <strong>Kế hoạch (Plan)</strong>: Tạo các Giai đoạn (Phase) &rarr; Tạo các công việc con trong từng Phase &rarr; Gán kỹ sư phụ trách &rarr; Nhập ngày bắt đầu/kết thúc.</li>
+    <li>Kiểm tra tính cân đối trên <strong>Biểu đồ Gantt</strong>.</li>
+    <li>Định kỳ hàng tuần, kỹ sư vào cập nhật % tiến độ thực tế của từng task con. Hệ thống tự động tính dồn % lên cấp Phase và dự án tổng thể.</li>
+  </ol>
+
+  <h1>10. GIẢI ĐÁP CÁC TÌNH HUỐNG THƯỜNG GẶP (FAQ)</h1>
+
+  <div class="callout callout-warning avoid-break">
+    <div class="callout-title">Q1: Tại sao Kỹ sư không nhìn thấy phân hệ Quản lý Người dùng &amp; Cấu hình hệ thống?</div>
+    <strong>Trả lời:</strong> Các phân hệ này chỉ dành riêng cho Ban Giám Đốc (nhóm vai trò <code>Admin</code>). Tài khoản <code>Technical</code> chỉ được phân quyền xử lý Dashboard, Yêu cầu, Ticket, Lịch bảo trì và Dự án.
+  </div>
+
+  <div class="callout callout-info avoid-break">
+    <div class="callout-title">Q2: Làm sao để không bị vi phạm SLA khi khách hàng phản hồi chậm?</div>
+    <strong>Trả lời:</strong> Kỹ sư mở Ticket đó lên &rarr; Chuyển trạng thái sang <code>On Hold</code> &rarr; Chọn lý do <code>Chờ phản hồi từ khách hàng</code>. Hệ thống sẽ lập tức tạm dừng đồng hồ tính giờ SLA và ghi nhận mốc thời gian tạm dừng vào nhật ký.
+  </div>
+
+  <div class="callout callout-tip avoid-break">
+    <div class="callout-title">Q3: Khi kéo thả đổi vị trí công việc trong Kế hoạch dự án có bị mất dữ liệu không?</div>
+    <strong>Trả lời:</strong> Hoàn toàn không. Phiên bản 4.0 hỗ trợ cả 2 cách: Kéo thả chuột trực tiếp và Gõ số dòng mong muốn. Dữ liệu được lưu trữ tự động lên máy chủ cơ sở dữ liệu Supabase ngay tức thì.
+  </div>
+
+  <div class="callout callout-info avoid-break">
+    <div class="callout-title">Q4: Dữ liệu Khách hàng và Hợp đồng đồng bộ từ Google Sheets như thế nào?</div>
+    <strong>Trả lời:</strong> Tại màn hình Khách hàng hoặc Hợp đồng, nhấn nút <strong>Đồng bộ ngay (Refresh icon)</strong> ở thanh công cụ. Hệ thống sẽ kết nối qua API Google Sheets và cập nhật các dòng thay đổi trong vài giây.
+  </div>
+
+  <hr style="border: 0; border-top: 1px solid #cbd5e1; margin: 30px 0 15px 0;">
+  <p style="text-align: center; font-size: 11px; color: #64748b;">
+    <strong>TÀI LIỆU HƯỚNG DẪN SỬ DỤNG HỆ THỐNG JPT HELPDESK &amp; PROJECT MANAGEMENT v4.0</strong><br>
+    Đơn vị phát hành: CÔNG TY TNHH CÔNG NGHỆ JPT (JPROTECH COMPANY) &bull; Email hỗ trợ: <code>admin@jpt.vn</code>
+  </p>
+
+</body>
+</html>

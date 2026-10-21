@@ -21,6 +21,26 @@ export interface StaffSearchSelectProps {
   colorClass?: string;
 }
 
+// Global in-memory cache for staff list across component instances
+let globalStaffCache: NhanSu[] | null = null;
+let globalStaffPromise: Promise<NhanSu[]> | null = null;
+
+async function getCachedStaff(): Promise<NhanSu[]> {
+  if (globalStaffCache && globalStaffCache.length > 0) {
+    return globalStaffCache;
+  }
+  if (!globalStaffPromise) {
+    globalStaffPromise = fetchNhanSu().then((data) => {
+      globalStaffCache = data || [];
+      return globalStaffCache;
+    }).catch((err) => {
+      globalStaffPromise = null;
+      throw err;
+    });
+  }
+  return globalStaffPromise;
+}
+
 export default function StaffSearchSelect({
   value = "",
   valueKey = "name",
@@ -39,7 +59,11 @@ export default function StaffSearchSelect({
 }: StaffSearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [internalStaffList, setInternalStaffList] = useState<NhanSu[]>([]);
+  const [internalStaffList, setInternalStaffList] = useState<NhanSu[]>(() => {
+    if (propStaffList && propStaffList.length > 0) return propStaffList;
+    if (globalStaffCache && globalStaffCache.length > 0) return globalStaffCache;
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
 
@@ -50,18 +74,27 @@ export default function StaffSearchSelect({
   const defaultPlaceholder = mode === "multiple" ? "-- Chọn người theo dõi --" : "-- Chọn nhân sự --";
   const effectivePlaceholder = placeholder || defaultPlaceholder;
 
-  // Load staff list if not provided via props
+  // Load staff list if not provided via props or when prop changes
   useEffect(() => {
     if (propStaffList && propStaffList.length > 0) {
       setInternalStaffList(propStaffList);
+      setIsLoading(false);
+      globalStaffCache = propStaffList;
+      return;
+    }
+
+    if (internalStaffList.length > 0) {
+      setIsLoading(false);
       return;
     }
 
     let isMounted = true;
     setIsLoading(true);
-    fetchNhanSu()
+    getCachedStaff()
       .then((data) => {
-        if (isMounted) setInternalStaffList(data || []);
+        if (isMounted && data) {
+          setInternalStaffList(data);
+        }
       })
       .catch((err) => console.error("Error fetching staff list for select:", err))
       .finally(() => {
@@ -71,13 +104,6 @@ export default function StaffSearchSelect({
     return () => {
       isMounted = false;
     };
-  }, [propStaffList]);
-
-  // Keep internal list in sync if prop changes
-  useEffect(() => {
-    if (propStaffList) {
-      setInternalStaffList(propStaffList);
-    }
   }, [propStaffList]);
 
   // Handle outside click & window resize

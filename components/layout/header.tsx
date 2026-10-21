@@ -118,6 +118,15 @@ export default function Header({
           </div>
         )}
 
+        {/* GUIDE LINK */}
+        <Link
+          href="/guide"
+          title="Hướng dẫn sử dụng & Tải PDF"
+          className="cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1 text-slate-200 hover:text-cyan-300"
+        >
+          <HelpCircle size={16} />
+        </Link>
+
         {/* NOTIFICATION BELL */}
         <div className="relative cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1">
           <Bell

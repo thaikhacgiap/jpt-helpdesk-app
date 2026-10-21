@@ -61,7 +61,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
             priority: t.priority,
             category: t.category,
             ttType: t.tt_type || "Yêu cầu dịch vụ",
-            status: t.tt_status || "New",
+            status: (t.tt_status?.toLowerCase() === "resolved" ? "Completed" : t.tt_status?.toLowerCase() === "in progress" ? "In progress" : t.tt_status) || "New",
             startTime: t.start_time || undefined,
             requestTime: undefined,
             source: "customer",

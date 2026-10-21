@@ -235,15 +235,121 @@ export function getTicketRequestCode(ticket: any): string {
 // Helper to extract or resolve request status from a ticket
 export function getTicketRequestStatus(ticket: any, customMap?: Record<string, string>): string {
   if (!ticket) return "";
-  if (ticket.request_status) return ticket.request_status;
-  const reqCode = getTicketRequestCode(ticket);
-  if (!reqCode) return "";
-  if (customMap) {
-    const fromMap = customMap[reqCode.toUpperCase()] || customMap[(ticket.request_id || "").toUpperCase()];
-    if (fromMap) return fromMap;
+  let status = ticket.request_status;
+  if (!status) {
+    const reqCode = getTicketRequestCode(ticket);
+    if (reqCode && customMap) {
+      status = customMap[reqCode.toUpperCase()] || customMap[(ticket.request_id || "").toUpperCase()];
+    }
   }
-  return "";
+  // Fallback to ticket's own status if linked to request
+  if (!status && getTicketRequestCode(ticket)) {
+    status = ticket.tt_status;
+  }
+  if (!status) return "";
+  if (status.toLowerCase() === "resolved") return "Completed";
+  if (status.toLowerCase() === "in progress") return "In progress";
+  return status;
 }
+
+/**
+ * Synchronizes ticket status, completion times, and linkages to the linked request (CR-, TH-, SR-, TR-),
+ * guaranteeing ticket status and request status are completely unified in both database and local cache.
+ */
+export async function syncTicketToRequest(
+  ticketIdOrDbId: string,
+  extraUpdates?: {
+    ttStatus?: string;
+    endTime?: string;
+    closeTime?: string;
+    startTime?: string;
+    title?: string;
+    ttType?: string;
+    category?: string;
+  }
+): Promise<boolean> {
+  if (!ticketIdOrDbId) return false;
+  try {
+    const { data: tk, error: tkErr } = await supabase
+      .from('tickets')
+      .select('id, ticket_id, request_code, tt_status, start_time, end_time, close_time, tt_close_time, title, tt_type, category')
+      .or(`id.eq.${ticketIdOrDbId},ticket_id.eq.${ticketIdOrDbId}`)
+      .maybeSingle();
+
+    if (tkErr || !tk) return false;
+
+    const rc = tk.request_code;
+    if (!rc) return false;
+
+    let status = extraUpdates?.ttStatus || tk.tt_status || 'In progress';
+    if (status.toLowerCase() === 'resolved') status = 'Completed';
+    if (status.toLowerCase() === 'in progress') status = 'In progress';
+
+    const nowIso = new Date().toISOString();
+    const reqUpdates: any = {
+      tt_status: status,
+      document_link: tk.ticket_id,
+      updated_at: nowIso,
+    };
+
+    if (extraUpdates?.title || tk.title) reqUpdates.title = extraUpdates?.title || tk.title;
+    if (extraUpdates?.ttType || tk.tt_type) reqUpdates.tt_type = extraUpdates?.ttType || tk.tt_type;
+    if (extraUpdates?.category || tk.category) reqUpdates.category = extraUpdates?.category || tk.category;
+    if (extraUpdates?.startTime || tk.start_time) reqUpdates.start_time = extraUpdates?.startTime || tk.start_time;
+
+    const endTime = extraUpdates?.endTime || tk.end_time || tk.tt_close_time || tk.close_time;
+    if (status === 'Completed') {
+      const finalEnd = endTime || nowIso;
+      reqUpdates.end_time = finalEnd;
+      reqUpdates.close_time = finalEnd;
+      reqUpdates.tt_close_time = finalEnd;
+    }
+
+    const { error: updateErr } = await supabase
+      .from('tickets')
+      .update(reqUpdates)
+      .or(`ticket_id.eq.${rc},ticket_id.eq.${rc.replace(/^CR-/, 'TH-')},ticket_id.eq.${rc.replace(/^TH-/, 'CR-')},id.eq.${rc}`);
+
+    if (updateErr) {
+      console.warn('Error in syncTicketToRequest updating DB:', updateErr.message);
+      return false;
+    }
+
+    // Also synchronize local storage cache for requests if running in browser
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('jpt_requests');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const rcUpper = rc.toUpperCase();
+            let changed = false;
+            list.forEach((item: any) => {
+              const code = (item.code || item.id || '').toUpperCase();
+              if (code === rcUpper || code === rcUpper.replace(/^CR-/, 'TH-') || code === rcUpper.replace(/^TH-/, 'CR-')) {
+                item.status = status;
+                if (status === 'Completed' && reqUpdates.end_time) {
+                  item.completeTime = reqUpdates.end_time;
+                  item.actualCompleteTime = reqUpdates.end_time;
+                }
+                changed = true;
+              }
+            });
+            if (changed) {
+              localStorage.setItem('jpt_requests', JSON.stringify(list));
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('syncTicketToRequest caught error:', err);
+    return false;
+  }
+}
+
 
 // Fetch all tickets (excluding Requests)
 export async function fetchTickets(): Promise<Ticket[]> {
@@ -262,7 +368,9 @@ export async function fetchTickets(): Promise<Ticket[]> {
     const requestStatusMap = new Map<string, string>();
     (data || []).forEach(t => {
       const tid = (t.ticket_id || '').toUpperCase();
-      const status = t.tt_status || (t as any).status || 'New';
+      let status = t.tt_status || (t as any).status || 'New';
+      if (status.toLowerCase() === 'resolved') status = 'Completed';
+      if (status.toLowerCase() === 'in progress') status = 'In progress';
       if (t.id) requestStatusMap.set(t.id, status);
       if (tid) {
         requestStatusMap.set(tid, status);
@@ -280,7 +388,9 @@ export async function fetchTickets(): Promise<Ticket[]> {
           if (Array.isArray(list)) {
             list.forEach((r: any) => {
               const code = (r.code || r.id || '').toUpperCase();
-              const status = r.status || 'New';
+              let status = r.status || 'New';
+              if (status.toLowerCase() === 'resolved') status = 'Completed';
+              if (status.toLowerCase() === 'in progress') status = 'In progress';
               if (code) requestStatusMap.set(code, status);
               if (r.id) requestStatusMap.set(r.id, status);
             });
@@ -302,6 +412,13 @@ export async function fetchTickets(): Promise<Ticket[]> {
         reqStatus = requestStatusMap.get(reqCode.toUpperCase())
           || requestStatusMap.get((t.request_id || '').toUpperCase())
           || '';
+      }
+      if (!reqStatus && reqCode && t.tt_status) {
+        reqStatus = t.tt_status;
+      }
+      if (reqStatus) {
+        if (reqStatus.toLowerCase() === 'resolved') reqStatus = 'Completed';
+        if (reqStatus.toLowerCase() === 'in progress') reqStatus = 'In progress';
       }
       return {
         ...t,
@@ -397,26 +514,11 @@ export async function updateTicket(ticketId: string, updates: any): Promise<{ su
 
     // Synchronize status and completion time to linked customer request if request_code exists
     try {
-      const { data: currentTk } = await supabase
-        .from('tickets')
-        .select('request_code')
-        .eq('id', ticketDbId)
-        .maybeSingle();
-
-      if (currentTk?.request_code) {
-        const rc = currentTk.request_code;
-        const reqUpdates: any = { updated_at: new Date().toISOString() };
-        if (updates.ttStatus) reqUpdates.tt_status = updates.ttStatus;
-        if (updates.endTime) {
-          reqUpdates.end_time = updates.endTime;
-          reqUpdates.close_time = updates.endTime;
-          reqUpdates.tt_close_time = updates.endTime;
-        }
-        await supabase
-          .from('tickets')
-          .update(reqUpdates)
-          .or(`ticket_id.eq.${rc},ticket_id.eq.${rc.replace(/^CR-/, "TH-")},ticket_id.eq.${rc.replace(/^TH-/, "CR-")}`);
-      }
+      await syncTicketToRequest(ticketDbId, {
+        ttStatus: updates.ttStatus,
+        endTime: updates.endTime,
+        startTime: updates.startTime,
+      });
     } catch (syncErr) {
       console.warn('Error syncing to linked customer request:', syncErr);
     }

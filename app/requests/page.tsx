@@ -114,8 +114,11 @@ export default function RequestsPage() {
     const requestTime = linked?.request_time || (linked as any)?.requestTime || null;
     // Trạng thái của yêu cầu bắt buộc lấy theo trạng thái của ticket liên kết.
     // Nếu chưa có ticket thì yêu cầu luôn ở trạng thái "New" (Chờ tiếp nhận).
-    const status = linked ? (linked.tt_status || "New") : "New";
-    const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || null;
+    let rawStatus = linked ? (linked.tt_status || "New") : (t.tt_status || "New");
+    if (rawStatus.toLowerCase() === "resolved") rawStatus = "Completed";
+    if (rawStatus.toLowerCase() === "in progress") rawStatus = "In progress";
+    const status = rawStatus;
+    const completeTime = (linked as any)?.tt_close_time || (linked as any)?.close_time || linked?.end_time || t.end_time || null;
     const linkedCode = linked ? linked.ticket_id : (t.document_link && t.document_link.startsWith("TK-") ? t.document_link : null);
 
     return { linked, requestTime, status, completeTime, linkedCode };
@@ -186,6 +189,12 @@ export default function RequestsPage() {
         const ttTitleParam = params.get("ttTitle") || "";
         const titleParam = params.get("title") || "";
         const tokenParam = params.get("token") || params.get("t") || "";
+        const assigneeParam = params.get("assignee") || params.get("assigned") || "";
+        const followerParam = params.get("follower") || params.get("following") || "";
+        const customerIdParam = params.get("customerId") || "";
+        const customerNameParam = params.get("customerName") || "";
+        const startTimeParam = params.get("startTime") || "";
+        const descParam = params.get("description") || params.get("desc") || "";
 
         let hasParams = false;
 
@@ -248,21 +257,45 @@ export default function RequestsPage() {
               requestTime: nowLocal,
               deadlineTime: "",
               actualCompleteTime: "",
-              description: "",
+              description: descParam || "",
               requester: defaultRequester,
-              assignee: "",
-              follower: "",
-              startTime: nowLocal,
+              assignee: assigneeParam || "",
+              follower: followerParam || "",
+              startTime: startTimeParam ? getLocalDateTimeString(startTimeParam) : nowLocal,
               receiveTime: "",
               completeTime: "",
               status: "New",
-              customerId: "",
-              customerName: "",
+              customerId: customerIdParam || "",
+              customerName: customerNameParam || "",
               projectId: "",
               projectName: "",
               contractLink: "",
               attachedFiles: []
             });
+
+            // Tự động load bổ sung người thực hiện / người theo dõi từ ticket nếu chưa có trong query
+            if (ticketIdParam && (!assigneeParam || !followerParam)) {
+              supabase
+                .from("tickets")
+                .select("assigned, following, customer_id, customer_name, start_time, description")
+                .or(`ticket_id.eq.${ticketIdParam},id.eq.${ticketIdParam}`)
+                .maybeSingle()
+                .then(({ data: tkData }) => {
+                  if (tkData) {
+                    setFormData(prev => ({
+                      ...prev,
+                      assignee: prev.assignee || tkData.assigned || "",
+                      follower: prev.follower || tkData.following || "",
+                      customerId: prev.customerId || tkData.customer_id || "",
+                      customerName: prev.customerName || tkData.customer_name || "",
+                      startTime: (!startTimeParam && tkData.start_time) ? getLocalDateTimeString(tkData.start_time) : prev.startTime,
+                      description: prev.description || tkData.description || "",
+                    }));
+                  }
+                })
+                .catch((e) => console.warn("Error loading ticket staff data:", e));
+            }
+
             setError("");
             setIsModalOpen(true);
           } else {
@@ -750,7 +783,7 @@ export default function RequestsPage() {
       const receiver = currentUser?.name || "Kỹ thuật viên";
       const receiveTime = new Date().toISOString();
       await updateServiceTicket(ticket.id, {
-        tt_status: "In Progress",
+        tt_status: "In progress",
         assigned: receiver,
         start_time: receiveTime,
         updated_at: new Date().toISOString()
@@ -771,14 +804,14 @@ export default function RequestsPage() {
     setCustomerFormData(prev => ({
       ...prev,
       assigned: receiverName,
-      tt_status: "In Progress",
+      tt_status: "In progress",
       receive_time: prev.receive_time || nowLocal
     }));
 
     if (editingCustomerTicket) {
       try {
         await updateServiceTicket(editingCustomerTicket.id, {
-          tt_status: "In Progress",
+          tt_status: "In progress",
           assigned: receiverName,
           start_time: customerFormData.receive_time ? new Date(customerFormData.receive_time).toISOString() : nowIso,
           updated_at: nowIso

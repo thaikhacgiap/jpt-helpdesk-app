@@ -36,7 +36,8 @@ import {
   ExternalLink,
   MessageSquare,
   Home,
-  Wrench
+  Wrench,
+  Download
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -768,6 +769,17 @@ export default function PortalPage() {
               <Home size={13} />
               <span>Dashboard</span>
             </button>
+
+            {/* Guide PDF Download Link */}
+            <a
+              href="/HUONG_DAN_SU_DUNG_PHAN_MEM_JPT_HELPDESK.pdf"
+              download="HUONG_DAN_SU_DUNG_PHAN_MEM_JPT_HELPDESK.pdf"
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300/60 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Tải tài liệu Hướng dẫn sử dụng định dạng PDF"
+            >
+              <Download size={13} />
+              <span>Tải HDSD (PDF)</span>
+            </a>
 
             {/* Notification Bell */}
             <div className="relative">

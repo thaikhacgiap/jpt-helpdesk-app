@@ -240,9 +240,11 @@ export function logout(): void {
 }
 
 export function hasAccess(role: UserSession["role"], pathname: string): boolean {
+  const path = pathname.toLowerCase();
+  if (path === "/guide" || path.startsWith("/guide/")) return true;
+
   if (role === "Admin") return true;
 
-  const path = pathname.toLowerCase();
   const session = getCurrentUser();
   if (!session) return false;
 
