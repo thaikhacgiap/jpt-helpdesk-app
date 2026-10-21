@@ -134,7 +134,7 @@ export default function RequestsPage() {
     code: "",
     title: "",
     type: "Triển khai dịch vụ" as RequestTask["type"],
-    taskCategory: "Mã ticket", // 'Mã ticket' | 'Mã dự án' | 'Mã bảo trì' | 'Yêu cầu khác'
+    taskCategory: "Ticket", // 'Ticket' | 'Triển khai' | 'Bảo Trì' | 'Khác'
     taskRefCode: "",
     taskRefTitle: "",
     soKy: "",
@@ -250,7 +250,7 @@ export default function RequestsPage() {
               code: "",
               title: titleParam || "", // Không chèn tiêu đề TT vào tiêu đề request!
               type: "Yêu cầu công việc",
-              taskCategory: "Mã ticket",
+              taskCategory: "Ticket",
               taskRefCode: ticketIdParam,
               taskRefTitle: ttTitleParam,
               soKy: "",
@@ -716,7 +716,7 @@ export default function RequestsPage() {
       code: "",
       title: "",
       type: defaultType || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
-      taskCategory: "Mã ticket",
+      taskCategory: "Ticket",
       taskRefCode: "",
       taskRefTitle: "",
       soKy: "",
@@ -754,13 +754,13 @@ export default function RequestsPage() {
       code: req.code || "",
       title: req.title || "",
       type: req.type || (activeTab === "task" ? "Yêu cầu công việc" : "Triển khai dịch vụ"),
-      taskCategory: req.taskCategory || "Mã ticket",
+      taskCategory: formatTaskCategory(req.taskCategory),
       taskRefCode: req.taskRefCode || "",
       taskRefTitle: req.taskRefTitle || "",
       soKy: req.soKy !== undefined ? String(req.soKy) : "",
       requestTime: parseLocalTime(req.requestTime) || (req.startTime ? parseLocalTime(req.startTime) : ""),
       deadlineTime: parseLocalTime(req.deadlineTime),
-      actualCompleteTime: parseLocalTime(req.actualCompleteTime || req.completeTime),
+      actualCompleteTime: parseLocalTime(req.actualCompleteTime || (req.status === "Completed" ? req.completeTime : "")),
       description: req.description || "",
       requester: req.requester || "",
       assignee: req.assignee || "",
@@ -1043,10 +1043,10 @@ export default function RequestsPage() {
         await updateRequest(editingRequest.id, {
           title: formData.title,
           type: isTask ? "Yêu cầu công việc" : formData.type,
-          taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
+          taskCategory: isTask ? formatTaskCategory(formData.taskCategory) : undefined,
           taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
           taskRefTitle: isTask ? (formData.taskRefTitle || "") : undefined,
-          soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
+          soKy: isTask && formatTaskCategory(formData.taskCategory) === "Bảo Trì" ? formData.soKy : undefined,
           requestTime: isTask ? (formData.requestTime || undefined) : undefined,
           deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
           actualCompleteTime: isTask ? (formData.actualCompleteTime || undefined) : undefined,
@@ -1056,7 +1056,7 @@ export default function RequestsPage() {
           follower: formData.follower,
           startTime: formData.startTime,
           receiveTime: formData.receiveTime || undefined,
-          completeTime: formData.actualCompleteTime || formData.completeTime || undefined,
+          completeTime: formData.actualCompleteTime || (formData.status === "Completed" ? formData.completeTime : undefined) || undefined,
           status: formData.status,
           customerId: formData.customerId || undefined,
           customerName: formData.customerName || undefined,
@@ -1070,10 +1070,10 @@ export default function RequestsPage() {
           code: formData.code?.trim() || undefined,
           title: formData.title,
           type: isTask ? "Yêu cầu công việc" : formData.type,
-          taskCategory: isTask ? (formData.taskCategory || "Mã ticket") : undefined,
+          taskCategory: isTask ? formatTaskCategory(formData.taskCategory) : undefined,
           taskRefCode: isTask ? (formData.taskRefCode || "") : undefined,
           taskRefTitle: isTask ? (formData.taskRefTitle || "") : undefined,
-          soKy: isTask && formData.taskCategory === "Mã bảo trì" ? formData.soKy : undefined,
+          soKy: isTask && formatTaskCategory(formData.taskCategory) === "Bảo Trì" ? formData.soKy : undefined,
           requestTime: isTask ? (formData.requestTime || undefined) : undefined,
           deadlineTime: isTask ? (formData.deadlineTime || undefined) : undefined,
           actualCompleteTime: isTask ? (formData.actualCompleteTime || undefined) : undefined,
@@ -1083,7 +1083,7 @@ export default function RequestsPage() {
           follower: formData.follower,
           startTime: formData.startTime || getLocalDateTimeString(),
           receiveTime: formData.receiveTime || undefined,
-          completeTime: formData.actualCompleteTime || formData.completeTime || undefined,
+          completeTime: formData.actualCompleteTime || (formData.status === "Completed" ? formData.completeTime : undefined) || undefined,
           status: formData.status || "New",
           customerId: formData.customerId || undefined,
           customerName: formData.customerName || undefined,
@@ -1218,6 +1218,44 @@ export default function RequestsPage() {
       case "Yêu cầu tư vấn": return "bg-cyan-50 text-cyan-700 border-cyan-200/50";
       case "Yêu cầu công việc": return "bg-amber-50 text-amber-700 border-amber-200/50";
       default: return "bg-slate-50 text-slate-700 border-slate-200";
+    }
+  };
+
+  const isCatTicket = (cat?: string | null) => {
+    const c = (cat || "").toLowerCase();
+    return c === "ticket" || c.includes("ticket");
+  };
+  const isCatProject = (cat?: string | null) => {
+    const c = (cat || "").toLowerCase();
+    return c === "triển khai" || c.includes("dự án") || c.includes("project");
+  };
+  const isCatMaintenance = (cat?: string | null) => {
+    const c = (cat || "").toLowerCase();
+    return c === "bảo trì" || c.includes("bảo trì") || c.includes("maintenance");
+  };
+  const isCatOther = (cat?: string | null) => {
+    return !isCatTicket(cat) && !isCatProject(cat) && !isCatMaintenance(cat);
+  };
+
+  const formatTaskCategory = (cat?: string | null, type?: string | null): "Ticket" | "Triển khai" | "Bảo Trì" | "Khác" => {
+    if (isCatTicket(cat) || isCatTicket(type)) return "Ticket";
+    if (isCatProject(cat) || isCatProject(type)) return "Triển khai";
+    if (isCatMaintenance(cat) || isCatMaintenance(type)) return "Bảo Trì";
+    return "Khác";
+  };
+
+  const getTaskCategoryBadge = (cat?: string | null, type?: string | null): string => {
+    const formatted = formatTaskCategory(cat, type);
+    switch (formatted) {
+      case "Ticket":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Triển khai":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "Bảo Trì":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Khác":
+      default:
+        return "bg-slate-100 text-slate-700 border-slate-200";
     }
   };
 
@@ -1586,140 +1624,152 @@ export default function RequestsPage() {
         </div>
 
         <div className="table-scroll flex-1 min-h-0 overflow-auto">
-          <table className="w-full text-sm" style={{minWidth: activeTab === 'task' ? '1500px' : '1350px'}}>
+          <table className="w-full text-sm" style={{minWidth: activeTab === 'task' ? '1550px' : '1400px'}}>
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
               <tr className="text-sm text-slate-500 font-normal text-left bg-slate-50">
-                <th className="px-6 py-1.5 w-40 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
+                <th className="px-6 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Mã công việc</th>
                 <th className="px-4 py-1.5 w-28 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Tình trạng</th>
-                <th className="px-4 py-1.5 min-w-[280px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                <th className="px-4 py-1.5 min-w-[220px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
                   {activeTab === "task" ? "Tiêu đề Request" : "Tên công việc / Yêu cầu"}
                 </th>
-                {activeTab === "task" && (
-                  <th className="px-4 py-1.5 min-w-[220px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
-                    TT Title
-                  </th>
-                )}
-                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
+                <th className="px-4 py-1.5 w-28 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Loại công việc</th>
+                <th className="px-4 py-1.5 min-w-[150px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                  ID liên kết
+                </th>
+                <th className="px-4 py-1.5 min-w-[180px] sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                  Khách hàng
+                </th>
                 <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người yêu cầu</th>
                 <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người tiếp nhận</th>
                 <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Người theo dõi</th>
-                <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
                   Thời gian tạo
                 </th>
                 {activeTab === "task" && (
-                  <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
+                  <th className="px-4 py-1.5 w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">
                     Thời gian bắt đầu
                   </th>
                 )}
                 <th className="px-4 py-1.5 w-36 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thời gian hoàn thành</th>
-                <th className="px-4 py-1.5 text-center w-32 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
+                <th className="px-4 py-1.5 text-center w-28 sticky top-0 bg-slate-50 z-10 font-normal whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === "task" ? 12 : 10} className="py-20 text-center text-slate-400 text-sm font-normal">
+                  <td colSpan={activeTab === "task" ? 13 : 11} className="py-20 text-center text-slate-400 text-sm font-normal">
                     <Inbox size={28} className="mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-normal">{emptyMsg}</p>
                   </td>
                 </tr>
               ) : (
                 list.map((req) => (
-                  <tr key={req.id} className="hover:bg-slate-50/50 transition text-sm font-normal">
-                    <td className="px-6 py-1 text-blue-600 font-mono text-sm font-normal">
+                  <tr key={req.id} className="hover:bg-slate-50/50 transition text-sm font-normal whitespace-nowrap h-10">
+                    <td className="px-6 py-1 text-blue-600 font-mono text-sm font-normal whitespace-nowrap">
                       <span
                         onClick={() => handleEditOpen(req)}
-                        className="cursor-pointer hover:underline text-blue-600 font-normal"
+                        className="cursor-pointer hover:underline text-blue-600 font-normal whitespace-nowrap"
                       >
                         {req.code}
                       </span>
                     </td>
                     
-                    {/* Tình trạng - Read only, edit qua modal */}
+                    {/* Tình trạng */}
                     <td className="px-4 py-1 whitespace-nowrap text-left">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(req.status)}`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusBadge(req.status)}`}>
                         {getStatusLabel(req.status)}
                       </span>
                     </td>
 
-                    <td className="px-4 py-1 text-left">
-                      <p className="text-slate-800 text-sm font-medium truncate max-w-[360px]" title={req.description || req.title}>
-                        {req.title}
-                      </p>
-                      {(req.taskRefCode || req.soKy || req.customerName || req.projectName || req.contractLink || (req.attachedFiles && req.attachedFiles.length > 0)) && (
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                          {req.taskRefCode && (
-                            <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-semibold font-mono text-[10px]" title={`TT ID: ${req.taskRefCode}`}>
-                              TT ID: {req.taskRefCode}
-                            </span>
-                          )}
-                          {req.soKy && (
-                            <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-medium text-[10px]">
-                              Số kỳ: {req.soKy}
-                            </span>
-                          )}
-                          {req.customerName && (
-                            <span className="text-blue-600 font-medium truncate max-w-[130px]" title={req.customerName}>🏢 {req.customerName}</span>
-                          )}
-                          {req.projectName && (
-                            <span className="text-indigo-600 font-medium truncate max-w-[130px]" title={req.projectName}>📁 {req.projectName}</span>
-                          )}
-                          {req.contractLink && (
-                            <a
-                              href={req.contractLink.startsWith("http") ? req.contractLink : `https://${req.contractLink}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-teal-600 hover:underline flex items-center gap-0.5"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <LinkIcon size={11} /> Hợp đồng
-                            </a>
-                          )}
-                          {req.attachedFiles && req.attachedFiles.length > 0 && (
-                            <span className="text-amber-600 flex items-center gap-0.5">
-                              <Paperclip size={11} /> {req.attachedFiles.length} file
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Cột TT Title (chỉ khi activeTab === 'task') */}
-                    {activeTab === "task" && (
-                      <td className="px-4 py-1 text-left text-xs text-slate-700">
-                        {req.taskRefTitle ? (
-                          <span className="truncate block max-w-[240px] font-normal" title={req.taskRefTitle}>
-                            {req.taskRefTitle}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 italic">—</span>
+                    {/* Tiêu đề Request - 1 dòng duy nhất */}
+                    <td className="px-4 py-1 text-left whitespace-nowrap max-w-[260px]">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="text-slate-800 text-sm font-medium truncate" title={req.description || req.title}>
+                          {req.title}
+                        </span>
+                        {req.contractLink && (
+                          <a
+                            href={req.contractLink.startsWith("http") ? req.contractLink : `https://${req.contractLink}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-teal-600 hover:underline shrink-0"
+                            title="Xem hợp đồng"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <LinkIcon size={12} />
+                          </a>
                         )}
-                      </td>
-                    )}
-
-                    <td className="px-4 py-1 text-left">
-                      <span className={`px-2.5 py-0.5 rounded text-sm font-normal border ${getTypeColor(req.taskCategory || req.type)}`}>
-                        {req.taskCategory || req.type}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
-                      <div className="flex items-center gap-1">
-                        <div className="w-5 h-5 rounded-full bg-slate-100 text-xs font-normal flex items-center justify-center text-slate-500">
-                          {req.requester ? req.requester.charAt(0) : "U"}
-                        </div>
-                        <span>{req.requester || "—"}</span>
+                        {req.attachedFiles && req.attachedFiles.length > 0 && (
+                          <span className="text-amber-600 shrink-0 text-xs flex items-center" title={`${req.attachedFiles.length} file đính kèm`}>
+                            <Paperclip size={12} />
+                          </span>
+                        )}
                       </div>
                     </td>
 
-                    <td className="px-4 py-1 text-slate-655 text-sm font-normal text-left">
-                      <div className="flex items-center gap-1">
+                    {/* Loại công việc (Ticket, Triển khai, Bảo Trì, Khác) */}
+                    <td className="px-4 py-1 text-left whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getTaskCategoryBadge(req.taskCategory, req.type)}`}>
+                        {formatTaskCategory(req.taskCategory, req.type)}
+                      </span>
+                    </td>
+
+                    {/* ID liên kết (Mã ticket, mã dự án, mã bảo trì) */}
+                    <td className="px-4 py-1 text-left whitespace-nowrap">
+                      {(() => {
+                        const cat = formatTaskCategory(req.taskCategory, req.type);
+                        const linkedCode = req.taskRefCode || (req.projectId ? `PRJ-${req.projectId}` : "") || (req.soKy ? `Kỳ ${req.soKy}` : "");
+                        if (!linkedCode) return <span className="text-slate-300 italic">—</span>;
+                        
+                        const badgeStyle = cat === "Ticket" 
+                          ? "bg-blue-50 text-blue-700 border-blue-200" 
+                          : cat === "Triển khai" 
+                          ? "bg-purple-50 text-purple-700 border-purple-200" 
+                          : cat === "Bảo Trì" 
+                          ? "bg-amber-50 text-amber-700 border-amber-200" 
+                          : "bg-slate-100 text-slate-700 border-slate-200";
+
+                        return (
+                          <span
+                            className={`font-mono text-xs font-semibold px-2 py-0.5 rounded border inline-block max-w-[150px] truncate whitespace-nowrap ${badgeStyle}`}
+                            title={req.taskRefTitle ? `${linkedCode}: ${req.taskRefTitle}` : (req.projectName ? `${linkedCode}: ${req.projectName}` : linkedCode)}
+                          >
+                            {linkedCode}
+                          </span>
+                        );
+                      })()}
+                    </td>
+
+                    {/* Khách hàng */}
+                    <td className="px-4 py-1 text-slate-700 text-sm font-normal text-left whitespace-nowrap max-w-[190px]">
+                      {req.customerName ? (
+                        <span className="truncate block font-medium text-slate-800" title={req.customerName}>
+                          {req.customerName}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 italic">—</span>
+                      )}
+                    </td>
+
+                    {/* Người yêu cầu */}
+                    <td className="px-4 py-1 text-slate-700 text-sm font-normal text-left whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <div className="w-5 h-5 rounded-full bg-slate-100 text-[10px] font-medium flex items-center justify-center text-slate-600 shrink-0">
+                          {req.requester ? req.requester.charAt(0).toUpperCase() : "U"}
+                        </div>
+                        <span className="truncate max-w-[110px]" title={req.requester || undefined}>{req.requester || "—"}</span>
+                      </div>
+                    </td>
+
+                    {/* Người tiếp nhận */}
+                    <td className="px-4 py-1 text-slate-700 text-sm font-normal text-left whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         {req.assignee ? (
                           <>
-                            <div className="w-5 h-5 rounded-full bg-blue-50 text-xs font-normal flex items-center justify-center text-blue-600 border border-blue-200">
-                              {req.assignee.charAt(0)}
+                            <div className="w-5 h-5 rounded-full bg-blue-50 text-[10px] font-medium flex items-center justify-center text-blue-600 border border-blue-200 shrink-0">
+                              {req.assignee.charAt(0).toUpperCase()}
                             </div>
-                            <span>{req.assignee}</span>
+                            <span className="truncate max-w-[110px]" title={req.assignee}>{req.assignee}</span>
                           </>
                         ) : (
                           <span className="text-slate-400 text-xs italic">Chưa giao</span>
@@ -1727,29 +1777,35 @@ export default function RequestsPage() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-1 text-slate-500 text-sm font-normal text-left">
-                      {req.follower || "—"}
+                    {/* Người theo dõi */}
+                    <td className="px-4 py-1 text-slate-500 text-xs font-normal text-left whitespace-nowrap max-w-[150px]">
+                      <span className="truncate block whitespace-nowrap" title={req.follower || undefined}>
+                        {req.follower || "—"}
+                      </span>
                     </td>
 
                     {/* Thời gian tạo */}
-                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left" title={req.createdAt ? `Thời gian tạo: ${formatDate(req.createdAt)}` : undefined}>
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left whitespace-nowrap" title={req.createdAt ? `Thời gian tạo: ${formatDate(req.createdAt)}` : undefined}>
                       {formatDate(req.createdAt || req.requestTime || req.startTime)}
                     </td>
 
                     {/* Thời gian bắt đầu (chỉ khi activeTab === 'task') */}
                     {activeTab === "task" && (
-                      <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left" title={req.startTime ? `Thời gian bắt đầu: ${formatDate(req.startTime)}` : undefined}>
+                      <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left whitespace-nowrap" title={req.startTime ? `Thời gian bắt đầu: ${formatDate(req.startTime)}` : undefined}>
                         {formatDate(req.startTime)}
                       </td>
                     )}
 
                     {/* Thời gian hoàn thành */}
-                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left" title={req.deadlineTime ? `Hạn yêu cầu: ${formatDate(req.deadlineTime)}` : undefined}>
-                      {formatDate(req.actualCompleteTime || req.completeTime)}
+                    <td className="px-4 py-1 text-slate-500 font-mono text-xs font-normal text-left whitespace-nowrap" title={req.deadlineTime ? `Hạn yêu cầu: ${formatDate(req.deadlineTime)}` : undefined}>
+                      {req.actualCompleteTime 
+                        ? formatDate(req.actualCompleteTime) 
+                        : (req.status === "Completed" && req.completeTime ? formatDate(req.completeTime) : <span className="text-slate-300 italic">—</span>)}
                     </td>
 
-                    <td className="px-4 py-1 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    {/* Thao tác */}
+                    <td className="px-4 py-1 text-center whitespace-nowrap">
+                      <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                         {isPending && (
                           <button
                             onClick={() => handleInternalReceive(req)}
@@ -2152,34 +2208,34 @@ export default function RequestsPage() {
                           </div>
                         )}
 
-                        {/* "Loại yêu cầu" ("Mã ticket", "Mã dự án", "Mã bảo trì", "Yêu cầu khác") */}
+                        {/* "Loại yêu cầu" ("Ticket", "Triển khai", "Bảo Trì", "Khác") */}
                         <div className="grid grid-cols-2 gap-3 text-left">
                           <div>
                             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
-                              Loại yêu cầu <span className="text-red-500">*</span>
+                              Loại công việc <span className="text-red-500">*</span>
                             </label>
                             <select
                               name="taskCategory"
-                              value={formData.taskCategory || "Mã ticket"}
+                              value={formatTaskCategory(formData.taskCategory)}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 setFormData(prev => ({
                                   ...prev,
                                   taskCategory: val,
-                                  ...(val !== "Mã bảo trì" ? { soKy: "" } : {})
+                                  ...(val !== "Bảo Trì" ? { soKy: "" } : {})
                                 }));
                               }}
                               className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm bg-white cursor-pointer font-medium text-slate-800"
                             >
-                              <option value="Mã ticket">Mã ticket</option>
-                              <option value="Mã dự án">Mã dự án</option>
-                              <option value="Mã bảo trì">Mã bảo trì</option>
-                              <option value="Yêu cầu khác">Yêu cầu khác</option>
+                              <option value="Ticket">Ticket</option>
+                              <option value="Triển khai">Triển khai</option>
+                              <option value="Bảo Trì">Bảo Trì</option>
+                              <option value="Khác">Khác</option>
                             </select>
                           </div>
 
                           {/* Trường điền mã liên kết tương ứng theo loại yêu cầu */}
-                          {formData.taskCategory === "Mã ticket" && (
+                          {isCatTicket(formData.taskCategory) && (
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                                 TT ID (Mã Ticket)
@@ -2211,7 +2267,7 @@ export default function RequestsPage() {
                             </div>
                           )}
 
-                          {formData.taskCategory === "Mã dự án" && (
+                          {isCatProject(formData.taskCategory) && (
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                                 Dự án liên kết
@@ -2241,7 +2297,7 @@ export default function RequestsPage() {
                             </div>
                           )}
 
-                          {formData.taskCategory === "Mã bảo trì" && (
+                          {isCatMaintenance(formData.taskCategory) && (
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                                 Mã bảo trì
@@ -2257,7 +2313,7 @@ export default function RequestsPage() {
                             </div>
                           )}
 
-                          {formData.taskCategory === "Yêu cầu khác" && (
+                          {isCatOther(formData.taskCategory) && (
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                                 Mã tham chiếu (tùy chọn)
@@ -2275,7 +2331,7 @@ export default function RequestsPage() {
                         </div>
 
                         {/* Khi chọn mã bảo trì sẽ xuất hiện trường điền "số kỳ" */}
-                        {formData.taskCategory === "Mã bảo trì" && (
+                        {isCatMaintenance(formData.taskCategory) && (
                           <div className="text-left">
                             <label className="block text-[11px] font-semibold text-amber-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
                               <span>Số kỳ <span className="text-red-500">*</span></span>
