@@ -596,6 +596,13 @@ export default function RequestsPage() {
   };
 
   useEffect(() => {
+    // Clear stale deleted IDs cache to ensure new and active requests are always visible
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("jpt_deleted_request_ids");
+      } catch {}
+    }
+
     // Initial render from local cache
     const initialRequests = getStoredRequests();
     if (initialRequests.length > 0) {
