@@ -1359,8 +1359,14 @@ export async function fetchProjectById(id: string): Promise<Project | undefined>
         const p = fromDbProject(data);
         const list = getStoredProjects();
         const idx = list.findIndex(item => item.id === id);
-        if (idx >= 0) list[idx] = p;
-        else list.push(p);
+        if (idx >= 0) {
+          if (list[idx].plan && list[idx].plan.length > 0 && (!p.plan || p.plan.length === 0)) {
+            p.plan = list[idx].plan;
+          }
+          list[idx] = p;
+        } else {
+          list.push(p);
+        }
         setStoredProjects(list);
         return p;
       }
@@ -1625,6 +1631,47 @@ export function updateProjectPlan(projectId: string, plan: ProjectTask[]): Proje
 
   // Sync to Supabase
   saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync updateProjectPlan error:", err));
+
+  return projects[index];
+}
+
+export async function addDiaryEntryAsync(projectId: string, entry: Omit<ProjectDiaryEntry, 'id' | 'timestamp'>): Promise<ProjectDiaryEntry | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  const newEntry: ProjectDiaryEntry = {
+    ...entry,
+    id: `diary-${Date.now()}`,
+    timestamp: new Date().toISOString()
+  };
+
+  projects[index].diary.unshift(newEntry);
+  setStoredProjects(projects);
+
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync addDiaryEntryAsync error:", err);
+  }
+
+  return newEntry;
+}
+
+export async function updateProjectPlanAsync(projectId: string, plan: ProjectTask[]): Promise<Project | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  projects[index].plan = plan;
+  recalculateProgress(projects[index]);
+  setStoredProjects(projects);
+
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync updateProjectPlanAsync error:", err);
+  }
 
   return projects[index];
 }

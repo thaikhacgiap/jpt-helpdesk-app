@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import MainLayout from "@/components/layout/main-layout";
@@ -17,7 +17,9 @@ import {
   updateMilestone,
   addDocument,
   addDiaryEntry,
+  addDiaryEntryAsync,
   updateProjectPlan,
+  updateProjectPlanAsync,
   subscribeToProjects,
   Project,
   ProjectTask,
@@ -954,19 +956,21 @@ export default function ProjectDetailPage() {
     setIsEditingPlan(true);
   };
 
-  const handleSavePlanEdits = () => {
+  const handleSavePlanEdits = async () => {
     if (!project) return;
     const reindexed = autoAssignTaskIndices(tempPlan);
     const synced = syncPlanProgressHierarchy(reindexed);
-    const updated = updateProjectPlan(project.id, synced);
+    const updated = await updateProjectPlanAsync(project.id, synced);
     if (updated) {
-      addDiaryEntry(project.id, {
+      setProject({ ...updated });
+      await addDiaryEntryAsync(project.id, {
         author: "John D.",
         content: `Cập nhật trực tiếp danh sách công việc dự án và lưu lại`,
         category: "Update"
       });
+      const latest = getProjectById(project.id);
+      if (latest) setProject({ ...latest });
       setIsEditingPlan(false);
-      refreshProjectData();
     }
   };
 
@@ -1201,14 +1205,19 @@ export default function ProjectDetailPage() {
     setMoveModeOverIdx(null);
   };
 
-  // Normalization helper for dates
+  // Normalization helper for dates (returns clean YYYY-MM-DD or empty string)
   const normalizeDateInput = (val?: any): string => {
     if (!val) return "";
     const str = String(val).trim();
     if (!str) return "";
 
-    // DD/MM/YYYY or DD-MM-YYYY or D/M/YYYY
-    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    // ISO timestamp e.g. 2026-07-05T00:00:00 or 2026-07-05
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      return str.slice(0, 10);
+    }
+
+    // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmyMatch) {
       const d = dmyMatch[1].padStart(2, "0");
       const m = dmyMatch[2].padStart(2, "0");
@@ -1216,9 +1225,13 @@ export default function ProjectDetailPage() {
       return `${y}-${m}-${d}`;
     }
 
-    // YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-      return str;
+    // YYYY/MM/DD or YYYY.MM.DD
+    const ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (ymdMatch) {
+      const y = ymdMatch[1];
+      const m = ymdMatch[2].padStart(2, "0");
+      const d = ymdMatch[3].padStart(2, "0");
+      return `${y}-${m}-${d}`;
     }
 
     // Excel serial number (e.g. 45200)
@@ -1240,7 +1253,7 @@ export default function ProjectDetailPage() {
         return d.toISOString().slice(0, 10);
       }
     }
-    return str;
+    return "";
   };
 
   // Helper to extract values by fuzzy column headers
@@ -1490,14 +1503,17 @@ export default function ProjectDetailPage() {
           }));
 
           const reindexed = autoAssignTaskIndices(validated);
-          const updated = updateProjectPlan(project.id, reindexed);
+          const updated = await updateProjectPlanAsync(project.id, reindexed);
           if (updated) {
-            addDiaryEntry(project.id, {
+            setProject({ ...updated });
+            setTempPlan(reindexed);
+            await addDiaryEntryAsync(project.id, {
               author: "John D.",
               content: `Nhập dữ liệu kế hoạch dự án từ tệp JSON thành công (${reindexed.length} công việc)`,
               category: "Update"
             });
-            refreshProjectData();
+            const latest = getProjectById(project.id);
+            if (latest) setProject({ ...latest });
             alert(`Đã nhập thành công ${reindexed.length} công việc kế hoạch từ file JSON!`);
           }
           return;
@@ -1658,17 +1674,24 @@ export default function ProjectDetailPage() {
       }
 
       const reindexed = autoAssignTaskIndices(parsedTasks);
-      const updated = updateProjectPlan(project.id, reindexed);
+      const updated = await updateProjectPlanAsync(project.id, reindexed);
       if (updated) {
         const phaseCount = reindexed.filter(t => t.level === 'phase').length;
         const mainCount = reindexed.filter(t => t.level === 'main').length;
         const subCount = reindexed.filter(t => t.level === 'sub').length;
-        addDiaryEntry(project.id, {
+
+        setProject({ ...updated });
+        setTempPlan(reindexed);
+
+        await addDiaryEntryAsync(project.id, {
           author: "John D.",
           content: `Nhập dữ liệu kế hoạch dự án từ tệp "${file.name}" thành công (${reindexed.length} dòng: ${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task)`,
           category: "Update"
         });
-        refreshProjectData();
+
+        const latest = getProjectById(project.id);
+        if (latest) setProject({ ...latest });
+
         alert(
           `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task) từ file "${file.name}"!`
         );
@@ -1903,26 +1926,95 @@ export default function ProjectDetailPage() {
 
   // Calculate Gantt Chart day-by-day data
   const calculateGanttData = () => {
-    if (!project.plan || project.plan.length === 0) return { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
+    if (!project || !project.plan || project.plan.length === 0) {
+      return { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
+    }
 
-    const oneDay = 24 * 60 * 60 * 1000;
-    // Find overall date range from all tasks
-    const allDates = project.plan.flatMap(t => [t.startDate, t.endDate].filter(Boolean));
-    if (allDates.length === 0) return { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
+    const plan = project.plan;
 
-    const minDate = new Date(allDates.reduce((a, b) => a < b ? a : b));
-    const maxDate = new Date(allDates.reduce((a, b) => a > b ? a : b));
+    // 1. Resolve effective dates, level, and progress for every task in the hierarchy
+    const taskDetails = plan.map((t, idx) => {
+      const lvl = resolveTaskLevel(t);
+      const isHeader = lvl === 'Phase' || !!t.isHeader;
+      const progressInfo = getResolvedTaskProgress(plan, idx);
+
+      let effectiveStart = normalizeDateInput(t.startDate);
+      let effectiveEnd = normalizeDateInput(t.endDate);
+
+      if (isHeader) {
+        const stats = getPhaseStats(plan, idx);
+        effectiveStart = normalizeDateInput(stats.startDate) || effectiveStart;
+        effectiveEnd = normalizeDateInput(stats.endDate) || effectiveEnd;
+      } else if (lvl === 'Main task') {
+        const stats = getMainTaskStats(plan, idx);
+        if (stats.hasSubs && stats.subs.length > 0) {
+          const subStarts = stats.subs.map(s => normalizeDateInput(s.startDate)).filter(Boolean).sort();
+          const subEnds = stats.subs.map(s => normalizeDateInput(s.endDate)).filter(Boolean).sort();
+          if (subStarts[0]) effectiveStart = subStarts[0];
+          if (subEnds[subEnds.length - 1]) effectiveEnd = subEnds[subEnds.length - 1];
+        }
+      }
+
+      // Fallbacks from project dates
+      const projStart = normalizeDateInput(project.startDate);
+      const projEnd = normalizeDateInput(project.endDate);
+
+      if (!effectiveStart && effectiveEnd) effectiveStart = effectiveEnd;
+      if (!effectiveEnd && effectiveStart) effectiveEnd = effectiveStart;
+      if (!effectiveStart && !effectiveEnd) {
+        effectiveStart = projStart || new Date().toISOString().slice(0, 10);
+        effectiveEnd = projEnd || effectiveStart;
+      }
+
+      // Ensure start <= end
+      if (effectiveStart > effectiveEnd) {
+        const tmp = effectiveStart;
+        effectiveStart = effectiveEnd;
+        effectiveEnd = tmp;
+      }
+
+      return {
+        ...t,
+        level: lvl,
+        isHeader,
+        displayProgress: progressInfo.progress,
+        effectiveStartDate: effectiveStart,
+        effectiveEndDate: effectiveEnd
+      };
+    });
+
+    // 2. Collect all valid dates to determine chart bounds
+    const allValidDates = taskDetails
+      .flatMap(t => [t.effectiveStartDate, t.effectiveEndDate])
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort();
+
+    let minDateStr = allValidDates[0];
+    let maxDateStr = allValidDates[allValidDates.length - 1];
+
+    if (!minDateStr || !maxDateStr) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      minDateStr = normalizeDateInput(project.startDate) || todayStr;
+      maxDateStr = normalizeDateInput(project.endDate) || todayStr;
+    }
+
+    const minDate = new Date(minDateStr + "T00:00:00");
+    const maxDate = new Date(maxDateStr + "T00:00:00");
+
     // Pad by 2 days on each side
     minDate.setDate(minDate.getDate() - 1);
     maxDate.setDate(maxDate.getDate() + 2);
 
-    // Generate day array
+    // 3. Generate day array
     const days: { date: Date; iso: string; dayName: string; dayNum: number; isToday: boolean; isWeekend: boolean }[] = [];
     const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     const cur = new Date(minDate);
-    const todayStr = new Date().toISOString().split('T')[0];
-    while (cur <= maxDate) {
-      const iso = cur.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const maxDayLimit = 730;
+    let dayCount = 0;
+
+    while (cur <= maxDate && dayCount < maxDayLimit) {
+      const iso = cur.toISOString().slice(0, 10);
       days.push({
         date: new Date(cur),
         iso,
@@ -1932,42 +2024,70 @@ export default function ProjectDetailPage() {
         isWeekend: cur.getDay() === 0 || cur.getDay() === 6
       });
       cur.setDate(cur.getDate() + 1);
+      dayCount++;
     }
 
-    // Group days by month
+    if (days.length === 0) {
+      return { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
+    }
+
+    // 4. Group days by month
     const monthGroups: { label: string; count: number }[] = [];
     let lastMonth = '';
     days.forEach(d => {
-      const monthKey = `Th\u00e1ng ${d.date.getMonth() + 1}, ${d.date.getFullYear()}`;
-      if (monthKey !== lastMonth) { monthGroups.push({ label: monthKey, count: 1 }); lastMonth = monthKey; }
-      else monthGroups[monthGroups.length - 1].count++;
+      const monthKey = `Tháng ${d.date.getMonth() + 1}, ${d.date.getFullYear()}`;
+      if (monthKey !== lastMonth) {
+        monthGroups.push({ label: monthKey, count: 1 });
+        lastMonth = monthKey;
+      } else {
+        monthGroups[monthGroups.length - 1].count++;
+      }
     });
 
-    // Phase colors palette
+    // 5. Phase color palette
     const phaseColors = [
-      { bg: '#4fc3c3', text: '#fff', light: '#e0f7f7' }, // teal
-      { bg: '#f0a500', text: '#fff', light: '#fff3cc' }, // amber
-      { bg: '#7c6fcd', text: '#fff', light: '#ede9ff' }, // purple
-      { bg: '#4caf7d', text: '#fff', light: '#e0f5ea' }, // green
-      { bg: '#e05b7f', text: '#fff', light: '#fde8ee' }, // rose
+      { bg: '#0284c7', text: '#fff', light: '#e0f2fe', border: '#0369a1' },
+      { bg: '#d97706', text: '#fff', light: '#fef3c7', border: '#b45309' },
+      { bg: '#7c3aed', text: '#fff', light: '#ede9fe', border: '#6d28d9' },
+      { bg: '#059669', text: '#fff', light: '#d1fae5', border: '#047857' },
+      { bg: '#e11d48', text: '#fff', light: '#ffe4e6', border: '#be123c' },
+      { bg: '#4f46e5', text: '#fff', light: '#e0e7ff', border: '#4338ca' },
     ];
 
-    // Assign phase color index
+    const baseMs = new Date(days[0].iso + "T00:00:00").getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+
     let phaseColorIdx = -1;
-    const tasks = project.plan.map(t => {
-      if (t.isHeader) phaseColorIdx = (phaseColorIdx + 1) % phaseColors.length;
+    const tasks = taskDetails.map((t) => {
+      if (t.isHeader) {
+        phaseColorIdx = (phaseColorIdx + 1) % phaseColors.length;
+      }
       const color = phaseColors[Math.max(0, phaseColorIdx)];
-      // Calculate bar position as day indices
-      const startIdx = days.findIndex(d => d.iso >= (t.startDate || ''));
-      const endIdx = days.findLastIndex(d => d.iso <= (t.endDate || ''));
-      return { ...t, startIdx: Math.max(0, startIdx), endIdx: Math.max(0, endIdx), color };
+
+      const startMs = new Date(t.effectiveStartDate + "T00:00:00").getTime();
+      const endMs = new Date(t.effectiveEndDate + "T00:00:00").getTime();
+
+      let startIdx = Math.round((startMs - baseMs) / dayMs);
+      let endIdx = Math.round((endMs - baseMs) / dayMs);
+
+      startIdx = Math.max(0, Math.min(days.length - 1, startIdx));
+      endIdx = Math.max(startIdx, Math.min(days.length - 1, endIdx));
+
+      return {
+        ...t,
+        startIdx,
+        endIdx,
+        color
+      };
     });
 
     const todayIdx = days.findIndex(d => d.isToday);
     return { tasks, days, monthGroups, todayIdx };
   };
 
-  const gantt = activeTab === "gantt" ? calculateGanttData() : { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
+  const gantt = useMemo(() => {
+    return calculateGanttData();
+  }, [project?.plan, project?.startDate, project?.endDate, activeTab]);
   const COL_W = 28; // px per day column
 
   return (
@@ -3237,128 +3357,246 @@ export default function ProjectDetailPage() {
         )}
         {/* TAB 2: GANTT CHART */}
         {activeTab === "gantt" && (
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-            {project.plan.length === 0 ? (
-              <div className="p-8 text-center bg-slate-50">
-                <CalendarDays size={36} className="mx-auto text-slate-300 mb-2" />
-                <p className="text-sm text-slate-500">Chưa có công việc nào. Hãy thêm ở tab Kế hoạch.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <div style={{ minWidth: `${280 + 120 + gantt.days.length * COL_W}px` }}>
-
-                  {/* ===== HEADER ROW ===== */}
-                  <div className="flex border-b border-slate-200 bg-slate-50 select-none sticky top-0 z-10">
-                    {/* Task name col */}
-                    <div className="shrink-0 border-r border-slate-200 bg-slate-100" style={{ width: 280 }}>
-                      <div className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Tên công việc</div>
-                    </div>
-                    {/* Progress col */}
-                    <div className="shrink-0 border-r border-slate-200 bg-slate-100 flex items-end" style={{ width: 120 }}>
-                      <div className="px-3 py-2 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Tiến độ</div>
-                    </div>
-                    {/* Day columns */}
-                    <div className="flex-1">
-                      {/* Month row */}
-                      <div className="flex border-b border-slate-200">
-                        {gantt.monthGroups.map((mg, i) => (
-                          <div key={i} className="border-r border-slate-200 last:border-0 text-center text-[10px] font-bold text-slate-600 py-1 bg-slate-50"
-                            style={{ width: mg.count * COL_W }}>
-                            {mg.label}
-                          </div>
-                        ))}
-                      </div>
-                      {/* Day number + name row */}
-                      <div className="flex">
-                        {gantt.days.map((d, i) => (
-                          <div key={i}
-                            className={`border-r border-slate-200 last:border-0 text-center flex flex-col items-center justify-center py-0.5 ${
-                              d.isToday ? 'bg-violet-100' : d.isWeekend ? 'bg-slate-100/60' : 'bg-slate-50'
-                            }`}
-                            style={{ width: COL_W, minWidth: COL_W }}>
-                            <span className={`text-[10px] font-bold ${ d.isToday ? 'text-violet-700' : 'text-slate-600' }`}>{d.dayNum}</span>
-                            <span className={`text-[9px] ${ d.isToday ? 'text-violet-500' : d.isWeekend ? 'text-rose-400' : 'text-slate-400'}`}>{d.dayName}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ===== TASK ROWS ===== */}
-                  {gantt.tasks.map((task, idx) => {
-                    const isHeader = !!task.isHeader;
-                    const rowH = isHeader ? 44 : 36;
-                    const displayProgress = getResolvedTaskProgress(project.plan, project.plan.indexOf(task)).progress;
-
-                    return (
-                      <div key={task.id || idx}
-                        className={`flex border-b border-slate-100 group transition-colors ${
-                          isHeader ? 'bg-slate-50/80' : 'bg-white hover:bg-blue-50/20'
-                        }`}
-                        style={{ height: rowH }}
-                      >
-                        {/* Task Name */}
-                        <div className="shrink-0 border-r border-slate-200 flex items-center px-2 overflow-hidden" style={{ width: 280 }}>
-                          {isHeader ? (
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-slate-400 shrink-0">&#x229E;</span>
-                              <span className="text-[11px] font-bold text-slate-800 truncate" title={task.title}>{task.title}</span>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-slate-600 truncate pl-5" title={task.title}>{task.title}</span>
-                          )}
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="shrink-0 border-r border-slate-200 flex items-center px-2 gap-2" style={{ width: 120 }}>
-                          <span className="text-[10px] font-bold text-slate-600 w-7 text-right shrink-0">{displayProgress}%</span>
-                          <div className="flex-1 relative h-2.5 rounded-full overflow-hidden bg-amber-200">
-                            <div className="absolute inset-y-0 left-0 rounded-full bg-blue-500 transition-all"
-                              style={{ width: `${displayProgress}%` }} />
-                          </div>
-                          <span className="text-slate-300 text-xs shrink-0">&#x23F0;</span>
-                        </div>
-
-                        {/* Gantt Day Grid + Bar */}
-                        <div 
-                          className="flex-1 relative flex items-center h-full overflow-hidden"
-                          style={{
-                            backgroundImage: 'linear-gradient(to right, #f1f5f9 1px, transparent 1px)',
-                            backgroundSize: `${COL_W}px 100%`
-                          }}
-                        >
-                          {/* Today column highlight */}
-                          {gantt.todayIdx !== undefined && gantt.todayIdx >= 0 && (
-                            <div 
-                              className="absolute inset-y-0 bg-violet-100/60 pointer-events-none"
-                              style={{ left: gantt.todayIdx * COL_W, width: COL_W }}
-                            />
-                          )}
-
-                          {/* Gantt bar */}
-                          {task.startIdx >= 0 && task.endIdx >= task.startIdx && (
-                            <div
-                              className="absolute flex items-center px-2 rounded-md text-[10px] font-semibold shadow-sm select-none cursor-help overflow-hidden"
-                              style={{
-                                left: task.startIdx * COL_W + 2,
-                                width: Math.max(COL_W - 2, (task.endIdx - task.startIdx + 1) * COL_W - 4),
-                                height: isHeader ? 20 : 18,
-                                backgroundColor: task.color.bg,
-                                color: task.color.text,
-                                opacity: isHeader ? 0.85 : 1
-                              }}
-                              title={`${task.title}\n${formatDate(task.startDate)} → ${formatDate(task.endDate)}\n${displayProgress}%`}
-                            >
-                              <span className="truncate drop-shadow-sm">{task.title}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+          <div className="space-y-4">
+            {/* Gantt Top Summary & Legend Bar */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                  <CalendarDays size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Biểu đồ tiến độ Gantt</h3>
+                  <p className="text-xs text-slate-500">
+                    Tự động đồng bộ theo kế hoạch: {gantt.tasks.length} hạng mục &bull; {gantt.days.length} ngày hiển thị
+                    {gantt.days.length > 0 && ` (${formatDate(gantt.days[0].iso)} → ${formatDate(gantt.days[gantt.days.length - 1].iso)})`}
+                  </p>
                 </div>
               </div>
-            )}
+
+              {/* Legend & Quick Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 rounded-xl border border-slate-200/60 text-[11px] text-slate-600 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block" /> Phase
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Main task
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" /> Sub task
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-violet-200 border border-violet-400 inline-block" /> Hôm nay
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleImportPlanClick}
+                  disabled={isImportingPlan}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+                  title="Nhập tệp kế hoạch từ Excel (.xlsx, .xls), CSV hoặc JSON"
+                >
+                  {isImportingPlan ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Upload size={13} />
+                  )}
+                  <span>{isImportingPlan ? "Đang nhập..." : "Nhập kế hoạch"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportExcel(false)}
+                  disabled={isExportingPlan}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                  title="Xuất kế hoạch ra tệp Excel (.xlsx)"
+                >
+                  <Download size={13} />
+                  <span>Xuất Excel</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Gantt Main Chart Box */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+              {project.plan.length === 0 ? (
+                <div className="p-12 text-center bg-slate-50/50">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                    <CalendarDays size={28} />
+                  </div>
+                  <h4 className="text-base font-bold text-slate-800">Chưa có kế hoạch công việc</h4>
+                  <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                    Dự án này chưa có công việc nào. Bạn có thể nhập file Excel/CSV mẫu hoặc thêm công việc ở tab Kế hoạch.
+                  </p>
+                  <div className="mt-5 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleImportPlanClick}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
+                    >
+                      <Upload size={14} />
+                      <span>Nhập file kế hoạch (Excel/CSV/JSON)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("plan")}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Đến tab Kế hoạch</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div style={{ minWidth: `${280 + 120 + gantt.days.length * COL_W}px` }}>
+
+                    {/* ===== HEADER ROW ===== */}
+                    <div className="flex border-b border-slate-200 bg-slate-50 select-none sticky top-0 z-10 shadow-xs">
+                      {/* Task name col */}
+                      <div className="shrink-0 border-r border-slate-200 bg-slate-100/90 flex items-center" style={{ width: 280 }}>
+                        <div className="px-3 py-2 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
+                          Tên công việc / Hạng mục
+                        </div>
+                      </div>
+                      {/* Progress col */}
+                      <div className="shrink-0 border-r border-slate-200 bg-slate-100/90 flex items-center" style={{ width: 120 }}>
+                        <div className="px-3 py-2 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
+                          Tiến độ
+                        </div>
+                      </div>
+                      {/* Day columns */}
+                      <div className="flex-1">
+                        {/* Month row */}
+                        <div className="flex border-b border-slate-200">
+                          {gantt.monthGroups.map((mg, i) => (
+                            <div key={i} className="border-r border-slate-200 last:border-0 text-center text-[10px] font-bold text-slate-700 py-1 bg-slate-50"
+                              style={{ width: mg.count * COL_W }}>
+                              {mg.label}
+                            </div>
+                          ))}
+                        </div>
+                        {/* Day number + name row */}
+                        <div className="flex">
+                          {gantt.days.map((d, i) => (
+                            <div key={i}
+                              className={`border-r border-slate-200 last:border-0 text-center flex flex-col items-center justify-center py-0.5 ${
+                                d.isToday ? 'bg-violet-100/90 ring-1 ring-violet-400 inset-0' : d.isWeekend ? 'bg-slate-100/60' : 'bg-slate-50'
+                              }`}
+                              style={{ width: COL_W, minWidth: COL_W }}>
+                              <span className={`text-[10px] font-bold ${ d.isToday ? 'text-violet-700' : 'text-slate-700' }`}>{d.dayNum}</span>
+                              <span className={`text-[9px] ${ d.isToday ? 'text-violet-600 font-bold' : d.isWeekend ? 'text-rose-500 font-medium' : 'text-slate-400'}`}>{d.dayName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ===== TASK ROWS ===== */}
+                    {gantt.tasks.map((task, idx) => {
+                      const isHeader = !!task.isHeader;
+                      const isPhase = task.level === 'Phase' || isHeader;
+                      const isMain = task.level === 'Main task';
+                      const isSub = task.level === 'Sub task';
+                      const rowH = isPhase ? 42 : 36;
+                      const displayProgress = task.displayProgress ?? 0;
+
+                      return (
+                        <div key={task.id || idx}
+                          className={`flex border-b border-slate-100 group transition-colors ${
+                            isPhase ? 'bg-blue-50/50 hover:bg-blue-50/70 border-b-blue-200/60' : 'bg-white hover:bg-blue-50/20'
+                          }`}
+                          style={{ height: rowH }}
+                        >
+                          {/* Task Name Column with 3-Level Indentation */}
+                          <div className="shrink-0 border-r border-slate-200 flex items-center px-3 overflow-hidden" style={{ width: 280 }}>
+                            {isPhase ? (
+                              <div className="flex items-center gap-1.5 min-w-0 font-bold text-blue-950 text-xs">
+                                <span className="text-blue-600 font-black shrink-0 text-xs">&#x25C6;</span>
+                                <span className="truncate" title={task.title}>{task.title}</span>
+                              </div>
+                            ) : isMain ? (
+                              <div className="flex items-center gap-1.5 min-w-0 pl-3 font-semibold text-slate-800 text-[11px]">
+                                <span className="text-slate-400 shrink-0 text-[10px]">&#x25AA;</span>
+                                <span className="truncate" title={task.title}>{task.title}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 min-w-0 pl-6 text-slate-600 text-[11px]">
+                                <span className="text-slate-400 shrink-0 text-xs">&#x21B3;</span>
+                                <span className="truncate" title={task.title}>{task.title}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Progress Bar Column */}
+                          <div className="shrink-0 border-r border-slate-200 flex items-center px-2.5 gap-2" style={{ width: 120 }}>
+                            <span className={`text-[10px] font-bold w-7 text-right shrink-0 ${
+                              isPhase ? 'text-blue-900 font-black' : 'text-slate-700'
+                            }`}>{displayProgress}%</span>
+                            <div className="flex-1 relative h-2.5 rounded-full overflow-hidden bg-slate-100 border border-slate-200/60">
+                              <div 
+                                className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+                                  displayProgress === 100 ? 'bg-emerald-500' : displayProgress > 0 ? 'bg-blue-600' : 'bg-slate-300'
+                                }`}
+                                style={{ width: `${displayProgress}%` }} 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Gantt Day Grid + Bar */}
+                          <div 
+                            className="flex-1 relative flex items-center h-full overflow-hidden"
+                            style={{
+                              backgroundImage: 'linear-gradient(to right, #f1f5f9 1px, transparent 1px)',
+                              backgroundSize: `${COL_W}px 100%`
+                            }}
+                          >
+                            {/* Today column highlight */}
+                            {gantt.todayIdx !== undefined && gantt.todayIdx >= 0 && (
+                              <div 
+                                className="absolute inset-y-0 bg-violet-100/50 pointer-events-none border-x border-violet-200/40"
+                                style={{ left: gantt.todayIdx * COL_W, width: COL_W }}
+                              />
+                            )}
+
+                            {/* Gantt bar */}
+                            {task.startIdx >= 0 && task.endIdx >= task.startIdx && (
+                              <div
+                                className={`absolute flex items-center px-2 rounded-md text-[10px] font-semibold shadow-xs select-none cursor-pointer overflow-hidden transition-transform hover:scale-[1.01] hover:brightness-105 ${
+                                  isPhase ? 'ring-1 ring-black/15 font-bold' : ''
+                                }`}
+                                style={{
+                                  left: task.startIdx * COL_W + 2,
+                                  width: Math.max(COL_W - 4, (task.endIdx - task.startIdx + 1) * COL_W - 4),
+                                  height: isPhase ? 22 : 18,
+                                  backgroundColor: task.color.bg,
+                                  color: task.color.text,
+                                  opacity: isPhase ? 0.95 : 0.9
+                                }}
+                                title={`${task.title}\nThời gian: ${formatDate(task.effectiveStartDate)} → ${formatDate(task.effectiveEndDate)}\nTiến độ: ${displayProgress}%`}
+                              >
+                                {/* Inner Progress Fill Shading */}
+                                {displayProgress > 0 && (
+                                  <div
+                                    className="absolute inset-y-0 left-0 bg-black/25 pointer-events-none rounded-l-md transition-all"
+                                    style={{ width: `${displayProgress}%` }}
+                                  />
+                                )}
+                                <span className="truncate drop-shadow-xs relative z-10">{task.title}</span>
+                                <span className="ml-1 text-[9px] font-mono opacity-90 relative z-10 shrink-0 font-normal">
+                                  ({displayProgress}%)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
