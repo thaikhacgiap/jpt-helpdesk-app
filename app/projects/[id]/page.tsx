@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import MainLayout from "@/components/layout/main-layout";
@@ -2085,9 +2085,7 @@ export default function ProjectDetailPage() {
     return { tasks, days, monthGroups, todayIdx };
   };
 
-  const gantt = useMemo(() => {
-    return calculateGanttData();
-  }, [project?.plan, project?.startDate, project?.endDate, activeTab]);
+  const gantt = activeTab === "gantt" ? calculateGanttData() : { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
   const COL_W = 28; // px per day column
 
   return (
