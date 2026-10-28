@@ -280,66 +280,148 @@ function MoveRowInput({
   );
 }
 
-// Direct Inline Date Cell - Thao tác chọn ngày trực tiếp trên bảng kế hoạch
+// Click-to-edit Date Cell
 function InlineDateCell({
   value,
   onChange,
   disabled = false,
-  isActual = false,
 }: {
   value?: string;
   onChange: (val: string) => void;
   disabled?: boolean;
-  isActual?: boolean;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      try {
+        if (typeof inputRef.current.showPicker === 'function') {
+          inputRef.current.showPicker();
+        }
+      } catch (e) {}
+    }
+  }, [isEditing]);
+
+  const formatDisplay = (valStr?: string) => {
+    if (!valStr) return "";
+    const parts = valStr.split("-");
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return valStr;
+  };
+
   if (disabled) {
     return <span className="text-slate-400 text-xs">—</span>;
   }
 
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={value || ""}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+        onBlur={(e) => {
+          onChange(e.target.value);
+          setIsEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") {
+            setIsEditing(false);
+          }
+        }}
+        className="w-full px-1.5 py-0.5 border border-blue-500 rounded text-xs text-slate-800 bg-white outline-none cursor-pointer text-center shadow-xs"
+      />
+    );
+  }
+
   return (
-    <input
-      type="date"
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
-      className={`w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition ${
-        isActual ? "text-blue-700 font-semibold hover:border-blue-300" : "text-slate-700 font-medium"
-      }`}
-      title={isActual ? "Nhấp để chọn ngày thực tế" : "Nhấp để chọn ngày kế hoạch"}
-    />
+    <div
+      onClick={() => setIsEditing(true)}
+      className="cursor-pointer py-1 px-1.5 rounded hover:bg-blue-50/80 border border-transparent hover:border-blue-300 transition text-center select-none"
+      title="Bấm vào để thay đổi thời gian"
+    >
+      <span className={value ? "text-slate-700 font-medium text-xs" : "text-slate-400 text-xs"}>
+        {value ? formatDisplay(value) : "—"}
+      </span>
+    </div>
   );
 }
 
-// Direct Inline Staff Assignee Cell - Cho phép chọn người thực hiện trực tiếp trên bảng
+// Click-to-edit Staff Assignee Cell
 function InlineStaffCell({
   value,
   staffList,
   onChange,
-  disabled = false,
 }: {
   value?: string;
   staffList: NhanSu[];
   onChange: (val: string) => void;
-  disabled?: boolean;
 }) {
-  if (disabled) {
-    return <span className="text-slate-400 text-xs italic">—</span>;
+  const [isEditing, setIsEditing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        if (target.closest('.staff-search-dropdown') || target.closest('[data-staff-select-portal]')) {
+          return;
+        }
+        setIsEditing(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div ref={containerRef} className="w-full min-w-[150px] max-w-[220px] mx-auto py-0.5">
+        <StaffSearchSelect
+          mode="multiple"
+          size="sm"
+          staffList={staffList}
+          value={value || ""}
+          outputFormat="string"
+          onChange={(newVal) => {
+            onChange(newVal as string);
+          }}
+          placeholder="Chọn nhân sự..."
+        />
+        <div className="flex justify-end mt-1">
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 hover:bg-blue-50 rounded cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="w-full min-w-[140px] max-w-[210px] mx-auto py-0.5">
-      <StaffSearchSelect
-        mode="multiple"
-        size="sm"
-        staffList={staffList}
-        value={value || ""}
-        outputFormat="string"
-        onChange={(newVal) => {
-          onChange(newVal as string);
-        }}
-        placeholder="+ Chọn nhân sự..."
-        dropdownPosition="fixed"
-        className="w-full text-xs"
-      />
+    <div
+      onClick={() => setIsEditing(true)}
+      className="flex items-center justify-center cursor-pointer py-1 px-1.5 rounded hover:bg-blue-50/80 border border-transparent hover:border-blue-300 transition"
+      title="Bấm vào để thay đổi người thực hiện"
+    >
+      {value ? (
+        <span 
+          className="inline-block max-w-[130px] truncate text-[11px] px-2.5 py-0.5 bg-slate-100 hover:bg-blue-100 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-800 rounded-full font-semibold align-middle transition"
+          title={value}
+        >
+          {value}
+        </span>
+      ) : (
+        <span className="text-slate-400 text-xs italic">—</span>
+      )}
     </div>
   );
 }
@@ -3067,7 +3149,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
                                   {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()}
@@ -3081,7 +3163,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* End Date */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
                                   {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()}
@@ -3095,33 +3177,31 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? (
                                 <span className="text-slate-400 text-xs">—</span>
                               ) : (
                                 <InlineDateCell
                                   value={task.actualStartDate}
                                   onChange={(val) => handleInlineTaskFieldChange(idx, "actualStartDate", val)}
-                                  isActual={true}
                                 />
                               )}
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                               {isPhase ? (
                                 (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-700 font-bold text-xs">{formatDate(s.actualEndDate)}</span> : <span className="text-slate-400 text-xs">—</span>; })()
                               ) : (
                                 <InlineDateCell
                                   value={task.actualEndDate}
                                   onChange={(val) => handleInlineTaskFieldChange(idx, "actualEndDate", val)}
-                                  isActual={true}
                                 />
                               )}
                             </td>
 
-                            {/* Assignee - inline direct select via StaffSearchSelect */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {/* Assignee - inline click-to-edit via StaffSearchSelect */}
+                            <td className="py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap">
                               {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
                                 return assignees.length > 0 ? (
@@ -3183,32 +3263,32 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Status */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
                               {isPhase ? (() => {
                                 const s = getPhaseStats(project.plan, idx);
                                 const isCompleted = s.progress === 100;
                                 const isDoing = s.progress > 0 && s.progress < 100;
                                 return (
-                                  <span className={`inline-block px-2.5 py-1 text-[11px] font-bold rounded-full border tracking-wide whitespace-nowrap shadow-2xs ${
+                                  <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
                                     isCompleted 
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                                      ? 'bg-[#2ecc71] text-white' 
                                       : isDoing 
-                                      ? 'bg-blue-50 text-blue-700 border-blue-300' 
-                                      : 'bg-slate-50 text-slate-600 border-slate-300'
+                                      ? 'bg-[#e67e22] text-white' 
+                                      : 'bg-slate-100 text-slate-600 border border-slate-200'
                                   }`}>
                                     {isCompleted ? 'Hoàn thành' : isDoing ? 'Đang thực hiện' : 'Chưa thực hiện'}
                                   </span>
                                 );
                               })() : (
                                 <select
-                                  value={task.status || "Todo"}
+                                  value={task.status}
                                   onChange={(e) => handleInlineTaskStatusChange(task, idx, e.target.value as ProjectTask["status"])}
-                                  className={`w-full max-w-[125px] text-[11px] font-bold py-1 px-2 rounded-full border outline-none cursor-pointer transition shadow-2xs ${
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded tracking-wide border cursor-pointer outline-none transition ${
                                     task.status === 'Completed' 
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' 
+                                      ? 'bg-[#2ecc71] text-white border-emerald-600' 
                                       : task.status === 'In Progress' 
-                                      ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100' 
-                                      : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
+                                      ? 'bg-[#e67e22] text-white border-amber-600' 
+                                      : 'bg-slate-100 text-slate-700 border-slate-300'
                                   }`}
                                   title="Bấm để chọn trạng thái"
                                 >
@@ -3220,7 +3300,7 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Notes - Bấm để viết trực tiếp */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
+                            <td className="py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
                               <input
                                 type="text"
                                 defaultValue={task.notes || ""}
@@ -3231,9 +3311,9 @@ export default function ProjectDetailPage() {
                                     (e.target as HTMLInputElement).blur();
                                   }
                                 }}
-                                placeholder="Ghi chú..."
-                                className="w-full text-xs text-slate-700 bg-transparent hover:bg-slate-50 focus:bg-white px-2 py-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none transition placeholder:text-slate-300"
-                                title={task.notes ? task.notes : "Nhấp để nhập ghi chú..."}
+                                placeholder="Bấm để ghi chú..."
+                                className="w-full px-1.5 py-0.5 text-xs text-slate-650 italic bg-transparent hover:bg-slate-50 focus:bg-white focus:not-italic focus:text-slate-800 focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition truncate focus:overflow-visible"
+                                title={task.notes ? task.notes : "Bấm vào đây để viết ghi chú"}
                               />
                             </td>
 
