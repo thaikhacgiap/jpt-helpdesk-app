@@ -431,6 +431,31 @@ export default function MaintenanceDetailPage() {
     });
   };
 
+  // Fast inline update for any task field directly on table
+  const updateTaskField = async (taskId: string, field: keyof Task, value: any) => {
+    const currentList = cycleTasks[activeCycle] ? [...cycleTasks[activeCycle]] : [];
+    const idx = currentList.findIndex(t => t.id === taskId);
+    if (idx === -1) return;
+
+    currentList[idx] = {
+      ...currentList[idx],
+      [field]: value,
+    };
+
+    const updatedCycleTasks = {
+      ...cycleTasks,
+      [activeCycle]: currentList,
+    };
+
+    setCycleTasks(updatedCycleTasks);
+
+    try {
+      await saveTasksToDB(updatedCycleTasks);
+    } catch (err) {
+      console.error("Error updating task field inline:", err);
+    }
+  };
+
   // Open modal for adding task (optional defaultParentId for nesting)
   const handleAddTaskOpen = (defaultParentId: string = "") => {
     setEditingTask(null);
@@ -1284,31 +1309,31 @@ export default function MaintenanceDetailPage() {
                   <table className="w-full text-xs border-collapse text-left">
                     <thead className="bg-[#374151] text-white font-semibold sticky top-0 z-10">
                       <tr>
-                        <th className="px-3 py-2.5 w-16 text-center border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-14 text-center border-r border-slate-600">
                           <span>STT</span>
                         </th>
-                        <th className="px-4 py-2.5 border-r border-slate-600 min-w-[220px]">
+                        <th className="px-4 py-2.5 border-r border-slate-600 min-w-[200px]">
                           <span>Công việc</span>
                         </th>
-                        <th className="px-3 py-2.5 w-40 border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-48 min-w-[190px] border-r border-slate-600">
                           <span>Người thực hiện</span>
                         </th>
-                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
                           <span>Bắt đầu (dự kiến)</span>
                         </th>
-                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
                           <span>Kết thúc (dự kiến)</span>
                         </th>
-                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
                           <span>Bắt đầu (thực tế)</span>
                         </th>
-                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
                           <span>Kết thúc (thực tế)</span>
                         </th>
-                        <th className="px-3 py-2.5 w-32 text-center border-r border-slate-600">
+                        <th className="px-2 py-2.5 w-36 min-w-[140px] text-center border-r border-slate-600">
                           <span>Tình trạng</span>
                         </th>
-                        <th className="px-3 py-2.5 w-32 border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-40 min-w-[150px] border-r border-slate-600">
                           <span>Ghi chú</span>
                         </th>
                         <th className="px-2 py-2.5 w-20 text-center">
@@ -1371,49 +1396,112 @@ export default function MaintenanceDetailPage() {
                               </div>
                             </td>
 
-                            {/* Người thực hiện */}
-                            <td className="px-3 py-2.5 text-slate-800 border-r border-slate-200 align-middle">
-                              {t.assignees && t.assignees.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {t.assignees.map((a, aIdx) => (
-                                    <span key={aIdx} className="text-slate-800">
-                                      {a}{aIdx < t.assignees.length - 1 ? ", " : ""}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-slate-300">—</span>
-                              )}
+                            {/* Người thực hiện (Inline Select) */}
+                            <td className="p-1 border-r border-slate-200 align-middle">
+                              <StaffSearchSelect
+                                size="sm"
+                                mode="multiple"
+                                outputFormat="array"
+                                value={t.assignees || []}
+                                onChange={(val) => {
+                                  const arr = Array.isArray(val) ? val : [val].filter(Boolean);
+                                  updateTaskField(t.id, "assignees", arr);
+                                }}
+                                staffList={staffList}
+                                placeholder="+ Chọn..."
+                                dropdownPosition="fixed"
+                                className="w-full text-xs"
+                              />
                             </td>
 
-                            {/* Bắt đầu (dự kiến) */}
-                            <td className="px-2 py-2.5 text-center text-slate-600 border-r border-slate-200 align-middle whitespace-nowrap">
-                              {t.startDate ? formatDateVN(t.startDate) : "—"}
+                            {/* Bắt đầu (dự kiến) (Inline Date) */}
+                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              <input
+                                type="date"
+                                value={t.startDate || ""}
+                                onChange={(e) => updateTaskField(t.id, "startDate", e.target.value)}
+                                className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
+                                title="Nhấp để sửa ngày bắt đầu (dự kiến)"
+                              />
                             </td>
 
-                            {/* Kết thúc (dự kiến) */}
-                            <td className="px-2 py-2.5 text-center text-slate-600 border-r border-slate-200 align-middle whitespace-nowrap">
-                              {t.endDate ? formatDateVN(t.endDate) : "—"}
+                            {/* Kết thúc (dự kiến) (Inline Date) */}
+                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              <input
+                                type="date"
+                                value={t.endDate || ""}
+                                onChange={(e) => updateTaskField(t.id, "endDate", e.target.value)}
+                                className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
+                                title="Nhấp để sửa ngày kết thúc (dự kiến)"
+                              />
                             </td>
 
-                            {/* Bắt đầu (thực tế) */}
-                            <td className="px-2 py-2.5 text-center text-slate-700 font-medium border-r border-slate-200 align-middle whitespace-nowrap">
-                              {t.actualStartDate ? formatDateVN(t.actualStartDate) : "—"}
+                            {/* Bắt đầu (thực tế) (Inline Date) */}
+                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              <input
+                                type="date"
+                                value={t.actualStartDate || ""}
+                                onChange={(e) => updateTaskField(t.id, "actualStartDate", e.target.value)}
+                                className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
+                                title="Nhấp để sửa ngày bắt đầu (thực tế)"
+                              />
                             </td>
 
-                            {/* Kết thúc (thực tế) */}
-                            <td className="px-2 py-2.5 text-center text-slate-700 font-medium border-r border-slate-200 align-middle whitespace-nowrap">
-                              {t.actualEndDate ? formatDateVN(t.actualEndDate) : "—"}
+                            {/* Kết thúc (thực tế) (Inline Date) */}
+                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              <input
+                                type="date"
+                                value={t.actualEndDate || ""}
+                                onChange={(e) => updateTaskField(t.id, "actualEndDate", e.target.value)}
+                                className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
+                                title="Nhấp để sửa ngày kết thúc (thực tế)"
+                              />
                             </td>
 
-                            {/* Tình trạng */}
-                            <td className="px-2 py-2.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
-                              {renderTaskStatusBadge(t.status)}
+                            {/* Tình trạng (Inline Select) */}
+                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              <select
+                                value={t.status || "Chưa bắt đầu"}
+                                onChange={(e) => updateTaskField(t.id, "status", e.target.value)}
+                                className={`w-full text-[11px] font-bold py-1 px-2 rounded-full border outline-none cursor-pointer transition shadow-2xs ${
+                                  t.status === "Hoàn thành"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                    : t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện"
+                                    ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+                                    : t.status === "Đang Kế Hoạch" || t.status === "Đang kế hoạch"
+                                    ? "bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100"
+                                    : t.status === "Tạm dừng"
+                                    ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
+                                    : "bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100"
+                                }`}
+                              >
+                                <option value="Chưa bắt đầu">Chưa bắt đầu</option>
+                                <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
+                                <option value="Đang Thực Hiện">Đang Thực Hiện</option>
+                                <option value="Hoàn thành">Hoàn thành</option>
+                                <option value="Tạm dừng">Tạm dừng</option>
+                              </select>
                             </td>
 
-                            {/* Ghi chú */}
-                            <td className="px-3 py-2.5 text-slate-500 border-r border-slate-200 align-middle">
-                              {t.notes || "—"}
+                            {/* Ghi chú (Inline Input) */}
+                            <td className="p-1 border-r border-slate-200 align-middle">
+                              <input
+                                type="text"
+                                defaultValue={t.notes || ""}
+                                key={`${t.id}-${t.notes || ""}`}
+                                onBlur={(e) => {
+                                  if (e.target.value !== (t.notes || "")) {
+                                    updateTaskField(t.id, "notes", e.target.value.trim());
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="Ghi chú..."
+                                className="w-full text-xs text-slate-700 bg-transparent hover:bg-slate-50 focus:bg-white px-2 py-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none transition placeholder:text-slate-300"
+                              />
                             </td>
 
                             {/* Thao tác */}
