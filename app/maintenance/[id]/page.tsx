@@ -10,7 +10,7 @@ import {
   ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X,
   CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, Info, Lightbulb, ListOrdered,
-  CircleDot, PauseCircle, FileSpreadsheet, Sparkles
+  CircleDot, PauseCircle, FileSpreadsheet
 } from "lucide-react";
 import { 
   generateDefaultTasks, 
@@ -68,7 +68,6 @@ export default function MaintenanceDetailPage() {
   const [cycleTasks, setCycleTasks] = useState<{ [key: string]: Task[] }>({});
   const [cycleRecs, setCycleRecs] = useState<{ [key: string]: Recommendation[] }>({});
   const [collapsedParents, setCollapsedParents] = useState<{ [key: string]: boolean }>({});
-  const [isDataMenuOpen, setIsDataMenuOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState<"tasks" | "recommendations">("tasks");
   
@@ -106,6 +105,8 @@ export default function MaintenanceDetailPage() {
     department: "",
     startDate: "",
     endDate: "",
+    actualStartDate: "",
+    actualEndDate: "",
     status: "Chưa bắt đầu",
     notes: "",
   });
@@ -440,6 +441,8 @@ export default function MaintenanceDetailPage() {
       department: "",
       startDate: getCycleStartDate(activeCycle),
       endDate: getCycleStartDate(activeCycle),
+      actualStartDate: "",
+      actualEndDate: "",
       status: "Chưa bắt đầu",
       notes: "",
     });
@@ -456,6 +459,8 @@ export default function MaintenanceDetailPage() {
       department: task.department || "",
       startDate: task.startDate || "",
       endDate: task.endDate || "",
+      actualStartDate: task.actualStartDate || "",
+      actualEndDate: task.actualEndDate || "",
       status: task.status || "Chưa bắt đầu",
       notes: task.notes || "",
     });
@@ -489,6 +494,8 @@ export default function MaintenanceDetailPage() {
             department: form.department,
             startDate: form.startDate,
             endDate: form.endDate,
+            actualStartDate: form.actualStartDate || "",
+            actualEndDate: form.actualEndDate || "",
             status: form.status || "Chưa bắt đầu",
             notes: form.notes,
           };
@@ -503,6 +510,8 @@ export default function MaintenanceDetailPage() {
           department: form.department,
           startDate: form.startDate,
           endDate: form.endDate,
+          actualStartDate: form.actualStartDate || "",
+          actualEndDate: form.actualEndDate || "",
           status: form.status || "Chưa bắt đầu",
           notes: form.notes,
           orderIndex: currentList.length,
@@ -554,30 +563,7 @@ export default function MaintenanceDetailPage() {
     }
   };
 
-  // Apply default template to active cycle
-  const handleApplyTemplate = async () => {
-    if (currentTasks.length > 0) {
-      const confirmOverwrite = confirm(
-        `Lần bảo trì này đang có ${currentTasks.length} công việc. Bạn có muốn nạp mẫu kế hoạch bảo trì chuẩn như hình (24 công việc, 3 cấp) không?`
-      );
-      if (!confirmOverwrite) return;
-    }
 
-    try {
-      const cycleStartDate = getCycleStartDate(activeCycle);
-      const templateTasks = generateDefaultTasks(cycleStartDate);
-      const updatedCycleTasks = {
-        ...cycleTasks,
-        [activeCycle]: templateTasks,
-      };
-      setCycleTasks(updatedCycleTasks);
-      await saveTasksToDB(updatedCycleTasks);
-      alert(`Đã áp dụng mẫu kế hoạch bảo trì thành công (${templateTasks.length} công việc)!`);
-    } catch (err) {
-      console.error("Error applying template:", err);
-      alert("Lỗi khi áp dụng mẫu template.");
-    }
-  };
 
   // Open modal for adding recommendation
   const handleRecCreateOpen = () => {
@@ -757,8 +743,10 @@ export default function MaintenanceDetailPage() {
         const cleanStt = rawStt.replace(/\.+$/, "").trim();
         const assigneesStr = getCell(row, ["người thực hiện", "phụ trách", "nhân sự", "assignee", "owner", "nguoi thuc hien"]);
         const assignees = assigneesStr ? assigneesStr.split(/[;,]/).map(s => s.trim()).filter(Boolean) : [];
-        const startDate = normalizeImportDate(getCell(row, ["bắt đầu (dự kiến)", "bắt đầu", "ngày bắt đầu", "start date", "start", "bat dau"]));
-        const endDate = normalizeImportDate(getCell(row, ["kết thúc (dự kiến)", "kết thúc", "hoàn thành", "ngày kết thúc", "hạn chót", "end date", "end", "ket thuc"]));
+        const startDate = normalizeImportDate(getCell(row, ["bắt đầu (dự kiến)", "dự kiến bắt đầu", "bắt đầu", "ngày bắt đầu", "start date", "start", "bat dau"]));
+        const endDate = normalizeImportDate(getCell(row, ["kết thúc (dự kiến)", "dự kiến kết thúc", "kết thúc", "hoàn thành", "ngày kết thúc", "hạn chót", "end date", "end", "ket thuc"]));
+        const actualStartDate = normalizeImportDate(getCell(row, ["bắt đầu (thực tế)", "thực tế bắt đầu", "bắt đầu thực tế", "actual start", "actual start date", "thuc te bat dau"]));
+        const actualEndDate = normalizeImportDate(getCell(row, ["kết thúc (thực tế)", "thực tế kết thúc", "kết thúc thực tế", "actual end", "actual end date", "thuc te ket thuc"]));
         const status = getCell(row, ["tình trạng", "trạng thái", "status", "tinh trang"]);
         const notes = getCell(row, ["ghi chú", "notes", "note", "comment", "ghi chu"]);
 
@@ -782,6 +770,8 @@ export default function MaintenanceDetailPage() {
           department: "",
           startDate,
           endDate,
+          actualStartDate,
+          actualEndDate,
           status: status || "",
           notes,
           orderIndex: idx,
@@ -810,7 +800,6 @@ export default function MaintenanceDetailPage() {
   // Export Excel handler (matching user's template design)
   const handleExportExcel = async (isTemplate = false) => {
     try {
-      setIsDataMenuOpen(false);
       const res = await fetch("/api/maintenance/export-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -847,11 +836,20 @@ export default function MaintenanceDetailPage() {
     }
   };
 
-  // Export CSV handler matching the 7 columns from the template
+  // Export CSV handler matching the 9 columns
   const handleExportCSV = () => {
-    setIsDataMenuOpen(false);
     const sorted = getSortedHierarchicalTasks(currentTasks);
-    const headers = ["STT", "Công việc", "Người thực hiện", "Bắt đầu (dự kiến)", "Kết thúc (dự kiến)", "Tình trạng", "Ghi chú"];
+    const headers = [
+      "STT",
+      "Công việc",
+      "Người thực hiện",
+      "Bắt đầu (dự kiến)",
+      "Kết thúc (dự kiến)",
+      "Bắt đầu (thực tế)",
+      "Kết thúc (thực tế)",
+      "Tình trạng",
+      "Ghi chú",
+    ];
     const csvRows = [headers.join(",")];
 
     if (sorted.length === 0) {
@@ -864,6 +862,8 @@ export default function MaintenanceDetailPage() {
           `""`,
           t.startDate || "",
           t.endDate || "",
+          t.actualStartDate || "",
+          t.actualEndDate || "",
           t.status || "",
           `"${(t.notes || "").replace(/"/g, '""')}"`
         ];
@@ -878,6 +878,8 @@ export default function MaintenanceDetailPage() {
           `"${assigneesStr.replace(/"/g, '""')}"`,
           t.startDate || "",
           t.endDate || "",
+          t.actualStartDate || "",
+          t.actualEndDate || "",
           t.status || "",
           `"${(t.notes || "").replace(/"/g, '""')}"`
         ];
@@ -1116,100 +1118,34 @@ export default function MaintenanceDetailPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               {activeTab === "tasks" ? (
                 <>
-                  {/* Thao tác dữ liệu dropdown */}
-                  <div className="relative">
-                    <button 
-                      onClick={() => setIsDataMenuOpen(!isDataMenuOpen)}
-                      className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 shadow-xs transition cursor-pointer"
-                    >
-                      <Calendar size={14} className="text-blue-600" />
-                      <span className="uppercase text-[11px] tracking-wider">THAO TÁC DỮ LIỆU</span>
-                      <ChevronDown size={14} className="text-slate-400" />
-                    </button>
-
-                    {isDataMenuOpen && (
-                      <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 text-xs">
-                        <button
-                          onClick={() => { setIsDataMenuOpen(false); handleApplyTemplate(); }}
-                          className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2 text-blue-700 font-semibold cursor-pointer border-b border-slate-100"
-                        >
-                          <Sparkles size={14} className="text-blue-600 shrink-0" />
-                          <span>Áp dụng template chuẩn</span>
-                        </button>
-                        <button
-                          onClick={() => { setIsDataMenuOpen(false); handleAddTaskOpen(""); }}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
-                        >
-                          <Plus size={14} className="text-blue-600 shrink-0" />
-                          <span>Thêm công việc</span>
-                        </button>
-                        <button
-                          onClick={() => handleExportExcel(false)}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
-                        >
-                          <FileSpreadsheet size={14} className="text-emerald-600 shrink-0" />
-                          <span>Xuất file Excel (.xlsx)</span>
-                        </button>
-                        <button
-                          onClick={() => handleExportExcel(true)}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
-                        >
-                          <Download size={14} className="text-slate-500 shrink-0" />
-                          <span>Tải file mẫu Excel (.xlsx)</span>
-                        </button>
-                        <button
-                          onClick={() => { setIsDataMenuOpen(false); triggerImportFile(); }}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
-                        >
-                          <Upload size={14} className="text-slate-500 shrink-0" />
-                          <span>Nhập từ Excel / CSV</span>
-                        </button>
-                        <button
-                          onClick={handleExportCSV}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer border-t border-slate-100"
-                        >
-                          <Download size={14} className="text-slate-400 shrink-0" />
-                          <span>Xuất file CSV (.csv)</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Áp dụng mẫu template button */}
+                  {/* 1. Tải file mẫu */}
                   <button 
-                    onClick={handleApplyTemplate}
-                    title="Nạp mẫu kế hoạch bảo trì kiểm tra định kỳ chuẩn theo mẫu"
-                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                    onClick={() => handleExportExcel(true)}
+                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    title="Tải file mẫu Excel (.xlsx)"
                   >
-                    <Sparkles size={14} className="text-indigo-600" />
-                    <span>Áp dụng template mẫu</span>
+                    <Download size={14} className="text-slate-500" />
+                    <span>Tải file mẫu</span>
                   </button>
 
-                  {/* Thêm công việc button */}
-                  <button 
-                    onClick={() => handleAddTaskOpen("")}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-                  >
-                    <Plus size={15} />
-                    <span>Thêm công việc</span>
-                  </button>
-
-                  {/* Export Excel button */}
+                  {/* 2. Xuất Excel */}
                   <button 
                     onClick={() => handleExportExcel(false)}
-                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    title="Xuất công việc ra file Excel (.xlsx)"
                   >
                     <FileSpreadsheet size={14} className="text-emerald-600" />
                     <span>Xuất Excel</span>
                   </button>
 
-                  {/* Import button */}
+                  {/* 3. Nhập Excel */}
                   <button 
                     onClick={triggerImportFile}
-                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    title="Nhập dữ liệu công việc từ file Excel / CSV"
                   >
-                    <Upload size={14} className="text-slate-500" />
-                    <span>Nhập Excel/CSV</span>
+                    <Upload size={14} className="text-blue-600" />
+                    <span>Nhập Excel</span>
                   </button>
                 </>
               ) : (
@@ -1286,29 +1222,29 @@ export default function MaintenanceDetailPage() {
                   </svg>
                 </div>
                 <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG LẦN BẢO TRÌ NÀY</p>
-                <p className="text-xs text-slate-400 mt-1 mb-5">Bạn có thể nạp mẫu kế hoạch bảo trì chuẩn hoặc thêm thủ công.</p>
+                <p className="text-xs text-slate-400 mt-1 mb-5">Bạn có thể tải file mẫu để nhập dữ liệu hoặc thêm công việc mới.</p>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <button 
-                    onClick={handleApplyTemplate}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md flex items-center gap-2"
+                    onClick={() => handleExportExcel(true)}
+                    className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs flex items-center gap-1.5"
                   >
-                    <Sparkles size={15} />
-                    <span>Áp dụng mẫu kế hoạch chuẩn (như hình)</span>
+                    <Download size={14} className="text-slate-500" />
+                    <span>Tải file mẫu Excel</span>
+                  </button>
+                  <button 
+                    onClick={triggerImportFile}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md flex items-center gap-1.5"
+                  >
+                    <Upload size={14} />
+                    <span>Nhập từ file Excel</span>
                   </button>
                   <button 
                     onClick={() => handleAddTaskOpen("")}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md flex items-center gap-1.5"
                   >
                     <Plus size={15} />
-                    <span>Thêm công việc mới</span>
-                  </button>
-                  <button 
-                    onClick={triggerImportFile}
-                    className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs flex items-center gap-1.5"
-                  >
-                    <Upload size={14} className="text-slate-500" />
-                    <span>Nhập file Excel/CSV</span>
+                    <span>Thêm công việc</span>
                   </button>
                 </div>
               </div>
@@ -1331,8 +1267,17 @@ export default function MaintenanceDetailPage() {
                   </span>
                 </div>
 
-                <div className="bg-[#1565C0] text-white font-bold text-xs px-4 py-2 text-center uppercase tracking-wider">
+                <div className="bg-[#1565C0] text-white font-bold text-xs px-4 py-2 flex items-center justify-between uppercase tracking-wider">
+                  <div className="w-24" />
                   <span>Công việc thực hiện</span>
+                  <button
+                    onClick={() => handleAddTaskOpen("")}
+                    className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Thêm công việc mới vào kế hoạch"
+                  >
+                    <Plus size={13} />
+                    <span>Thêm công việc</span>
+                  </button>
                 </div>
 
                 <div className="flex-1 overflow-auto custom-scrollbar">
@@ -1342,25 +1287,31 @@ export default function MaintenanceDetailPage() {
                         <th className="px-3 py-2.5 w-16 text-center border-r border-slate-600">
                           <span>STT</span>
                         </th>
-                        <th className="px-4 py-2.5 border-r border-slate-600">
+                        <th className="px-4 py-2.5 border-r border-slate-600 min-w-[220px]">
                           <span>Công việc</span>
                         </th>
-                        <th className="px-4 py-2.5 w-44 border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-40 border-r border-slate-600">
                           <span>Người thực hiện</span>
                         </th>
-                        <th className="px-4 py-2.5 w-32 text-center border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
                           <span>Bắt đầu (dự kiến)</span>
                         </th>
-                        <th className="px-4 py-2.5 w-32 text-center border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
                           <span>Kết thúc (dự kiến)</span>
                         </th>
-                        <th className="px-4 py-2.5 w-36 text-center border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                          <span>Bắt đầu (thực tế)</span>
+                        </th>
+                        <th className="px-3 py-2.5 w-28 text-center border-r border-slate-600">
+                          <span>Kết thúc (thực tế)</span>
+                        </th>
+                        <th className="px-3 py-2.5 w-32 text-center border-r border-slate-600">
                           <span>Tình trạng</span>
                         </th>
-                        <th className="px-4 py-2.5 w-36 border-r border-slate-600">
+                        <th className="px-3 py-2.5 w-32 border-r border-slate-600">
                           <span>Ghi chú</span>
                         </th>
-                        <th className="px-3 py-2.5 w-24 text-center">
+                        <th className="px-2 py-2.5 w-20 text-center">
                           <span>Thao tác</span>
                         </th>
                       </tr>
@@ -1443,6 +1394,16 @@ export default function MaintenanceDetailPage() {
                             {/* Kết thúc (dự kiến) */}
                             <td className="px-2 py-2.5 text-center text-slate-600 border-r border-slate-200 align-middle whitespace-nowrap">
                               {t.endDate ? formatDateVN(t.endDate) : "—"}
+                            </td>
+
+                            {/* Bắt đầu (thực tế) */}
+                            <td className="px-2 py-2.5 text-center text-slate-700 font-medium border-r border-slate-200 align-middle whitespace-nowrap">
+                              {t.actualStartDate ? formatDateVN(t.actualStartDate) : "—"}
+                            </td>
+
+                            {/* Kết thúc (thực tế) */}
+                            <td className="px-2 py-2.5 text-center text-slate-700 font-medium border-r border-slate-200 align-middle whitespace-nowrap">
+                              {t.actualEndDate ? formatDateVN(t.actualEndDate) : "—"}
                             </td>
 
                             {/* Tình trạng */}
@@ -1697,7 +1658,7 @@ export default function MaintenanceDetailPage() {
                 />
               </div>
 
-              {/* Date Fields: Bắt đầu (dự kiến) & Kết thúc (dự kiến) */}
+              {/* Date Fields: Bắt đầu & Kết thúc (dự kiến) */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">
@@ -1718,6 +1679,32 @@ export default function MaintenanceDetailPage() {
                     type="date"
                     value={form.endDate}
                     onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Date Fields: Bắt đầu & Kết thúc (thực tế) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Bắt đầu (thực tế)
+                  </label>
+                  <input
+                    type="date"
+                    value={form.actualStartDate}
+                    onChange={e => setForm(f => ({ ...f, actualStartDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Kết thúc (thực tế)
+                  </label>
+                  <input
+                    type="date"
+                    value={form.actualEndDate}
+                    onChange={e => setForm(f => ({ ...f, actualEndDate: e.target.value }))}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   />
                 </div>

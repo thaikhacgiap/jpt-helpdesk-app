@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Row 1: "Kế Hoạch" Blue Banner
-    sheet.mergeCells("A1:G1");
+    sheet.mergeCells("A1:I1");
     const r1 = sheet.getCell("A1");
     r1.value = "Kế Hoạch";
     r1.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     sheet.getRow(1).height = 34;
 
     // 2. Row 2: "Kiểm tra định kỳ - kỳ" Light Gray Banner
-    sheet.mergeCells("A2:G2");
+    sheet.mergeCells("A2:I2");
     const r2 = sheet.getCell("A2");
     const cycleText = cycleNum ? ` - kỳ ${cycleNum}` : " - kỳ";
     const extraInfo = customerName ? ` (${customerName}${contractNo ? ` - HĐ: ${contractNo}` : ""})` : "";
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     sheet.getRow(2).height = 28;
 
     // 3. Row 3: "Công việc thực hiện" Blue Banner
-    sheet.mergeCells("A3:G3");
+    sheet.mergeCells("A3:I3");
     const r3 = sheet.getCell("A3");
     r3.value = "Công việc thực hiện";
     r3.font = { name: "Arial", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
@@ -92,6 +92,8 @@ export async function POST(req: NextRequest) {
       "Người thực hiện",
       "Bắt đầu (dự kiến)",
       "Kết thúc (dự kiến)",
+      "Bắt đầu (thực tế)",
+      "Kết thúc (thực tế)",
       "Tình trạng",
       "Ghi chú",
     ];
@@ -134,16 +136,15 @@ export async function POST(req: NextRequest) {
       const isSubParent = task.hasChildren && task.level > 1;
       const isBold = isMainHeader || isSubParent;
 
-      // STT
+      // STT (Col 1)
       const cellSTT = row.getCell(1);
       cellSTT.value = task.stt;
       cellSTT.font = { name: "Arial", size: 9.5, bold: isBold, color: { argb: "FF1E293B" } };
       cellSTT.alignment = { vertical: "middle", horizontal: "center" };
       cellSTT.border = thinBorder;
 
-      // Công việc
+      // Công việc (Col 2)
       const cellName = row.getCell(2);
-      // Indentation for tree view
       const indentSpaces = task.level > 1 ? "  ".repeat(task.level - 1) : "";
       cellName.value = indentSpaces + task.name;
       cellName.font = {
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
       cellName.alignment = { vertical: "middle", horizontal: "left" };
       cellName.border = thinBorder;
 
-      // Người thực hiện
+      // Người thực hiện (Col 3)
       const cellAssignees = row.getCell(3);
       const assigneesStr = Array.isArray(task.assignees) ? task.assignees.join(", ") : (task.assignees || "");
       cellAssignees.value = assigneesStr;
@@ -164,22 +165,36 @@ export async function POST(req: NextRequest) {
       cellAssignees.alignment = { vertical: "middle", horizontal: "left" };
       cellAssignees.border = thinBorder;
 
-      // Bắt đầu (dự kiến)
+      // Bắt đầu (dự kiến) (Col 4)
       const cellStart = row.getCell(4);
       cellStart.value = formatDisplayDate(task.startDate);
       cellStart.font = { name: "Arial", size: 9.5, color: { argb: "FF475569" } };
       cellStart.alignment = { vertical: "middle", horizontal: "center" };
       cellStart.border = thinBorder;
 
-      // Kết thúc (dự kiến)
+      // Kết thúc (dự kiến) (Col 5)
       const cellEnd = row.getCell(5);
       cellEnd.value = formatDisplayDate(task.endDate);
       cellEnd.font = { name: "Arial", size: 9.5, color: { argb: "FF475569" } };
       cellEnd.alignment = { vertical: "middle", horizontal: "center" };
       cellEnd.border = thinBorder;
 
-      // Tình trạng
-      const cellStatus = row.getCell(6);
+      // Bắt đầu (thực tế) (Col 6)
+      const cellActualStart = row.getCell(6);
+      cellActualStart.value = formatDisplayDate(task.actualStartDate);
+      cellActualStart.font = { name: "Arial", size: 9.5, color: { argb: "FF0F172A" } };
+      cellActualStart.alignment = { vertical: "middle", horizontal: "center" };
+      cellActualStart.border = thinBorder;
+
+      // Kết thúc (thực tế) (Col 7)
+      const cellActualEnd = row.getCell(7);
+      cellActualEnd.value = formatDisplayDate(task.actualEndDate);
+      cellActualEnd.font = { name: "Arial", size: 9.5, color: { argb: "FF0F172A" } };
+      cellActualEnd.alignment = { vertical: "middle", horizontal: "center" };
+      cellActualEnd.border = thinBorder;
+
+      // Tình trạng (Col 8)
+      const cellStatus = row.getCell(8);
       cellStatus.value = task.status || "";
       cellStatus.font = {
         name: "Arial",
@@ -198,8 +213,8 @@ export async function POST(req: NextRequest) {
       cellStatus.alignment = { vertical: "middle", horizontal: "center" };
       cellStatus.border = thinBorder;
 
-      // Ghi chú
-      const cellNotes = row.getCell(7);
+      // Ghi chú (Col 9)
+      const cellNotes = row.getCell(9);
       cellNotes.value = task.notes || "";
       cellNotes.font = { name: "Arial", size: 9, color: { argb: "FF64748B" } };
       cellNotes.alignment = { vertical: "middle", horizontal: "left" };
@@ -210,9 +225,11 @@ export async function POST(req: NextRequest) {
     sheet.columns = [
       { key: "stt", width: 8 },
       { key: "name", width: 56 },
-      { key: "assignees", width: 24 },
+      { key: "assignees", width: 22 },
       { key: "startDate", width: 18 },
       { key: "endDate", width: 18 },
+      { key: "actualStartDate", width: 18 },
+      { key: "actualEndDate", width: 18 },
       { key: "status", width: 18 },
       { key: "notes", width: 28 },
     ];

@@ -8,6 +8,8 @@ export interface MaintenanceTask {
   department?: string;
   startDate: string;
   endDate: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
   status: string; // 'Chưa bắt đầu' | 'Đang Kế Hoạch' | 'Đang Thực Hiện' | 'Hoàn thành' | 'Tạm dừng'
   notes: string;
   orderIndex: number;
@@ -215,6 +217,8 @@ export function generateDefaultTasks(startDate = ""): MaintenanceTask[] {
     department: "",
     startDate: startDate || "",
     endDate: startDate || "",
+    actualStartDate: "",
+    actualEndDate: "",
     status: item.status || "",
     notes: "",
     orderIndex: idx,
