@@ -7,21 +7,19 @@ import { supabase } from "@/lib/supabase";
 import MainLayout from "@/components/layout/main-layout";
 import StaffSearchSelect from "@/components/common/staff-search-select";
 import { 
-  ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X, Check,
-  CheckCircle2, Clock, RotateCcw, AlertTriangle, Play, HelpCircle,
-  Menu, Bell, Calculator, Settings, ClipboardList, Calendar,
+  ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X,
+  CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, Info, Lightbulb, ListOrdered,
-  CircleDot, AlertCircle, PauseCircle, FileSpreadsheet, Sparkles
+  CircleDot, PauseCircle, FileSpreadsheet, Sparkles
 } from "lucide-react";
 import { 
-  DEFAULT_MAINTENANCE_TEMPLATE, 
   generateDefaultTasks, 
   getSortedHierarchicalTasks, 
   MaintenanceTask,
   HierarchicalTask 
 } from "@/lib/maintenance-template";
 
-export type Task = MaintenanceTask;
+type Task = MaintenanceTask;
 
 interface Recommendation {
   id: string;

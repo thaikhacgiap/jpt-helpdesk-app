@@ -184,6 +184,17 @@ export const DEFAULT_MAINTENANCE_TEMPLATE: TemplateDefinitionItem[] = [
   },
 ];
 
+function safeUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 /**
  * Generate a full set of tasks with UUIDs from the default template
  */
@@ -192,7 +203,7 @@ export function generateDefaultTasks(startDate = ""): MaintenanceTask[] {
   
   // First pass: assign UUIDs
   DEFAULT_MAINTENANCE_TEMPLATE.forEach(item => {
-    idMap[item.tempId] = crypto.randomUUID();
+    idMap[item.tempId] = safeUUID();
   });
 
   // Second pass: build tasks
@@ -230,7 +241,7 @@ export function getSortedHierarchicalTasks(tasks: MaintenanceTask[]): Hierarchic
   const getChildrenOf = (parentId: string | null) => {
     return tasks
       .filter(t => parentId ? t.parentId === parentId : (!t.parentId || !validIds.has(t.parentId)))
-      .sort((a, b) => a.orderIndex - b.orderIndex);
+      .sort((a, b) => (Number(a.orderIndex) || 0) - (Number(b.orderIndex) || 0));
   };
 
   const traverse = (parentId: string | null, prefix = "", level = 1) => {

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { 
-  DEFAULT_MAINTENANCE_TEMPLATE, 
   generateDefaultTasks, 
-  getSortedHierarchicalTasks, 
-  MaintenanceTask 
+  getSortedHierarchicalTasks 
 } from "@/lib/maintenance-template";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +20,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      planTitle = "Kế hoạch bảo trì",
       cycleNum = "1",
       customerName = "",
       contractNo = "",
