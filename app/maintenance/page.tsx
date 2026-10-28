@@ -9,6 +9,7 @@ import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
+import { generateDefaultTasks } from "@/lib/maintenance-template";
 
 interface Task {
   id: string;
@@ -363,6 +364,20 @@ export default function MaintenancePage() {
           .eq("id", editingPlan.id);
       } else {
         const ticketId = await generateNextMaintenanceId();
+        const todayStr = new Date().toISOString().substring(0, 10);
+        const initialTasks = {
+          "1": generateDefaultTasks(todayStr)
+        };
+        const remarkData = {
+          config: {
+            interval: "monthly",
+            startDate: todayStr
+          },
+          cycleMeta: {},
+          tasks: initialTasks,
+          recommendations: {}
+        };
+
         await supabase
           .from("tickets")
           .insert([{
@@ -372,6 +387,7 @@ export default function MaintenancePage() {
             start_time: new Date().toISOString(),
             sla_time: "1",
             progress: "0%",
+            remark: JSON.stringify(remarkData),
           }]);
       }
 

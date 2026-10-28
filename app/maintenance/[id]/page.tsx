@@ -11,21 +11,17 @@ import {
   CheckCircle2, Clock, RotateCcw, AlertTriangle, Play, HelpCircle,
   Menu, Bell, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, Info, Lightbulb, ListOrdered,
-  CircleDot, AlertCircle, PauseCircle
+  CircleDot, AlertCircle, PauseCircle, FileSpreadsheet, Sparkles
 } from "lucide-react";
+import { 
+  DEFAULT_MAINTENANCE_TEMPLATE, 
+  generateDefaultTasks, 
+  getSortedHierarchicalTasks, 
+  MaintenanceTask,
+  HierarchicalTask 
+} from "@/lib/maintenance-template";
 
-interface Task {
-  id: string;
-  parentId: string | null; // null for parent task, string parent task ID for subtasks
-  name: string;
-  assignees: string[];
-  department: string;
-  startDate: string;
-  endDate: string;
-  status: string; // 'Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Tạm dừng'
-  notes: string;
-  orderIndex: number;
-}
+export type Task = MaintenanceTask;
 
 interface Recommendation {
   id: string;
@@ -107,7 +103,6 @@ export default function MaintenanceDetailPage() {
   // Form states
   const [form, setForm] = useState({
     name: "",
-    isSubtask: false,
     parentId: "",
     assignees: [] as string[],
     department: "",
@@ -203,41 +198,18 @@ export default function MaintenanceDetailPage() {
 
   // Filter tasks for the active cycle
   const currentTasks = cycleTasks[activeCycle] || [];
+  const sortedTasks = getSortedHierarchicalTasks(currentTasks);
 
-  // Helper: separate and sort tasks hierarchically
-  const getSortedTasks = (tasks: Task[]) => {
-    const parents = tasks.filter(t => !t.parentId);
-    const subtasks = tasks.filter(t => t.parentId);
-
-    parents.sort((a, b) => a.orderIndex - b.orderIndex);
-
-    const sortedList: (Task & { stt: string; isParent: boolean })[] = [];
-
-    parents.forEach((parent, parentIdx) => {
-      const parentSTT = String(parentIdx + 1);
-      sortedList.push({
-        ...parent,
-        stt: parentSTT,
-        isParent: true,
-      });
-
-      const children = subtasks.filter(s => s.parentId === parent.id);
-      children.sort((a, b) => a.orderIndex - b.orderIndex);
-
-      children.forEach((child, childIdx) => {
-        const childSTT = `${parentSTT}.${childIdx + 1}`;
-        sortedList.push({
-          ...child,
-          stt: childSTT,
-          isParent: false,
-        });
-      });
-    });
-
-    return sortedList;
+  // Helper to determine if a task is visible given collapsed parents
+  const isTaskVisible = (task: HierarchicalTask, allTasks: MaintenanceTask[]) => {
+    let curr = task.parentId;
+    while (curr) {
+      if (collapsedParents[curr]) return false;
+      const parent = allTasks.find(t => t.id === curr);
+      curr = parent ? parent.parentId : null;
+    }
+    return true;
   };
-
-  const sortedTasks = getSortedTasks(currentTasks);
 
   // Helper to add months to a YYYY-MM-DD date string
   const addMonths = (dateStr: string, months: number): string => {
@@ -460,13 +432,12 @@ export default function MaintenanceDetailPage() {
     });
   };
 
-  // Open modal for adding task
-  const handleAddTaskOpen = () => {
+  // Open modal for adding task (optional defaultParentId for nesting)
+  const handleAddTaskOpen = (defaultParentId: string = "") => {
     setEditingTask(null);
     setForm({
       name: "",
-      isSubtask: false,
-      parentId: "",
+      parentId: defaultParentId || "",
       assignees: [],
       department: "",
       startDate: getCycleStartDate(activeCycle),
@@ -482,7 +453,6 @@ export default function MaintenanceDetailPage() {
     setEditingTask(task);
     setForm({
       name: task.name,
-      isSubtask: !!task.parentId,
       parentId: task.parentId || "",
       assignees: task.assignees || [],
       department: task.department || "",
@@ -515,8 +485,8 @@ export default function MaintenanceDetailPage() {
         if (taskIndex !== -1) {
           currentList[taskIndex] = {
             ...editingTask,
-            name: form.name,
-            parentId: form.isSubtask ? form.parentId : null,
+            name: form.name.trim(),
+            parentId: form.parentId || null,
             assignees: form.assignees || [],
             department: form.department,
             startDate: form.startDate,
@@ -529,8 +499,8 @@ export default function MaintenanceDetailPage() {
         // Add new flow
         const newTask: Task = {
           id: crypto.randomUUID(),
-          parentId: form.isSubtask ? form.parentId : null,
-          name: form.name,
+          parentId: form.parentId || null,
+          name: form.name.trim(),
           assignees: form.assignees || [],
           department: form.department,
           startDate: form.startDate,
@@ -554,16 +524,28 @@ export default function MaintenanceDetailPage() {
     }
   };
 
-  // Delete task
+  // Delete task and all its descendants recursively
   const handleDeleteTask = async (taskId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa công việc này không?")) return;
+    if (!confirm("Bạn có chắc chắn muốn xóa công việc này không? Tất cả công việc con trực thuộc cũng sẽ bị xóa.")) return;
 
     try {
       const updatedCycleTasks = { ...cycleTasks };
       let currentList = updatedCycleTasks[activeCycle] ? [...updatedCycleTasks[activeCycle]] : [];
 
-      // If it's a parent, remove all its subtasks too
-      currentList = currentList.filter(t => t.id !== taskId && t.parentId !== taskId);
+      // Collect all descendant ids
+      const toDelete = new Set<string>([taskId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const t of currentList) {
+          if (t.parentId && toDelete.has(t.parentId) && !toDelete.has(t.id)) {
+            toDelete.add(t.id);
+            changed = true;
+          }
+        }
+      }
+
+      currentList = currentList.filter(t => !toDelete.has(t.id));
 
       updatedCycleTasks[activeCycle] = currentList;
       setCycleTasks(updatedCycleTasks);
@@ -571,6 +553,31 @@ export default function MaintenanceDetailPage() {
       await saveTasksToDB(updatedCycleTasks);
     } catch (err) {
       console.error("Error deleting task:", err);
+    }
+  };
+
+  // Apply default template to active cycle
+  const handleApplyTemplate = async () => {
+    if (currentTasks.length > 0) {
+      const confirmOverwrite = confirm(
+        `Lần bảo trì này đang có ${currentTasks.length} công việc. Bạn có muốn nạp mẫu kế hoạch bảo trì chuẩn như hình (24 công việc, 3 cấp) không?`
+      );
+      if (!confirmOverwrite) return;
+    }
+
+    try {
+      const cycleStartDate = getCycleStartDate(activeCycle);
+      const templateTasks = generateDefaultTasks(cycleStartDate);
+      const updatedCycleTasks = {
+        ...cycleTasks,
+        [activeCycle]: templateTasks,
+      };
+      setCycleTasks(updatedCycleTasks);
+      await saveTasksToDB(updatedCycleTasks);
+      alert(`Đã áp dụng mẫu kế hoạch bảo trì thành công (${templateTasks.length} công việc)!`);
+    } catch (err) {
+      console.error("Error applying template:", err);
+      alert("Lỗi khi áp dụng mẫu template.");
     }
   };
 
@@ -685,50 +692,88 @@ export default function MaintenanceDetailPage() {
     }
   };
 
-  // Trigger file dialog
-  const triggerImportCSV = () => {
+  // Trigger file dialog for Excel/CSV import
+  const triggerImportFile = () => {
     fileInputRef.current?.click();
   };
 
-  // Import CSV handler
-  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Helper to normalize dates for import
+  const normalizeImportDate = (str: string): string => {
+    if (!str) return "";
+    const clean = str.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(clean)) return clean.substring(0, 10);
+    const parts = clean.split(/[\/\-]/);
+    if (parts.length === 3 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+    }
+    const parsed = new Date(clean);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().substring(0, 10);
+    return clean;
+  };
+
+  // Import file handler (supports .xlsx, .xls, .csv via parse-file API)
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-      const lines = text.split("\n");
-      const importedTasks: Task[] = [];
-      const parentIdMap: { [key: string]: string } = {}; // maps CSV STT to new UUIDs
+      const res = await fetch("/api/system/parse-file", {
+        method: "POST",
+        body: formData,
+      });
 
-      let orderIdx = 0;
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể đọc dữ liệu từ tệp.");
+      }
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+      const rows: Record<string, any>[] = data.rows || [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error("Tệp không chứa dữ liệu hoặc bảng tính bị trống.");
+      }
 
-        // Custom parser to handle quotes & commas
-        const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(",");
-        const cleanFields = matches.map(f => f.replace(/^"|"$/g, "").trim());
+      const getCell = (row: Record<string, any>, candidateKeys: string[]) => {
+        for (const k of Object.keys(row)) {
+          const cleanK = k.toLowerCase().trim();
+          for (const cand of candidateKeys) {
+            if (cleanK === cand || cleanK.includes(cand)) {
+              const val = row[k];
+              return val !== undefined && val !== null ? String(val).trim() : "";
+            }
+          }
+        }
+        return "";
+      };
 
-        if (cleanFields.length < 8) continue;
+      const importedTasks: MaintenanceTask[] = [];
+      const sttToIdMap: Record<string, string> = {};
 
-        const [stt, name, assigneesStr, department, startDate, endDate, status, notes] = cleanFields;
+      rows.forEach((row, idx) => {
+        const name = getCell(row, ["công việc", "tên công việc", "nội dung", "hạng mục", "task", "title", "name", "cong viec"]);
+        if (!name) return; // Skip empty row
 
-        const isSub = stt.includes(".");
-        const assignees = assigneesStr ? assigneesStr.split(";").map(s => s.trim()).filter(Boolean) : [];
+        const rawStt = getCell(row, ["stt", "no", "số tt", "số thứ tự", "index"]);
+        const cleanStt = rawStt.replace(/\.+$/, "").trim();
+        const assigneesStr = getCell(row, ["người thực hiện", "phụ trách", "nhân sự", "assignee", "owner", "nguoi thuc hien"]);
+        const assignees = assigneesStr ? assigneesStr.split(/[;,]/).map(s => s.trim()).filter(Boolean) : [];
+        const startDate = normalizeImportDate(getCell(row, ["bắt đầu (dự kiến)", "bắt đầu", "ngày bắt đầu", "start date", "start", "bat dau"]));
+        const endDate = normalizeImportDate(getCell(row, ["kết thúc (dự kiến)", "kết thúc", "hoàn thành", "ngày kết thúc", "hạn chót", "end date", "end", "ket thuc"]));
+        const status = getCell(row, ["tình trạng", "trạng thái", "status", "tinh trang"]);
+        const notes = getCell(row, ["ghi chú", "notes", "note", "comment", "ghi chu"]);
 
         const newId = crypto.randomUUID();
-
         let resolvedParentId: string | null = null;
-        if (isSub) {
-          const parentSTT = stt.split(".")[0];
-          resolvedParentId = parentIdMap[parentSTT] || null;
-        } else {
-          parentIdMap[stt] = newId;
+
+        if (cleanStt.includes(".")) {
+          const parentStt = cleanStt.substring(0, cleanStt.lastIndexOf("."));
+          resolvedParentId = sttToIdMap[parentStt] || null;
+        }
+
+        if (cleanStt) {
+          sttToIdMap[cleanStt] = newId;
         }
 
         importedTasks.push({
@@ -736,41 +781,96 @@ export default function MaintenanceDetailPage() {
           parentId: resolvedParentId,
           name,
           assignees,
-          department,
+          department: "",
           startDate,
           endDate,
-          status: status || "Chưa bắt đầu",
+          status: status || "",
           notes,
-          orderIndex: orderIdx++,
+          orderIndex: idx,
         });
+      });
+
+      if (importedTasks.length === 0) {
+        throw new Error("Không tìm thấy dòng công việc hợp lệ nào trong tệp.");
       }
 
-      if (importedTasks.length > 0) {
-        const updatedCycleTasks = {
-          ...cycleTasks,
-          [activeCycle]: importedTasks,
-        };
-        setCycleTasks(updatedCycleTasks);
-        await saveTasksToDB(updatedCycleTasks);
-        alert(`Đã nhập thành công ${importedTasks.length} công việc từ tệp CSV!`);
-      } else {
-        alert("Không tìm thấy dữ liệu hợp lệ trong file CSV!");
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = ""; // reset file input
+      const updatedCycleTasks = {
+        ...cycleTasks,
+        [activeCycle]: importedTasks,
+      };
+      setCycleTasks(updatedCycleTasks);
+      await saveTasksToDB(updatedCycleTasks);
+      alert(`Đã nhập thành công ${importedTasks.length} công việc từ tệp!`);
+    } catch (err: any) {
+      console.error("Import file error:", err);
+      alert("Lỗi khi nhập tệp: " + (err?.message || "Không xác định"));
+    } finally {
+      e.target.value = "";
+    }
   };
 
-  // Export CSV handler
+  // Export Excel handler (matching user's template design)
+  const handleExportExcel = async (isTemplate = false) => {
+    try {
+      setIsDataMenuOpen(false);
+      const res = await fetch("/api/maintenance/export-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planTitle: plan?.title || "Kế hoạch bảo trì",
+          cycleNum: activeCycle,
+          customerName: plan?.customer?.name || plan?.customer_name || "",
+          contractNo: plan?.contract_no || "",
+          startDate: getCycleStartDate(activeCycle),
+          tasks: isTemplate ? [] : currentTasks,
+          isTemplate,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Không thể xuất file Excel.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = isTemplate 
+        ? "Mau_Ke_Hoach_Bao_Tri.xlsx" 
+        : `Ke_Hoach_Bao_Tri_Ky_${activeCycle}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("Export Excel error:", err);
+      alert(err.message || "Lỗi khi xuất file Excel");
+    }
+  };
+
+  // Export CSV handler matching the 7 columns from the template
   const handleExportCSV = () => {
-    const sorted = getSortedTasks(currentTasks);
-    const headers = ["STT", "Công việc", "Người thực hiện", "Bộ phận", "Bắt đầu", "Hoàn thành", "Tình trạng", "Ghi chú"];
+    setIsDataMenuOpen(false);
+    const sorted = getSortedHierarchicalTasks(currentTasks);
+    const headers = ["STT", "Công việc", "Người thực hiện", "Bắt đầu (dự kiến)", "Kết thúc (dự kiến)", "Tình trạng", "Ghi chú"];
     const csvRows = [headers.join(",")];
 
     if (sorted.length === 0) {
       // Export template
-      csvRows.push("1,Tên công việc chính mẫu,,Bộ phận mẫu,2026-07-07,2026-07-08,Chưa bắt đầu,Ghi chú mẫu");
-      csvRows.push("1.1,Tên công việc con mẫu,Tên nhân viên mẫu,Bộ phận mẫu,2026-07-07,2026-07-08,Chưa bắt đầu,Ghi chú mẫu");
+      const templateTasks = getSortedHierarchicalTasks(generateDefaultTasks());
+      templateTasks.forEach(t => {
+        const row = [
+          t.stt,
+          `"${t.name.replace(/"/g, '""')}"`,
+          `""`,
+          t.startDate || "",
+          t.endDate || "",
+          t.status || "",
+          `"${(t.notes || "").replace(/"/g, '""')}"`
+        ];
+        csvRows.push(row.join(","));
+      });
     } else {
       sorted.forEach(t => {
         const assigneesStr = t.assignees ? t.assignees.join(";") : "";
@@ -778,7 +878,6 @@ export default function MaintenanceDetailPage() {
           t.stt,
           `"${t.name.replace(/"/g, '""')}"`,
           `"${assigneesStr.replace(/"/g, '""')}"`,
-          `"${t.department.replace(/"/g, '""')}"`,
           t.startDate || "",
           t.endDate || "",
           t.status || "",
@@ -793,62 +892,64 @@ export default function MaintenanceDetailPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", sorted.length === 0 ? "Mau_KeHoach_BaoTri.csv" : `BaoTri_Lan_${activeCycle}_PlanID_${planId}.csv`);
+    link.setAttribute("download", sorted.length === 0 ? "Mau_Ke_Hoach_Bao_Tri.csv" : `Bao_Tri_Ky_${activeCycle}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Status badges colors helper matching screenshot
+  // Status badges colors helper matching template
   const renderTaskStatusBadge = (status: string) => {
-    const norm = (status || "Chưa bắt đầu").trim();
-    if (norm === "Hoàn thành") {
+    const norm = (status || "").trim().toLowerCase();
+    if (norm === "hoàn thành") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-3xs whitespace-nowrap">
-          <CheckCircle2 size={13} className="text-emerald-500 fill-emerald-100 shrink-0" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+          <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
           <span>HOÀN THÀNH</span>
         </span>
       );
     }
-    if (norm === "Đang thực hiện") {
+    if (norm === "đang thực hiện") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200 shadow-3xs whitespace-nowrap">
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex items-center justify-center text-[7px] text-white shrink-0">●</span>
-          <span>ĐANG THỰC HIỆN</span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse shrink-0" />
+          <span>Đang Thực Hiện</span>
         </span>
       );
     }
-    if (norm === "Tạm dừng") {
+    if (norm === "đang kế hoạch" || norm === "kế hoạch") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 shadow-3xs whitespace-nowrap">
-          <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[8px] font-bold shrink-0">⏸</span>
-          <span>TẠM DỪNG</span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200 whitespace-nowrap">
+          <Clock size={12} className="text-sky-600 shrink-0" />
+          <span>Đang Kế Hoạch</span>
         </span>
       );
+    }
+    if (norm === "tạm dừng") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+          <PauseCircle size={12} className="text-amber-600 shrink-0" />
+          <span>Tạm dừng</span>
+        </span>
+      );
+    }
+    if (norm === "chưa bắt đầu") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-50 text-slate-500 border border-slate-200 whitespace-nowrap">
+          <CircleDot size={12} className="text-slate-400 shrink-0" />
+          <span>Chưa bắt đầu</span>
+        </span>
+      );
+    }
+    if (!status) {
+      return <span className="text-slate-300 text-xs">—</span>;
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200 shadow-3xs whitespace-nowrap">
-        <span className="w-3.5 h-3.5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[9px] font-black shrink-0">!</span>
-        <span>CHƯA BẮT ĐẦU</span>
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+        {status}
       </span>
     );
-  };
-
-  // Status badges colors helper
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Hoàn thành":
-        return "bg-green-50 text-green-700 border border-green-200";
-      case "Đang thực hiện":
-        return "bg-blue-50 text-blue-700 border border-blue-200";
-      case "Tạm dừng":
-        return "bg-amber-50 text-amber-700 border border-amber-200";
-      case "Chưa bắt đầu":
-        return "bg-red-50 text-red-700 border border-red-200";
-      default:
-        return "bg-slate-50 text-slate-500 border border-slate-200";
-    }
   };
 
   const showAssigneeAndStatusFields = 
@@ -1021,7 +1122,7 @@ export default function MaintenanceDetailPage() {
                   <div className="relative">
                     <button 
                       onClick={() => setIsDataMenuOpen(!isDataMenuOpen)}
-                      className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 shadow-xs transition cursor-pointer"
+                      className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-2 shadow-xs transition cursor-pointer"
                     >
                       <Calendar size={14} className="text-blue-600" />
                       <span className="uppercase text-[11px] tracking-wider">THAO TÁC DỮ LIỆU</span>
@@ -1029,57 +1130,88 @@ export default function MaintenanceDetailPage() {
                     </button>
 
                     {isDataMenuOpen && (
-                      <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 text-xs">
+                      <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-1 text-xs">
                         <button
-                          onClick={() => { setIsDataMenuOpen(false); handleAddTaskOpen(); }}
+                          onClick={() => { setIsDataMenuOpen(false); handleApplyTemplate(); }}
+                          className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2 text-blue-700 font-semibold cursor-pointer border-b border-slate-100"
+                        >
+                          <Sparkles size={14} className="text-blue-600 shrink-0" />
+                          <span>Áp dụng template chuẩn</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsDataMenuOpen(false); handleAddTaskOpen(""); }}
                           className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                         >
-                          <Plus size={14} className="text-blue-600" />
+                          <Plus size={14} className="text-blue-600 shrink-0" />
                           <span>Thêm công việc</span>
                         </button>
                         <button
-                          onClick={() => { setIsDataMenuOpen(false); handleExportCSV(); }}
+                          onClick={() => handleExportExcel(false)}
                           className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                         >
-                          <Download size={14} className="text-slate-500" />
-                          <span>Xuất file CSV</span>
+                          <FileSpreadsheet size={14} className="text-emerald-600 shrink-0" />
+                          <span>Xuất file Excel (.xlsx)</span>
                         </button>
                         <button
-                          onClick={() => { setIsDataMenuOpen(false); triggerImportCSV(); }}
+                          onClick={() => handleExportExcel(true)}
                           className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                         >
-                          <Upload size={14} className="text-slate-500" />
-                          <span>Nhập từ CSV</span>
+                          <Download size={14} className="text-slate-500 shrink-0" />
+                          <span>Tải file mẫu Excel (.xlsx)</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsDataMenuOpen(false); triggerImportFile(); }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
+                        >
+                          <Upload size={14} className="text-slate-500 shrink-0" />
+                          <span>Nhập từ Excel / CSV</span>
+                        </button>
+                        <button
+                          onClick={handleExportCSV}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer border-t border-slate-100"
+                        >
+                          <Download size={14} className="text-slate-400 shrink-0" />
+                          <span>Xuất file CSV (.csv)</span>
                         </button>
                       </div>
                     )}
                   </div>
 
+                  {/* Áp dụng mẫu template button */}
+                  <button 
+                    onClick={handleApplyTemplate}
+                    title="Nạp mẫu kế hoạch bảo trì kiểm tra định kỳ chuẩn theo mẫu"
+                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                  >
+                    <Sparkles size={14} className="text-indigo-600" />
+                    <span>Áp dụng template mẫu</span>
+                  </button>
+
                   {/* Thêm công việc button */}
                   <button 
-                    onClick={handleAddTaskOpen}
+                    onClick={() => handleAddTaskOpen("")}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                   >
                     <Plus size={15} />
                     <span>Thêm công việc</span>
                   </button>
 
-                  {/* Export button */}
+                  {/* Export Excel button */}
                   <button 
-                    onClick={handleExportCSV}
-                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    onClick={() => handleExportExcel(false)}
+                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                   >
-                    <Download size={14} className="text-slate-500" />
-                    <span>Export</span>
+                    <FileSpreadsheet size={14} className="text-emerald-600" />
+                    <span>Xuất Excel</span>
                   </button>
 
                   {/* Import button */}
                   <button 
-                    onClick={triggerImportCSV}
-                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    onClick={triggerImportFile}
+                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                   >
                     <Upload size={14} className="text-slate-500" />
-                    <span>Import</span>
+                    <span>Nhập Excel/CSV</span>
                   </button>
                 </>
               ) : (
@@ -1111,7 +1243,7 @@ export default function MaintenanceDetailPage() {
             </div>
           </div>
 
-          {/* Tabs switcher matching screenshot */}
+          {/* Tabs switcher */}
           <div className="flex border-b border-slate-200 shrink-0 gap-8">
             <button
               onClick={() => setActiveTab("tasks")}
@@ -1144,9 +1276,9 @@ export default function MaintenanceDetailPage() {
             </div>
           ) : activeTab === "tasks" ? (
             sortedTasks.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-12 text-center bg-white shadow-3xs">
-                <div className="w-48 h-36 flex items-center justify-center relative mb-4">
-                  <svg width="150" height="120" viewBox="0 0 150 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
+              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-10 text-center bg-white shadow-3xs">
+                <div className="w-48 h-32 flex items-center justify-center relative mb-4">
+                  <svg width="140" height="110" viewBox="0 0 150 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
                     <path d="M120 15H30C21.7 15 15 21.7 15 30V90C15 98.3 21.7 105 30 105H120C128.3 105 135 98.3 135 90V30C135 21.7 128.3 15 120 15Z" fill="#F1F5F9"/>
                     <rect x="35" y="35" width="80" height="8" rx="4" fill="#CBD5E1"/>
                     <rect x="35" y="55" width="60" height="8" rx="4" fill="#CBD5E1"/>
@@ -1156,207 +1288,203 @@ export default function MaintenanceDetailPage() {
                   </svg>
                 </div>
                 <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG LẦN BẢO TRÌ NÀY</p>
-                <p className="text-xs text-slate-400 mt-1 mb-6">Bắt đầu bằng cách thêm mới kế hoạch bảo trì.</p>
+                <p className="text-xs text-slate-400 mt-1 mb-5">Bạn có thể nạp mẫu kế hoạch bảo trì chuẩn hoặc thêm thủ công.</p>
                 
-                <button 
-                  onClick={handleAddTaskOpen}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
-                >
-                  + Thêm công việc đầu tiên
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button 
+                    onClick={handleApplyTemplate}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md flex items-center gap-2"
+                  >
+                    <Sparkles size={15} />
+                    <span>Áp dụng mẫu kế hoạch chuẩn (như hình)</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAddTaskOpen("")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md flex items-center gap-1.5"
+                  >
+                    <Plus size={15} />
+                    <span>Thêm công việc mới</span>
+                  </button>
+                  <button 
+                    onClick={triggerImportFile}
+                    className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs flex items-center gap-1.5"
+                  >
+                    <Upload size={14} className="text-slate-500" />
+                    <span>Nhập file Excel/CSV</span>
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+              <div className="flex-1 flex flex-col border border-slate-300 rounded-xl overflow-hidden shadow-xs bg-white">
+                {/* Visual Header Banners Matching Exact Screenshot */}
+                <div className="bg-[#1565C0] text-white font-bold text-sm px-4 py-2.5 tracking-wide flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-sm">
+                    <span>Kế Hoạch</span>
+                  </div>
+                  <div className="text-[11px] font-medium text-blue-100">
+                    {plan?.customer?.name || plan?.customer_name || ""}
+                  </div>
+                </div>
+
+                <div className="bg-[#E2E8F0] text-slate-800 font-bold text-xs px-4 py-2 border-b border-slate-300 flex items-center justify-between">
+                  <span>Kiểm tra định kỳ - Kỳ {activeCycle}</span>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Bắt đầu: {formatDateVN(getCycleStartDate(activeCycle))}
+                  </span>
+                </div>
+
+                <div className="bg-[#1565C0] text-white font-bold text-xs px-4 py-2 text-center uppercase tracking-wider">
+                  <span>Công việc thực hiện</span>
+                </div>
+
                 <div className="flex-1 overflow-auto custom-scrollbar">
-                  <table className="w-full text-sm border-collapse text-left">
-                    <thead className="bg-[#1e293b] text-xs text-white font-semibold sticky top-0 z-10">
+                  <table className="w-full text-xs border-collapse text-left">
+                    <thead className="bg-[#374151] text-white font-semibold sticky top-0 z-10">
                       <tr>
-                        <th className="px-3 py-3.5 w-16 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <span>STT</span>
-                            <ArrowUpDown size={11} className="opacity-60" />
-                          </div>
+                        <th className="px-3 py-2.5 w-16 text-center border-r border-slate-600">
+                          <span>STT</span>
                         </th>
-                        <th className="px-4 py-3.5">
-                          <div className="flex items-center gap-1">
-                            <span>Công việc</span>
-                            <ArrowUpDown size={11} className="opacity-60" />
-                          </div>
+                        <th className="px-4 py-2.5 border-r border-slate-600">
+                          <span>Công việc</span>
                         </th>
-                        <th className="px-4 py-3.5 w-48">
-                          <div className="flex items-center gap-1">
-                            <span>Người thực hiện</span>
-                            <ArrowUpDown size={11} className="opacity-60" />
-                          </div>
+                        <th className="px-4 py-2.5 w-44 border-r border-slate-600">
+                          <span>Người thực hiện</span>
                         </th>
-                        <th className="px-4 py-3.5 w-24">Bộ phận</th>
-                        <th className="px-4 py-3.5 w-28">Bắt đầu</th>
-                        <th className="px-4 py-3.5 w-32">Hoàn thành</th>
-                        <th className="px-4 py-3.5 w-44">Tình trạng</th>
-                        <th className="px-4 py-3.5 w-28">
-                          <div className="flex items-center gap-1">
-                            <span>Ghi chú</span>
-                            <ArrowUpDown size={11} className="opacity-60" />
-                          </div>
+                        <th className="px-4 py-2.5 w-32 text-center border-r border-slate-600">
+                          <span>Bắt đầu (dự kiến)</span>
                         </th>
-                        <th className="px-4 py-3.5 w-20 text-center">Thao tác</th>
+                        <th className="px-4 py-2.5 w-32 text-center border-r border-slate-600">
+                          <span>Kết thúc (dự kiến)</span>
+                        </th>
+                        <th className="px-4 py-2.5 w-36 text-center border-r border-slate-600">
+                          <span>Tình trạng</span>
+                        </th>
+                        <th className="px-4 py-2.5 w-36 border-r border-slate-600">
+                          <span>Ghi chú</span>
+                        </th>
+                        <th className="px-3 py-2.5 w-24 text-center">
+                          <span>Thao tác</span>
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                       {sortedTasks.map((t) => {
-                        if (t.isParent) {
-                          const progress = getParentProgress(t.id, currentTasks);
-                          const isCollapsed = collapsedParents[t.id];
-
-                          if (progress.hasSubtasks) {
-                            return (
-                              <tr key={t.id} className="bg-slate-50/70 hover:bg-slate-100/70 transition border-b border-slate-200/80">
-                                <td className="px-3 py-3.5 text-center">
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button 
-                                      onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
-                                      className="p-0.5 hover:bg-slate-200 rounded text-slate-600 transition cursor-pointer"
-                                      title={isCollapsed ? "Mở rộng" : "Thu gọn"}
-                                    >
-                                      {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                                    </button>
-                                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-3xs">
-                                      {t.stt}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3.5 font-bold text-slate-900 text-[13px] tracking-tight">
-                                  {t.name}
-                                </td>
-                                <td colSpan={7} className="px-4 py-3.5 text-right">
-                                  <div className="flex items-center justify-end gap-2.5 pr-4">
-                                    <div className="w-32 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                      <div 
-                                        className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                                        style={{ width: `${progress.percent}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-xs font-bold text-blue-600 min-w-[32px]">{progress.percent}%</span>
-                                    <span className="text-[11px] font-medium text-slate-400">({progress.completed}/{progress.total})</span>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          } else {
-                            // Single task parent with no subtasks (e.g. Row 3 in screenshot)
-                            return (
-                              <tr key={t.id} className="bg-white hover:bg-slate-50/50 transition border-b border-slate-100">
-                                <td className="px-3 py-3.5 text-center font-medium text-slate-700 text-xs">
-                                  {t.stt}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-800 text-xs font-normal">
-                                  {t.name}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-800 font-medium text-xs">
-                                  {t.assignees && t.assignees.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {t.assignees.map((a, aIdx) => (
-                                        <span key={aIdx} className="text-slate-800">
-                                          {a}{aIdx < t.assignees.length - 1 ? "," : ""}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-400">—</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-400 text-xs">
-                                  {t.department || "—"}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">
-                                  {formatVNStart(t.startDate)}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">
-                                  {formatVNEnd(t.endDate)}
-                                </td>
-                                <td className="px-4 py-3.5">
-                                  {renderTaskStatusBadge(t.status)}
-                                </td>
-                                <td className="px-4 py-3.5 text-slate-400 text-xs">{t.notes || "—"}</td>
-                                <td className="px-4 py-3.5 text-center">
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button 
-                                      onClick={() => handleEditTaskOpen(t)}
-                                      className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                                      title="Sửa công việc"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteTask(t.id)}
-                                      className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
-                                      title="Xóa công việc"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
-                        } else {
-                          // Child subtask row
-                          if (collapsedParents[t.parentId!]) {
-                            return null;
-                          }
-                          return (
-                            <tr key={t.id} className="hover:bg-slate-50/60 transition border-b border-slate-100">
-                              <td className="px-3 py-3 text-center text-slate-500 font-medium text-xs">
-                                {t.stt}
-                              </td>
-                              <td className="px-4 py-3 text-slate-700 text-xs font-normal pl-4">
-                                {t.name}
-                              </td>
-                              <td className="px-4 py-3 text-blue-600 font-medium text-xs">
-                                {t.assignees && t.assignees.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {t.assignees.map((a, aIdx) => (
-                                      <span key={aIdx} className="hover:underline cursor-pointer">
-                                        {a}{aIdx < t.assignees.length - 1 ? "," : ""}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-slate-400 text-xs">{t.department || "—"}</td>
-                              <td className="px-4 py-3 text-slate-600 font-medium text-xs">
-                                {formatVNStart(t.startDate)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600 font-medium text-xs">
-                                {formatVNEnd(t.endDate)}
-                              </td>
-                              <td className="px-4 py-3">
-                                {renderTaskStatusBadge(t.status)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-400 text-xs">{t.notes || "—"}</td>
-                              <td className="px-4 py-3 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button 
-                                    onClick={() => handleEditTaskOpen(t)}
-                                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                                    title="Sửa công việc con"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteTask(t.id)}
-                                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
-                                    title="Xóa công việc con"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
+                        if (!isTaskVisible(t, currentTasks)) {
+                          return null;
                         }
+
+                        const isMainHeader = t.level === 1;
+                        const isSubHeader = t.hasChildren && t.level > 1;
+                        const isBold = isMainHeader || isSubHeader;
+                        const isCollapsed = collapsedParents[t.id];
+
+                        return (
+                          <tr 
+                            key={t.id} 
+                            className={`transition border-b border-slate-200 ${
+                              isMainHeader 
+                                ? "bg-slate-50/90 hover:bg-slate-100/90" 
+                                : isSubHeader 
+                                ? "bg-slate-50/40 hover:bg-slate-100/60" 
+                                : "bg-white hover:bg-slate-50/60"
+                            }`}
+                          >
+                            {/* STT */}
+                            <td className="px-2 py-2.5 text-center border-r border-slate-200 align-middle">
+                              <div className="flex items-center justify-center gap-1">
+                                {t.hasChildren && (
+                                  <button
+                                    onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                    className="p-0.5 hover:bg-slate-200 rounded text-slate-500 cursor-pointer"
+                                    title={isCollapsed ? "Mở rộng" : "Thu gọn"}
+                                  >
+                                    {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                                  </button>
+                                )}
+                                <span className={`${isBold ? "font-bold text-slate-900" : "font-normal text-slate-700"}`}>
+                                  {t.stt}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Công việc */}
+                            <td 
+                              className={`py-2.5 pr-4 border-r border-slate-200 align-middle ${
+                                t.level === 1 
+                                  ? "pl-3 font-bold text-slate-900 text-[12.5px]" 
+                                  : t.level === 2 
+                                  ? `pl-7 text-[12px] ${isSubHeader ? "font-bold text-slate-800" : "font-normal text-slate-800"}` 
+                                  : "pl-11 text-[11.5px] font-normal text-slate-700"
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span>{t.name}</span>
+                              </div>
+                            </td>
+
+                            {/* Người thực hiện */}
+                            <td className="px-3 py-2.5 text-slate-800 border-r border-slate-200 align-middle">
+                              {t.assignees && t.assignees.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {t.assignees.map((a, aIdx) => (
+                                    <span key={aIdx} className="text-slate-800">
+                                      {a}{aIdx < t.assignees.length - 1 ? ", " : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+
+                            {/* Bắt đầu (dự kiến) */}
+                            <td className="px-2 py-2.5 text-center text-slate-600 border-r border-slate-200 align-middle whitespace-nowrap">
+                              {t.startDate ? formatDateVN(t.startDate) : "—"}
+                            </td>
+
+                            {/* Kết thúc (dự kiến) */}
+                            <td className="px-2 py-2.5 text-center text-slate-600 border-r border-slate-200 align-middle whitespace-nowrap">
+                              {t.endDate ? formatDateVN(t.endDate) : "—"}
+                            </td>
+
+                            {/* Tình trạng */}
+                            <td className="px-2 py-2.5 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                              {renderTaskStatusBadge(t.status)}
+                            </td>
+
+                            {/* Ghi chú */}
+                            <td className="px-3 py-2.5 text-slate-500 border-r border-slate-200 align-middle">
+                              {t.notes || "—"}
+                            </td>
+
+                            {/* Thao tác */}
+                            <td className="px-2 py-2.5 text-center align-middle whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleAddTaskOpen(t.id)}
+                                  className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                                  title="Thêm công việc con"
+                                >
+                                  <Plus size={13} />
+                                </button>
+                                <button 
+                                  onClick={() => handleEditTaskOpen(t)}
+                                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                                  title="Sửa"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteTask(t.id)}
+                                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
+                                  title="Xóa"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
                       })}
                     </tbody>
                   </table>
@@ -1370,32 +1498,38 @@ export default function MaintenanceDetailPage() {
                   const currentLeafTasks = currentTasks.filter(t => !currentParentIdsWithChildren.has(t.id));
                   const totalTasksCount = currentTasks.length;
                   const completedTasksCount = currentLeafTasks.filter(t => t.status === "Hoàn thành").length;
-                  const inProgressTasksCount = currentLeafTasks.filter(t => t.status === "Đang thực hiện").length;
+                  const inProgressTasksCount = currentLeafTasks.filter(t => t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện").length;
+                  const plannedTasksCount = currentLeafTasks.filter(t => t.status === "Đang Kế Hoạch" || t.status === "Đang kế hoạch").length;
                   const notStartedTasksCount = currentLeafTasks.filter(t => t.status === "Chưa bắt đầu" || !t.status).length;
 
                   return (
-                    <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 font-medium">
+                    <div className="bg-slate-50 px-5 py-2.5 border-t border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 font-medium">
                       <div className="flex items-center gap-2">
                         <Info size={14} className="text-blue-500 shrink-0" />
                         <span>
-                          Tổng cộng: <strong className="text-slate-700">{totalTasksCount} công việc</strong>
-                          &nbsp;|&nbsp; Đã hoàn thành: <strong className="text-slate-700">{completedTasksCount}</strong>
-                          &nbsp;|&nbsp; Đang thực hiện: <strong className="text-slate-700">{inProgressTasksCount}</strong>
-                          &nbsp;|&nbsp; Chưa bắt đầu: <strong className="text-slate-700">{notStartedTasksCount}</strong>
+                          Tổng: <strong className="text-slate-700">{totalTasksCount} công việc</strong>
+                          &nbsp;|&nbsp; Hoàn thành: <strong className="text-emerald-600">{completedTasksCount}</strong>
+                          &nbsp;|&nbsp; Đang làm: <strong className="text-blue-600">{inProgressTasksCount}</strong>
+                          &nbsp;|&nbsp; Kế hoạch: <strong className="text-sky-600">{plannedTasksCount}</strong>
+                          &nbsp;|&nbsp; Chưa bắt đầu: <strong className="text-slate-600">{notStartedTasksCount}</strong>
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-4 text-xs font-medium">
+                      <div className="flex items-center gap-3 text-[11px] font-medium">
                         <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
                           <span className="text-slate-600">Hoàn thành</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
                           <span className="text-slate-600">Đang thực hiện</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                          <span className="w-2 h-2 rounded-full bg-sky-500" />
+                          <span className="text-slate-600">Đang kế hoạch</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-slate-400" />
                           <span className="text-slate-600">Chưa bắt đầu</span>
                         </div>
                       </div>
@@ -1488,18 +1622,19 @@ export default function MaintenanceDetailPage() {
         </section>
       </div>
 
+      {/* Hidden file input for Excel / CSV import */}
       <input 
         type="file" 
         ref={fileInputRef} 
-        onChange={handleImportCSV} 
-        accept=".csv" 
+        onChange={handleImportFile} 
+        accept=".xlsx,.xls,.csv" 
         className="hidden" 
       />
 
-      {/* Task Creation/Editing Modal */}
+      {/* Task Creation/Editing Modal with Fields matching screenshot */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-fade-in max-h-[85vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50 shrink-0">
               <h2 className="text-lg font-bold text-slate-900">
                 {editingTask ? "Cập nhật công việc" : "Thêm công việc mới"}
@@ -1525,82 +1660,51 @@ export default function MaintenanceDetailPage() {
                 />
               </div>
 
-              {/* Task Level Selection */}
+              {/* Parent Selector / Hierarchy Level */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Loại công việc</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-1.5 text-sm font-medium cursor-pointer text-slate-700">
-                    <input
-                      type="radio"
-                      checked={!form.isSubtask}
-                      onChange={() => setForm(f => ({ ...f, isSubtask: false, parentId: "" }))}
-                      className="cursor-pointer accent-blue-600"
-                    />
-                    Công việc chính
-                  </label>
-                  <label className="flex items-center gap-1.5 text-sm font-medium cursor-pointer text-slate-700">
-                    <input
-                      type="radio"
-                      checked={form.isSubtask}
-                      onChange={() => setForm(f => ({ ...f, isSubtask: true }))}
-                      className="cursor-pointer accent-blue-600"
-                    />
-                    Công việc con
-                  </label>
-                </div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Thuộc công việc / Phân cấp
+                </label>
+                <select
+                  value={form.parentId}
+                  onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                >
+                  <option value="">-- Không có (Là công việc chính - Cấp 1) --</option>
+                  {sortedTasks
+                    .filter(t => !editingTask || t.id !== editingTask.id)
+                    .map(p => (
+                      <option key={p.id} value={p.id}>
+                        {"\u00A0\u00A0\u00A0".repeat(p.level - 1) + p.stt + ". " + p.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Chọn công việc cha để xếp mục này thành công việc con (Cấp 2, Cấp 3...)
+                </p>
               </div>
 
-              {/* Parent Selector if it's a subtask */}
-              {form.isSubtask && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Thuộc công việc chính <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={form.parentId}
-                    onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-                    required
-                  >
-                    <option value="">-- Chọn công việc chính --</option>
-                    {currentTasks.filter(t => !t.parentId).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               {/* Assignees (Multi-select with Search) */}
-              {showAssigneeAndStatusFields && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Người thực hiện (chọn nhiều có tìm kiếm)</label>
-                  <StaffSearchSelect
-                    mode="multiple"
-                    outputFormat="array"
-                    value={form.assignees}
-                    onChange={selected => handleAssigneeChange(Array.isArray(selected) ? selected : [selected].filter(Boolean))}
-                    staffList={staffList}
-                    placeholder="-- Tìm kiếm và chọn người thực hiện --"
-                  />
-                </div>
-              )}
-
-              {/* Department */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Bộ phận</label>
-                <input
-                  type="text"
-                  value={form.department}
-                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                  placeholder="Ví dụ: Support, IT..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Người thực hiện (chọn nhiều có tìm kiếm)
+                </label>
+                <StaffSearchSelect
+                  mode="multiple"
+                  outputFormat="array"
+                  value={form.assignees}
+                  onChange={selected => handleAssigneeChange(Array.isArray(selected) ? selected : [selected].filter(Boolean))}
+                  staffList={staffList}
+                  placeholder="-- Tìm kiếm và chọn người thực hiện --"
                 />
               </div>
 
-              {/* Date Fields */}
+              {/* Date Fields: Bắt đầu (dự kiến) & Kết thúc (dự kiến) */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ngày bắt đầu</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Bắt đầu (dự kiến)
+                  </label>
                   <input
                     type="date"
                     value={form.startDate}
@@ -1609,7 +1713,9 @@ export default function MaintenanceDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ngày hoàn thành</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Kết thúc (dự kiến)
+                  </label>
                   <input
                     type="date"
                     value={form.endDate}
@@ -1619,22 +1725,21 @@ export default function MaintenanceDetailPage() {
                 </div>
               </div>
 
-              {/* Status Select */}
-              {showAssigneeAndStatusFields && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng</label>
-                  <select
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-                  >
-                    <option value="Chưa bắt đầu">CHƯA BẮT ĐẦU</option>
-                    <option value="Đang thực hiện">ĐANG THỰC HIỆN</option>
-                    <option value="Hoàn thành">HOÀN THÀNH</option>
-                    <option value="Tạm dừng">TẠM DỪNG</option>
-                  </select>
-                </div>
-              )}
+              {/* Status Select matching template */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng</label>
+                <select
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                >
+                  <option value="Đang Thực Hiện">Đang Thực Hiện</option>
+                  <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
+                  <option value="Hoàn thành">Hoàn thành</option>
+                  <option value="Chưa bắt đầu">Chưa bắt đầu</option>
+                  <option value="Tạm dừng">Tạm dừng</option>
+                </select>
+              </div>
 
               {/* Notes */}
               <div>
