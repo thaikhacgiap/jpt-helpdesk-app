@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Row 1: "Kế Hoạch" Blue Banner
-    sheet.mergeCells("A1:I1");
+    sheet.mergeCells("A1:J1");
     const r1 = sheet.getCell("A1");
     r1.value = "Kế Hoạch";
     r1.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     sheet.getRow(1).height = 34;
 
     // 2. Row 2: "Kiểm tra định kỳ - kỳ" Light Gray Banner
-    sheet.mergeCells("A2:I2");
+    sheet.mergeCells("A2:J2");
     const r2 = sheet.getCell("A2");
     const cycleText = cycleNum ? ` - kỳ ${cycleNum}` : " - kỳ";
     const extraInfo = customerName ? ` (${customerName}${contractNo ? ` - HĐ: ${contractNo}` : ""})` : "";
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     sheet.getRow(2).height = 28;
 
     // 3. Row 3: "Công việc thực hiện" Blue Banner
-    sheet.mergeCells("A3:I3");
+    sheet.mergeCells("A3:J3");
     const r3 = sheet.getCell("A3");
     r3.value = "Công việc thực hiện";
     r3.font = { name: "Arial", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
       "Kết thúc (dự kiến)",
       "Bắt đầu (thực tế)",
       "Kết thúc (thực tế)",
+      "% Hoàn thành",
       "Tình trạng",
       "Ghi chú",
     ];
@@ -193,8 +194,16 @@ export async function POST(req: NextRequest) {
       cellActualEnd.alignment = { vertical: "middle", horizontal: "center" };
       cellActualEnd.border = thinBorder;
 
-      // Tình trạng (Col 8)
-      const cellStatus = row.getCell(8);
+      // % Hoàn thành (Col 8)
+      const cellProgress = row.getCell(8);
+      const progressVal = Number(task.progress) || 0;
+      cellProgress.value = `${progressVal}%`;
+      cellProgress.font = { name: "Arial", size: 9.5, bold: isBold, color: { argb: progressVal === 100 ? "FF16A34A" : "FF1E293B" } };
+      cellProgress.alignment = { vertical: "middle", horizontal: "center" };
+      cellProgress.border = thinBorder;
+
+      // Tình trạng (Col 9)
+      const cellStatus = row.getCell(9);
       cellStatus.value = task.status || "";
       cellStatus.font = {
         name: "Arial",
@@ -213,8 +222,8 @@ export async function POST(req: NextRequest) {
       cellStatus.alignment = { vertical: "middle", horizontal: "center" };
       cellStatus.border = thinBorder;
 
-      // Ghi chú (Col 9)
-      const cellNotes = row.getCell(9);
+      // Ghi chú (Col 10)
+      const cellNotes = row.getCell(10);
       cellNotes.value = task.notes || "";
       cellNotes.font = { name: "Arial", size: 9, color: { argb: "FF64748B" } };
       cellNotes.alignment = { vertical: "middle", horizontal: "left" };
@@ -230,6 +239,7 @@ export async function POST(req: NextRequest) {
       { key: "endDate", width: 18 },
       { key: "actualStartDate", width: 18 },
       { key: "actualEndDate", width: 18 },
+      { key: "progress", width: 14 },
       { key: "status", width: 18 },
       { key: "notes", width: 28 },
     ];

@@ -108,6 +108,7 @@ export default function MaintenanceDetailPage() {
     actualStartDate: "",
     actualEndDate: "",
     status: "Chưa bắt đầu",
+    progress: 0,
     notes: "",
   });
 
@@ -431,16 +432,128 @@ export default function MaintenanceDetailPage() {
     });
   };
 
+  // Helper to get all descendant tasks
+  const getDescendantsOf = (taskId: string, allTasks: HierarchicalTask[]): HierarchicalTask[] => {
+    const result: HierarchicalTask[] = [];
+    const queue = [taskId];
+    while (queue.length > 0) {
+      const currId = queue.shift()!;
+      const directChildren = allTasks.filter(t => t.parentId === currId);
+      for (const child of directChildren) {
+        result.push(child);
+        queue.push(child.id);
+      }
+    }
+    return result;
+  };
+
+  const getTaskComputedStats = (task: HierarchicalTask, allSortedTasks: HierarchicalTask[]) => {
+    if (!task.hasChildren) {
+      const progress = task.progress !== undefined 
+        ? task.progress 
+        : (task.status === "Hoàn thành" ? 100 : (task.status === "Đang Thực Hiện" || task.status === "Đang thực hiện") ? 50 : 0);
+      return {
+        isAuto: false,
+        progress,
+        startDate: task.startDate,
+        endDate: task.endDate,
+        actualStartDate: task.actualStartDate,
+        actualEndDate: task.actualEndDate,
+        assignees: task.assignees || [],
+        status: task.status || "Chưa bắt đầu",
+      };
+    }
+
+    const descendants = getDescendantsOf(task.id, allSortedTasks);
+    // Leaf descendants (tasks without children)
+    const leafDescendants = descendants.filter(d => !d.hasChildren);
+    const targetList = leafDescendants.length > 0 ? leafDescendants : descendants;
+
+    // Progress
+    let progress = 0;
+    if (targetList.length > 0) {
+      const totalProg = targetList.reduce((sum, item) => {
+        const p = item.progress !== undefined 
+          ? item.progress 
+          : (item.status === "Hoàn thành" ? 100 : (item.status === "Đang Thực Hiện" || item.status === "Đang thực hiện") ? 50 : 0);
+        return sum + p;
+      }, 0);
+      progress = Math.round(totalProg / targetList.length);
+    }
+
+    // Start date: earliest start date
+    const validStarts = targetList.map(t => t.startDate).filter(Boolean).sort();
+    const startDate = validStarts[0] || task.startDate || "";
+
+    // End date: latest end date
+    const validEnds = targetList.map(t => t.endDate).filter(Boolean).sort();
+    const endDate = validEnds[validEnds.length - 1] || task.endDate || "";
+
+    // Actual end date: latest actual end date only if ALL are completed (progress === 100 or status === 'Hoàn thành')
+    const allCompleted = targetList.length > 0 && targetList.every(t => (t.progress === 100 || t.status === "Hoàn thành"));
+    const validActualEnds = targetList.map(t => t.actualEndDate).filter(Boolean).sort();
+    const actualEndDate = allCompleted && validActualEnds.length > 0 ? validActualEnds[validActualEnds.length - 1] : "";
+
+    // Assignees: unique union of assignees
+    const allAssignees = targetList.flatMap(t => t.assignees || []);
+    const assignees = [...new Set(allAssignees.map(a => a.trim()).filter(Boolean))];
+
+    // Status
+    const status = progress === 100 ? "Hoàn thành" : progress > 0 ? "Đang Thực Hiện" : "Chưa bắt đầu";
+
+    return {
+      isAuto: true,
+      progress,
+      startDate,
+      endDate,
+      actualStartDate: "",
+      actualEndDate,
+      assignees,
+      status,
+    };
+  };
+
   // Fast inline update for any task field directly on table
   const updateTaskField = async (taskId: string, field: keyof Task, value: any) => {
     const currentList = cycleTasks[activeCycle] ? [...cycleTasks[activeCycle]] : [];
     const idx = currentList.findIndex(t => t.id === taskId);
     if (idx === -1) return;
 
-    currentList[idx] = {
-      ...currentList[idx],
+    const currentTask = currentList[idx];
+    let updatedTask = {
+      ...currentTask,
       [field]: value,
     };
+
+    // Auto sync between progress and status & actualEndDate
+    if (field === "progress") {
+      const pVal = Number(value) || 0;
+      if (pVal === 100) {
+        updatedTask.status = "Hoàn thành";
+        if (!updatedTask.actualEndDate) {
+          updatedTask.actualEndDate = new Date().toISOString().substring(0, 10);
+        }
+      } else if (pVal > 0) {
+        updatedTask.status = "Đang Thực Hiện";
+      } else {
+        updatedTask.status = "Chưa bắt đầu";
+      }
+    } else if (field === "status") {
+      if (value === "Hoàn thành") {
+        updatedTask.progress = 100;
+        if (!updatedTask.actualEndDate) {
+          updatedTask.actualEndDate = new Date().toISOString().substring(0, 10);
+        }
+      } else if (value === "Đang Thực Hiện" || value === "Đang thực hiện") {
+        if (!updatedTask.progress || updatedTask.progress === 0 || updatedTask.progress === 100) {
+          updatedTask.progress = 50;
+        }
+      } else if (value === "Chưa bắt đầu") {
+        updatedTask.progress = 0;
+      }
+    }
+
+    currentList[idx] = updatedTask;
 
     const updatedCycleTasks = {
       ...cycleTasks,
@@ -456,6 +569,21 @@ export default function MaintenanceDetailPage() {
     }
   };
 
+  // Quick add helpers for Phase, Main task, Sub task
+  const handleQuickAddPhase = () => {
+    handleAddTaskOpen("");
+  };
+
+  const handleQuickAddMainTask = () => {
+    const lastPhase = [...sortedTasks].reverse().find(t => t.level === 1);
+    handleAddTaskOpen(lastPhase ? lastPhase.id : "");
+  };
+
+  const handleQuickAddSubTask = () => {
+    const lastMain = [...sortedTasks].reverse().find(t => t.level === 2);
+    handleAddTaskOpen(lastMain ? lastMain.id : "");
+  };
+
   // Open modal for adding task (optional defaultParentId for nesting)
   const handleAddTaskOpen = (defaultParentId: string = "") => {
     setEditingTask(null);
@@ -469,6 +597,7 @@ export default function MaintenanceDetailPage() {
       actualStartDate: "",
       actualEndDate: "",
       status: "Chưa bắt đầu",
+      progress: 0,
       notes: "",
     });
     setIsModalOpen(true);
@@ -487,6 +616,7 @@ export default function MaintenanceDetailPage() {
       actualStartDate: task.actualStartDate || "",
       actualEndDate: task.actualEndDate || "",
       status: task.status || "Chưa bắt đầu",
+      progress: task.progress !== undefined ? task.progress : (task.status === "Hoàn thành" ? 100 : (task.status === "Đang Thực Hiện" || task.status === "Đang thực hiện") ? 50 : 0),
       notes: task.notes || "",
     });
     setIsModalOpen(true);
@@ -522,6 +652,7 @@ export default function MaintenanceDetailPage() {
             actualStartDate: form.actualStartDate || "",
             actualEndDate: form.actualEndDate || "",
             status: form.status || "Chưa bắt đầu",
+            progress: Number(form.progress) || 0,
             notes: form.notes,
           };
         }
@@ -538,6 +669,7 @@ export default function MaintenanceDetailPage() {
           actualStartDate: form.actualStartDate || "",
           actualEndDate: form.actualEndDate || "",
           status: form.status || "Chưa bắt đầu",
+          progress: Number(form.progress) || 0,
           notes: form.notes,
           orderIndex: currentList.length,
         };
@@ -772,6 +904,8 @@ export default function MaintenanceDetailPage() {
         const endDate = normalizeImportDate(getCell(row, ["kết thúc (dự kiến)", "dự kiến kết thúc", "kết thúc", "hoàn thành", "ngày kết thúc", "hạn chót", "end date", "end", "ket thuc"]));
         const actualStartDate = normalizeImportDate(getCell(row, ["bắt đầu (thực tế)", "thực tế bắt đầu", "bắt đầu thực tế", "actual start", "actual start date", "thuc te bat dau"]));
         const actualEndDate = normalizeImportDate(getCell(row, ["kết thúc (thực tế)", "thực tế kết thúc", "kết thúc thực tế", "actual end", "actual end date", "thuc te ket thuc"]));
+        const progressRaw = getCell(row, ["% hoàn thành", "tiến độ", "tiến độ (%)", "progress", "%", "tien do"]);
+        const progressNum = progressRaw ? parseInt(progressRaw.replace(/[^0-9]/g, ""), 10) : undefined;
         const status = getCell(row, ["tình trạng", "trạng thái", "status", "tinh trang"]);
         const notes = getCell(row, ["ghi chú", "notes", "note", "comment", "ghi chu"]);
 
@@ -787,6 +921,10 @@ export default function MaintenanceDetailPage() {
           sttToIdMap[cleanStt] = newId;
         }
 
+        const calculatedProgress = progressNum !== undefined 
+          ? progressNum 
+          : (status === "Hoàn thành" ? 100 : (status === "Đang Thực Hiện" || status === "Đang thực hiện" ? 50 : 0));
+
         importedTasks.push({
           id: newId,
           parentId: resolvedParentId,
@@ -798,6 +936,7 @@ export default function MaintenanceDetailPage() {
           actualStartDate,
           actualEndDate,
           status: status || "",
+          progress: calculatedProgress,
           notes,
           orderIndex: idx,
         });
@@ -1143,10 +1282,40 @@ export default function MaintenanceDetailPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               {activeTab === "tasks" ? (
                 <>
+                  {/* + Phase */}
+                  <button 
+                    onClick={handleQuickAddPhase}
+                    className="flex items-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                    title="Thêm giai đoạn mới (Phase)"
+                  >
+                    <Plus size={13} />
+                    <span>+ Phase</span>
+                  </button>
+
+                  {/* + Main task */}
+                  <button 
+                    onClick={handleQuickAddMainTask}
+                    className="flex items-center gap-1 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                    title="Thêm công việc chính (Main task)"
+                  >
+                    <Plus size={13} />
+                    <span>+ Main task</span>
+                  </button>
+
+                  {/* + Sub task */}
+                  <button 
+                    onClick={handleQuickAddSubTask}
+                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
+                    title="Thêm công việc con (Sub task)"
+                  >
+                    <Plus size={13} />
+                    <span>+ Sub task</span>
+                  </button>
+
                   {/* 1. Tải file mẫu */}
                   <button 
                     onClick={() => handleExportExcel(true)}
-                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                     title="Tải file mẫu Excel (.xlsx)"
                   >
                     <Download size={14} className="text-slate-500" />
@@ -1156,7 +1325,7 @@ export default function MaintenanceDetailPage() {
                   {/* 2. Xuất Excel */}
                   <button 
                     onClick={() => handleExportExcel(false)}
-                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                     title="Xuất công việc ra file Excel (.xlsx)"
                   >
                     <FileSpreadsheet size={14} className="text-emerald-600" />
@@ -1166,7 +1335,7 @@ export default function MaintenanceDetailPage() {
                   {/* 3. Nhập Excel */}
                   <button 
                     onClick={triggerImportFile}
-                    className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                     title="Nhập dữ liệu công việc từ file Excel / CSV"
                   >
                     <Upload size={14} className="text-blue-600" />
@@ -1274,148 +1443,118 @@ export default function MaintenanceDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col border border-slate-300 rounded-xl overflow-hidden shadow-xs bg-white">
-                {/* Visual Header Banners Matching Exact Screenshot */}
-                <div className="bg-[#1565C0] text-white font-bold text-sm px-4 py-2.5 tracking-wide flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-sm">
-                    <span>Kế Hoạch</span>
-                  </div>
-                  <div className="text-[11px] font-medium text-blue-100">
-                    {plan?.customer?.name || plan?.customer_name || ""}
-                  </div>
-                </div>
+              <div className="flex-1 overflow-x-auto overflow-y-auto min-h-[460px] relative bg-white border border-slate-200 rounded-xl shadow-xs custom-scrollbar">
+                <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
+                  <thead className="select-none">
+                    <tr className="bg-[#1E40AF] text-white">
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-16 whitespace-nowrap shadow-sm">
+                        Hàng
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
+                        No
+                      </th>
+                      <th className="py-2.5 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[280px] whitespace-nowrap shadow-sm">
+                        Công việc
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
+                        Thời gian bắt đầu
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
+                        Thời gian kết thúc
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                        Thời gian bắt đầu thực tế
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                        Thời gian kết thúc thực tế
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[140px] whitespace-nowrap shadow-sm">
+                        Người thực hiện
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
+                        % Hoàn thành
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
+                        Trạng thái
+                      </th>
+                      <th className="py-2.5 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[160px] whitespace-nowrap shadow-sm">
+                        Ghi chú
+                      </th>
+                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
+                        Thao tác
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTasks.map((t, rowIdx) => {
+                      if (!isTaskVisible(t, currentTasks)) {
+                        return null;
+                      }
 
-                <div className="bg-[#E2E8F0] text-slate-800 font-bold text-xs px-4 py-2 border-b border-slate-300 flex items-center justify-between">
-                  <span>Kiểm tra định kỳ - Kỳ {activeCycle}</span>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    Bắt đầu: {formatDateVN(getCycleStartDate(activeCycle))}
-                  </span>
-                </div>
+                      const isPhase = t.level === 1;
+                      const isMain = t.level === 2;
+                      const isSub = t.level > 2 || (!isPhase && !isMain);
+                      const stats = getTaskComputedStats(t, sortedTasks);
+                      const isCollapsed = collapsedParents[t.id];
 
-                <div className="bg-[#1565C0] text-white font-bold text-xs px-4 py-2 flex items-center justify-between uppercase tracking-wider">
-                  <div className="w-24" />
-                  <span>Công việc thực hiện</span>
-                  <button
-                    onClick={() => handleAddTaskOpen("")}
-                    className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-                    title="Thêm công việc mới vào kế hoạch"
-                  >
-                    <Plus size={13} />
-                    <span>Thêm công việc</span>
-                  </button>
-                </div>
+                      return (
+                        <tr 
+                          key={t.id} 
+                          className={`border-b border-slate-200 transition ${
+                            isPhase
+                              ? "bg-[#BFDBFE] font-black text-blue-950"
+                              : isMain
+                              ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
+                              : "bg-white hover:bg-slate-50/40 text-slate-700"
+                          }`}
+                        >
+                          {/* Cột Hàng (1, 2, 3...) */}
+                          <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
+                            {rowIdx + 1}
+                          </td>
 
-                <div className="flex-1 overflow-auto custom-scrollbar">
-                  <table className="w-full text-xs border-collapse text-left">
-                    <thead className="bg-[#374151] text-white font-semibold sticky top-0 z-10">
-                      <tr>
-                        <th className="px-3 py-2.5 w-14 text-center border-r border-slate-600">
-                          <span>STT</span>
-                        </th>
-                        <th className="px-4 py-2.5 border-r border-slate-600 min-w-[200px]">
-                          <span>Công việc</span>
-                        </th>
-                        <th className="px-3 py-2.5 w-48 min-w-[190px] border-r border-slate-600">
-                          <span>Người thực hiện</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
-                          <span>Bắt đầu (dự kiến)</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
-                          <span>Kết thúc (dự kiến)</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
-                          <span>Bắt đầu (thực tế)</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-32 min-w-[130px] text-center border-r border-slate-600">
-                          <span>Kết thúc (thực tế)</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-36 min-w-[140px] text-center border-r border-slate-600">
-                          <span>Tình trạng</span>
-                        </th>
-                        <th className="px-3 py-2.5 w-40 min-w-[150px] border-r border-slate-600">
-                          <span>Ghi chú</span>
-                        </th>
-                        <th className="px-2 py-2.5 w-20 text-center">
-                          <span>Thao tác</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {sortedTasks.map((t) => {
-                        if (!isTaskVisible(t, currentTasks)) {
-                          return null;
-                        }
+                          {/* Cột No (1, 1.1, 1.1.1...) */}
+                          <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
+                            <div className="flex items-center justify-center gap-1">
+                              {t.hasChildren && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                  className="p-0.5 hover:bg-slate-200/80 rounded text-slate-600 cursor-pointer"
+                                  title={isCollapsed ? "Mở rộng" : "Thu gọn"}
+                                >
+                                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                              )}
+                              <span>{t.stt}</span>
+                            </div>
+                          </td>
 
-                        const isMainHeader = t.level === 1;
-                        const isSubHeader = t.hasChildren && t.level > 1;
-                        const isBold = isMainHeader || isSubHeader;
-                        const isCollapsed = collapsedParents[t.id];
-
-                        return (
-                          <tr 
-                            key={t.id} 
-                            className={`transition border-b border-slate-200 ${
-                              isMainHeader 
-                                ? "bg-slate-50/90 hover:bg-slate-100/90" 
-                                : isSubHeader 
-                                ? "bg-slate-50/40 hover:bg-slate-100/60" 
-                                : "bg-white hover:bg-slate-50/60"
-                            }`}
-                          >
-                            {/* STT */}
-                            <td className="px-2 py-2.5 text-center border-r border-slate-200 align-middle">
-                              <div className="flex items-center justify-center gap-1">
-                                {t.hasChildren && (
-                                  <button
-                                    onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
-                                    className="p-0.5 hover:bg-slate-200 rounded text-slate-500 cursor-pointer"
-                                    title={isCollapsed ? "Mở rộng" : "Thu gọn"}
-                                  >
-                                    {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                                  </button>
-                                )}
-                                <span className={`${isBold ? "font-bold text-slate-900" : "font-normal text-slate-700"}`}>
-                                  {t.stt}
-                                </span>
+                          {/* Công việc */}
+                          <td className="py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap">
+                            {isPhase ? (
+                              <span className="text-slate-900 text-xs font-black uppercase tracking-wide whitespace-nowrap" title={t.name}>
+                                {t.name}
+                              </span>
+                            ) : isMain ? (
+                              <div className="pl-3 font-bold text-slate-800 text-xs whitespace-nowrap" title={t.name}>
+                                {t.name}
                               </div>
-                            </td>
-
-                            {/* Công việc */}
-                            <td 
-                              className={`py-2.5 pr-4 border-r border-slate-200 align-middle ${
-                                t.level === 1 
-                                  ? "pl-3 font-bold text-slate-900 text-[12.5px]" 
-                                  : t.level === 2 
-                                  ? `pl-7 text-[12px] ${isSubHeader ? "font-bold text-slate-800" : "font-normal text-slate-800"}` 
-                                  : "pl-11 text-[11.5px] font-normal text-slate-700"
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <span>{t.name}</span>
+                            ) : (
+                              <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap" title={t.name}>
+                                <span className="text-slate-400 font-mono">↳</span>
+                                <span className="whitespace-nowrap">{t.name}</span>
                               </div>
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Người thực hiện (Inline Select) */}
-                            <td className="p-1 border-r border-slate-200 align-middle">
-                              <StaffSearchSelect
-                                size="sm"
-                                mode="multiple"
-                                outputFormat="array"
-                                value={t.assignees || []}
-                                onChange={(val) => {
-                                  const arr = Array.isArray(val) ? val : [val].filter(Boolean);
-                                  updateTaskField(t.id, "assignees", arr);
-                                }}
-                                staffList={staffList}
-                                placeholder="+ Chọn..."
-                                dropdownPosition="fixed"
-                                className="w-full text-xs"
-                              />
-                            </td>
-
-                            {/* Bắt đầu (dự kiến) (Inline Date) */}
-                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          {/* Thời gian bắt đầu */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              <span className="text-[11px] font-semibold text-blue-900">
+                                {stats.startDate ? formatDateVN(stats.startDate) : "—"}
+                              </span>
+                            ) : (
                               <input
                                 type="date"
                                 value={t.startDate || ""}
@@ -1423,10 +1562,16 @@ export default function MaintenanceDetailPage() {
                                 className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
                                 title="Nhấp để sửa ngày bắt đầu (dự kiến)"
                               />
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Kết thúc (dự kiến) (Inline Date) */}
-                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          {/* Thời gian kết thúc */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              <span className="text-[11px] font-semibold text-blue-900">
+                                {stats.endDate ? formatDateVN(stats.endDate) : "—"}
+                              </span>
+                            ) : (
                               <input
                                 type="date"
                                 value={t.endDate || ""}
@@ -1434,10 +1579,14 @@ export default function MaintenanceDetailPage() {
                                 className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
                                 title="Nhấp để sửa ngày kết thúc (dự kiến)"
                               />
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Bắt đầu (thực tế) (Inline Date) */}
-                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          {/* Thời gian bắt đầu thực tế */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              <span className="text-slate-400 text-xs">—</span>
+                            ) : (
                               <input
                                 type="date"
                                 value={t.actualStartDate || ""}
@@ -1445,10 +1594,18 @@ export default function MaintenanceDetailPage() {
                                 className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
                                 title="Nhấp để sửa ngày bắt đầu (thực tế)"
                               />
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Kết thúc (thực tế) (Inline Date) */}
-                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          {/* Thời gian kết thúc thực tế */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              stats.actualEndDate ? (
+                                <span className="text-emerald-700 font-bold text-xs">{formatDateVN(stats.actualEndDate)}</span>
+                              ) : (
+                                <span className="text-slate-400 text-xs">—</span>
+                              )
+                            ) : (
                               <input
                                 type="date"
                                 value={t.actualEndDate || ""}
@@ -1456,14 +1613,89 @@ export default function MaintenanceDetailPage() {
                                 className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
                                 title="Nhấp để sửa ngày kết thúc (thực tế)"
                               />
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Tình trạng (Inline Select) */}
-                            <td className="p-1 text-center border-r border-slate-200 align-middle whitespace-nowrap">
+                          {/* Người thực hiện */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              stats.assignees.length > 0 ? (
+                                <div className="flex items-center justify-center">
+                                  <span 
+                                    className="inline-block max-w-[140px] truncate text-[11px] px-2 py-0.5 bg-blue-100/80 border border-blue-300 text-blue-900 rounded-full font-bold align-middle"
+                                    title={stats.assignees.join(', ')}
+                                  >
+                                    {stats.assignees.join(', ')}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic text-[10px]">Tự động từ tasks</span>
+                              )
+                            ) : (
+                              <div className="w-full min-w-[130px] max-w-[200px] mx-auto py-0.5">
+                                <StaffSearchSelect
+                                  size="sm"
+                                  mode="multiple"
+                                  outputFormat="array"
+                                  value={t.assignees || []}
+                                  onChange={(val) => {
+                                    const arr = Array.isArray(val) ? val : [val].filter(Boolean);
+                                    updateTaskField(t.id, "assignees", arr);
+                                  }}
+                                  staffList={staffList}
+                                  placeholder="+ Chọn..."
+                                  dropdownPosition="fixed"
+                                  className="w-full text-xs"
+                                />
+                              </div>
+                            )}
+                          </td>
+
+                          {/* % Hoàn thành */}
+                          <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              <div className="flex items-center justify-center gap-0.5" title={isPhase ? "Tự động tính từ các công việc con" : "Tự động tính từ các công việc con"}>
+                                <span className={`font-black text-xs ${isPhase ? 'text-blue-900' : 'text-slate-800'}`}>
+                                  {stats.progress}%
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-semibold select-none">⚙</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={t.progress !== undefined ? t.progress : (t.status === "Hoàn thành" ? 100 : (t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện") ? 50 : 0)}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                    updateTaskField(t.id, "progress", val);
+                                  }}
+                                  className="w-7 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0"
+                                  title="Nhấp để đổi % hoàn thành"
+                                />
+                                <span className="text-[10px] font-bold text-slate-400 select-none">%</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Trạng thái */}
+                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            {stats.isAuto ? (
+                              <span className={`inline-block px-2.5 py-1 text-[11px] font-bold rounded-full border tracking-wide whitespace-nowrap shadow-2xs ${
+                                stats.progress === 100
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : stats.progress > 0
+                                  ? 'bg-blue-50 text-blue-700 border-blue-300'
+                                  : 'bg-slate-50 text-slate-600 border-slate-300'
+                              }`}>
+                                {stats.progress === 100 ? 'Hoàn thành' : stats.progress > 0 ? 'Đang thực hiện' : 'Chưa thực hiện'}
+                              </span>
+                            ) : (
                               <select
                                 value={t.status || "Chưa bắt đầu"}
                                 onChange={(e) => updateTaskField(t.id, "status", e.target.value)}
-                                className={`w-full text-[11px] font-bold py-1 px-2 rounded-full border outline-none cursor-pointer transition shadow-2xs ${
+                                className={`w-full max-w-[125px] text-[11px] font-bold py-1 px-2 rounded-full border outline-none cursor-pointer transition shadow-2xs ${
                                   t.status === "Hoàn thành"
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
                                     : t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện"
@@ -1474,6 +1706,7 @@ export default function MaintenanceDetailPage() {
                                     ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
                                     : "bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100"
                                 }`}
+                                title="Bấm để chọn trạng thái"
                               >
                                 <option value="Chưa bắt đầu">Chưa bắt đầu</option>
                                 <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
@@ -1481,61 +1714,71 @@ export default function MaintenanceDetailPage() {
                                 <option value="Hoàn thành">Hoàn thành</option>
                                 <option value="Tạm dừng">Tạm dừng</option>
                               </select>
-                            </td>
+                            )}
+                          </td>
 
-                            {/* Ghi chú (Inline Input) */}
-                            <td className="p-1 border-r border-slate-200 align-middle">
-                              <input
-                                type="text"
-                                defaultValue={t.notes || ""}
-                                key={`${t.id}-${t.notes || ""}`}
-                                onBlur={(e) => {
-                                  if (e.target.value !== (t.notes || "")) {
-                                    updateTaskField(t.id, "notes", e.target.value.trim());
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    (e.target as HTMLInputElement).blur();
-                                  }
-                                }}
-                                placeholder="Ghi chú..."
-                                className="w-full text-xs text-slate-700 bg-transparent hover:bg-slate-50 focus:bg-white px-2 py-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none transition placeholder:text-slate-300"
-                              />
-                            </td>
+                          {/* Ghi chú */}
+                          <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
+                            <input
+                              type="text"
+                              defaultValue={t.notes || ""}
+                              key={`${t.id}-${t.notes || ""}`}
+                              onBlur={(e) => {
+                                if (e.target.value !== (t.notes || "")) {
+                                  updateTaskField(t.id, "notes", e.target.value.trim());
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              placeholder="Ghi chú..."
+                              className="w-full text-xs text-slate-700 bg-transparent hover:bg-slate-50 focus:bg-white px-2 py-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none transition placeholder:text-slate-300"
+                              title={t.notes ? t.notes : "Nhấp để nhập ghi chú..."}
+                            />
+                          </td>
 
-                            {/* Thao tác */}
-                            <td className="px-2 py-2.5 text-center align-middle whitespace-nowrap">
-                              <div className="flex items-center justify-center gap-1">
-                                <button 
-                                  onClick={() => handleAddTaskOpen(t.id)}
-                                  className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                                  title="Thêm công việc con"
-                                >
-                                  <Plus size={13} />
-                                </button>
-                                <button 
-                                  onClick={() => handleEditTaskOpen(t)}
-                                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                                  title="Sửa"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteTask(t.id)}
-                                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded transition cursor-pointer"
-                                  title="Xóa"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                          {/* Thao tác */}
+                          <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button 
+                                type="button"
+                                onClick={() => handleAddTaskOpen(t.id)}
+                                className="flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 transition cursor-pointer"
+                                title="Thêm công việc con vào mục này"
+                              >
+                                <Plus size={12} />
+                                <span>Thêm</span>
+                              </button>
+                              <span className="text-slate-300 select-none">|</span>
+                              <button 
+                                type="button"
+                                onClick={() => handleEditTaskOpen(t)}
+                                className="flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
+                                title="Sửa công việc này"
+                              >
+                                <Pencil size={12} />
+                                <span>Sửa</span>
+                              </button>
+                              <span className="text-slate-300 select-none">|</span>
+                              <button 
+                                type="button"
+                                onClick={() => handleDeleteTask(t.id)}
+                                className="flex items-center gap-0.5 text-[11px] font-semibold text-red-500 hover:text-red-700 transition cursor-pointer"
+                                title="Xóa công việc này"
+                              >
+                                <Trash2 size={12} />
+                                <span>Xóa</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
                 {/* Footer summary bar matching screenshot */}
                 {(() => {
@@ -1798,20 +2041,51 @@ export default function MaintenanceDetailPage() {
                 </div>
               </div>
 
-              {/* Status Select matching template */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng</label>
-                <select
-                  value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-                >
-                  <option value="Đang Thực Hiện">Đang Thực Hiện</option>
-                  <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
-                  <option value="Hoàn thành">Hoàn thành</option>
-                  <option value="Chưa bắt đầu">Chưa bắt đầu</option>
-                  <option value="Tạm dừng">Tạm dừng</option>
-                </select>
+              {/* Status and Progress */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">% Hoàn thành</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={form.progress ?? 0}
+                      onChange={e => {
+                        const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                        setForm(f => ({
+                          ...f,
+                          progress: val,
+                          status: val === 100 ? "Hoàn thành" : (val > 0 ? "Đang Thực Hiện" : f.status)
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-bold text-slate-500">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tình trạng</label>
+                  <select
+                    value={form.status}
+                    onChange={e => {
+                      const newStatus = e.target.value;
+                      setForm(f => ({
+                        ...f,
+                        status: newStatus,
+                        progress: newStatus === "Hoàn thành" ? 100 : (newStatus === "Chưa bắt đầu" ? 0 : f.progress)
+                      }));
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                  >
+                    <option value="Đang Thực Hiện">Đang Thực Hiện</option>
+                    <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
+                    <option value="Hoàn thành">Hoàn thành</option>
+                    <option value="Chưa bắt đầu">Chưa bắt đầu</option>
+                    <option value="Tạm dừng">Tạm dừng</option>
+                  </select>
+                </div>
               </div>
 
               {/* Notes */}

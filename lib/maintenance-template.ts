@@ -11,6 +11,7 @@ export interface MaintenanceTask {
   actualStartDate?: string;
   actualEndDate?: string;
   status: string; // 'Chưa bắt đầu' | 'Đang Kế Hoạch' | 'Đang Thực Hiện' | 'Hoàn thành' | 'Tạm dừng'
+  progress?: number;
   notes: string;
   orderIndex: number;
 }
