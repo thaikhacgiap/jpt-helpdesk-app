@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter } from "lucide-react";
+import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User } from "lucide-react";
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
+import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
+import StaffSearchSelect from "@/components/common/staff-search-select";
 
 interface Task {
   id: string;
@@ -70,6 +72,18 @@ const formatDateVN = (dateStr: string) => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+const formatDateTimeVN = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 const calculateCycleProgress = (tasks: Task[]) => {
@@ -186,6 +200,7 @@ const getPlanStatus = (t: any, progressPercent: number): { label: string; status
 export default function MaintenancePage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<NhanSu[]>([]);
   const [allContracts, setAllContracts] = useState<Contract[]>([]);
   const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,6 +212,8 @@ export default function MaintenancePage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [customerFilter, setCustomerFilter] = useState("All");
   const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("month");
+  const [sortField, setSortField] = useState<"customer" | "created_at" | null>(null);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const [form, setForm] = useState({
@@ -205,6 +222,7 @@ export default function MaintenancePage() {
     totalPeriods: 12,
     status: "New",
     description: "",
+    creatorName: "",
   });
 
   const loadTickets = async () => {
@@ -236,6 +254,9 @@ export default function MaintenancePage() {
 
       const contrData = await fetchContracts();
       setAllContracts(contrData || []);
+
+      const nhanSuData = await fetchNhanSu();
+      setStaffList(nhanSuData || []);
     } catch (err) {
       console.error("Error loading reference data:", err);
     }
@@ -245,6 +266,15 @@ export default function MaintenancePage() {
     loadTickets();
     loadReferenceData();
   }, []);
+
+  const handleSort = (field: "customer" | "created_at") => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
 
   const handleCustomerChange = async (customerId: string) => {
     setForm(f => ({ ...f, customerId, contractId: "" }));
@@ -299,6 +329,7 @@ export default function MaintenancePage() {
       totalPeriods: 12,
       status: "New",
       description: "",
+      creatorName: staffList[0]?.ten_nhan_su || "Admin",
     });
     setFilteredContracts([]);
     setIsModalOpen(true);
@@ -312,6 +343,7 @@ export default function MaintenancePage() {
       totalPeriods: parseInt(plan.hold_time) || 12,
       status: plan.tt_status || "New",
       description: plan.description || "",
+      creatorName: plan.creator_name || plan.created_by || plan.user_name || "",
     });
     if (plan.customer_id) {
       try {
@@ -354,6 +386,7 @@ export default function MaintenancePage() {
         contract_no: contrObj?.contract_no || contrObj?.code || contrObj?.name || null,
         hold_time: String(form.totalPeriods),
         tt_status: form.status,
+        creator_name: form.creatorName || null,
       };
 
       if (editingPlan) {
@@ -395,6 +428,7 @@ export default function MaintenancePage() {
         totalPeriods: 12,
         status: "New",
         description: "",
+        creatorName: "",
       });
       setFilteredContracts([]);
       loadTickets();
@@ -405,35 +439,55 @@ export default function MaintenancePage() {
     }
   };
 
-  const filtered = tickets.filter(t => {
-    const term = (search || "").toLowerCase().trim();
-    const displayId = (t.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-').toLowerCase();
-    const idMatch = !term || displayId.includes(term) || (t.ticket_id || "").toLowerCase().includes(term);
-    const custMatch = !term || (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
-    const contrMatch = !term || (t.contract_no || t.contract?.contract_no || t.contract?.service || t.contract?.name || "")?.toLowerCase().includes(term);
-    
-    const matchesSearch = !term || idMatch || custMatch || contrMatch;
-    
-    const progressVal = calculatePlanProgress(t);
-    const planStatus = getPlanStatus(t, progressVal);
-    
-    let matchesStatus = true;
-    if (statusFilter && statusFilter !== "All") {
-      if (statusFilter === "Completed") {
-        matchesStatus = planStatus.statusKey === "Completed" || t.tt_status === "Resolved" || t.tt_status === "Completed";
-      } else if (statusFilter === "Processing") {
-        matchesStatus = planStatus.statusKey === "Processing" || t.tt_status === "In Progress" || t.tt_status === "Processing";
-      } else if (statusFilter === "New") {
-        matchesStatus = planStatus.statusKey === "New" || t.tt_status === "New";
-      } else {
-        matchesStatus = planStatus.statusKey === statusFilter || t.tt_status === statusFilter;
+  const filtered = useMemo(() => {
+    const list = tickets.filter(t => {
+      const term = (search || "").toLowerCase().trim();
+      const displayId = (t.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-').toLowerCase();
+      const idMatch = !term || displayId.includes(term) || (t.ticket_id || "").toLowerCase().includes(term);
+      const custMatch = !term || (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
+      const contrMatch = !term || (t.contract_no || t.contract?.contract_no || t.contract?.service || t.contract?.name || "")?.toLowerCase().includes(term);
+      const creatorMatch = !term || (t.creator_name || t.created_by || t.user_name || "")?.toLowerCase().includes(term);
+      
+      const matchesSearch = !term || idMatch || custMatch || contrMatch || creatorMatch;
+      
+      const progressVal = calculatePlanProgress(t);
+      const planStatus = getPlanStatus(t, progressVal);
+      
+      let matchesStatus = true;
+      if (statusFilter && statusFilter !== "All") {
+        if (statusFilter === "Completed") {
+          matchesStatus = planStatus.statusKey === "Completed" || t.tt_status === "Resolved" || t.tt_status === "Completed";
+        } else if (statusFilter === "Processing") {
+          matchesStatus = planStatus.statusKey === "Processing" || t.tt_status === "In Progress" || t.tt_status === "Processing";
+        } else if (statusFilter === "New") {
+          matchesStatus = planStatus.statusKey === "New" || t.tt_status === "New";
+        } else {
+          matchesStatus = planStatus.statusKey === statusFilter || t.tt_status === statusFilter;
+        }
       }
+
+      const matchesCustomer = !customerFilter || customerFilter === "All" || customerFilter === "" || t.customer_id === customerFilter || (t.customer?.name === customerFilter) || (t.customer_name === customerFilter);
+
+      return matchesSearch && matchesStatus && matchesCustomer;
+    });
+
+    if (sortField === "customer") {
+      list.sort((a, b) => {
+        const nameA = (a.customer?.name || a.customer_name || "").trim().toLowerCase();
+        const nameB = (b.customer?.name || b.customer_name || "").trim().toLowerCase();
+        const cmp = nameA.localeCompare(nameB, "vi");
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+    } else if (sortField === "created_at") {
+      list.sort((a, b) => {
+        const timeA = new Date(a.created_at || a.created_time || a.start_time || 0).getTime();
+        const timeB = new Date(b.created_at || b.created_time || b.start_time || 0).getTime();
+        return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      });
     }
 
-    const matchesCustomer = !customerFilter || customerFilter === "All" || customerFilter === "" || t.customer_id === customerFilter || (t.customer?.name === customerFilter) || (t.customer_name === customerFilter);
-
-    return matchesSearch && matchesStatus && matchesCustomer;
-  });
+    return list;
+  }, [tickets, search, statusFilter, customerFilter, sortField, sortOrder]);
 
   const getTimelineYears = () => {
     const curYear = new Date().getFullYear();
@@ -836,8 +890,40 @@ export default function MaintenancePage() {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-xs text-slate-500 font-medium text-left">
               <th className="px-6 py-3">ID</th>
-              <th className="px-4 py-3">Tên khách hàng</th>
+              <th 
+                className="px-4 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition group"
+                onClick={() => handleSort("customer")}
+                title="Bấm để sắp xếp theo tên khách hàng"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === "customer" ? "font-semibold text-blue-700" : ""}>Tên khách hàng</span>
+                  <span className="text-slate-400 group-hover:text-slate-600">
+                    {sortField === "customer" ? (
+                      sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
+                    )}
+                  </span>
+                </div>
+              </th>
               <th className="px-4 py-3">Tên hợp đồng</th>
+              <th className="px-4 py-3">Người tạo</th>
+              <th 
+                className="px-4 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition group"
+                onClick={() => handleSort("created_at")}
+                title="Bấm để sắp xếp theo thời gian tạo"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === "created_at" ? "font-semibold text-blue-700" : ""}>Thời gian tạo</span>
+                  <span className="text-slate-400 group-hover:text-slate-600">
+                    {sortField === "created_at" ? (
+                      sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
+                    )}
+                  </span>
+                </div>
+              </th>
               <th className="px-4 py-3 text-center">Tổng kỳ</th>
               <th className="px-4 py-3">Tình trạng</th>
               <th className="px-4 py-3">Tiến độ</th>
@@ -847,14 +933,14 @@ export default function MaintenancePage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-400">
+                <td colSpan={9} className="py-12 text-center text-slate-400">
                   <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   Đang tải...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-14 text-center text-slate-400">
+                <td colSpan={9} className="py-14 text-center text-slate-400">
                   <Wrench size={36} className="mx-auto mb-2 opacity-20" />
                   <p className="text-sm">{search ? "Không tìm thấy kết quả" : "Chưa có kế hoạch bảo trì nào"}</p>
                   <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
@@ -878,6 +964,15 @@ export default function MaintenancePage() {
                     </td>
                     <td className="px-4 py-3.5 text-slate-500 max-w-[200px] truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
                       {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-700 max-w-[150px] truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
+                      <div className="flex items-center gap-1.5">
+                        <User size={13} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs" title={t.created_at || ""}>
+                      {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
                     </td>
                     <td className="px-4 py-3.5 text-center font-medium text-slate-500">{t.hold_time || 0}</td>
                     <td className="px-4 py-3.5">
@@ -1138,6 +1233,20 @@ export default function MaintenancePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Creator Select */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Người tạo
+                </label>
+                <StaffSearchSelect
+                  value={form.creatorName}
+                  onChange={(val) => setForm(f => ({ ...f, creatorName: typeof val === "string" ? val : "" }))}
+                  staffList={staffList}
+                  placeholder="-- Chọn người tạo --"
+                  allowClear={true}
+                />
               </div>
 
               {/* Total Periods */}
