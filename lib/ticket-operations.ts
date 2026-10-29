@@ -576,13 +576,11 @@ export async function fetchTickets(): Promise<Ticket[]> {
       return true;
     }).map(t => {
       const reqCode = getTicketRequestCode(t);
-      let reqStatus = (t as any).request_status;
       // Synchronize request status with ticket status: if ticket has tt_status, request status follows ticket status
-      let reqStatus = t.tt_status;
+      let reqStatus = t.tt_status || (t as any).request_status;
       if (!reqStatus && reqCode) {
         reqStatus = requestStatusMap.get(reqCode.toUpperCase())
           || requestStatusMap.get((t.request_id || '').toUpperCase())
-          || (t as any).request_status
           || '';
       }
       if (reqStatus) {
