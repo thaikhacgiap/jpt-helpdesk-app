@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import TicketFormModal from "./ticket-form-modal";
-import { fetchTickets, deleteTicket, getTicketRequestCode, getTicketRequestStatus } from "@/lib/ticket-operations";
+import { fetchTickets, deleteTicket, getTicketRequestCode, getTicketRequestStatus, syncAllTicketRequestStatuses } from "@/lib/ticket-operations";
 import { fetchAllAvailableRequests } from "@/components/common/request-search-select";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import { fetchContracts, Contract } from "@/lib/contract-operations";
@@ -645,8 +645,10 @@ export default function TicketsPage() {
       const map: Record<string, string> = {};
       list.forEach((r) => {
         let s = r.status || "New";
-        if (s.toLowerCase() === "resolved") s = "Completed";
-        if (s.toLowerCase() === "in progress") s = "In progress";
+        if (s.toLowerCase() === "resolved" || s.toLowerCase() === "closed") s = "Completed";
+        if (s.toLowerCase() === "in progress" || s.toLowerCase() === "in-progress" || s.toLowerCase() === "processing") s = "In progress";
+        if (s.toLowerCase() === "on hold" || s.toLowerCase() === "on-hold" || s.toLowerCase() === "hold") s = "On Hold";
+        if (s.toLowerCase() === "cancel" || s.toLowerCase() === "cancelled") s = "Cancel";
         if (r.code) map[r.code.toUpperCase()] = s;
         if (r.id) map[r.id.toUpperCase()] = s;
       });
@@ -657,13 +659,20 @@ export default function TicketsPage() {
   };
 
   const getTicketStatus = (ticket: Ticket): string => {
-    let s = getTicketRequestStatus(ticket, requestStatusMap);
-    if (!s && ticket.request_code && ticket.tt_status) {
-      s = ticket.tt_status;
+    const reqCode = getTicketRequestCode(ticket as any);
+    if (!reqCode) return "";
+
+    // Request status MUST synchronize with ticket status!
+    let s = ticket.tt_status;
+    if (!s) {
+      s = (ticket as any).request_status || requestStatusMap[reqCode.toUpperCase()] || requestStatusMap[reqCode.replace(/^CR-/, "TH-").toUpperCase()];
     }
     if (!s) return "";
-    if (s.toLowerCase() === "resolved") return "Completed";
-    if (s.toLowerCase() === "in progress") return "In progress";
+    const sLower = s.toLowerCase();
+    if (sLower === "resolved" || sLower === "closed") return "Completed";
+    if (sLower === "in progress" || sLower === "in-progress" || sLower === "processing") return "In progress";
+    if (sLower === "on hold" || sLower === "on-hold" || sLower === "hold") return "On Hold";
+    if (sLower === "cancel" || sLower === "cancelled") return "Cancel";
     return s;
   };
 
@@ -733,6 +742,11 @@ export default function TicketsPage() {
       }
 
       loadRequestsMap();
+      syncAllTicketRequestStatuses().then(({ syncedCount }) => {
+        if (syncedCount > 0) {
+          loadRequestsMap();
+        }
+      }).catch(err => console.warn("Auto sync requests warning:", err));
     } catch (err) {
       console.error("Error loading column preferences:", err);
     }
@@ -980,6 +994,11 @@ export default function TicketsPage() {
       const data = await fetchTickets();
       setTickets(data as Ticket[]);
       loadRequestsMap();
+      syncAllTicketRequestStatuses().then(({ syncedCount }) => {
+        if (syncedCount > 0) {
+          loadRequestsMap();
+        }
+      }).catch(err => console.warn("Auto sync requests warning:", err));
     } catch (err) {
       console.error("Error loading tickets:", err);
     } finally {

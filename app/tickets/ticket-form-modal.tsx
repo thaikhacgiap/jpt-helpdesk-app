@@ -5696,6 +5696,20 @@ export default function TicketFormModal({
         if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
       }
 
+      // Đồng bộ trạng thái sang Yêu cầu liên kết (CR-, TH-)
+      const targetSyncTicketId = ticket?.ticket_id || savedTicketId || dbId;
+      if (targetSyncTicketId) {
+        const finalStatus = currentStep === "completed" ? (ttStatus || finishedData.ticketStatus || "Completed") : ttStatus;
+        const finalEndTime = currentStep === "completed" ? (closeTime || finishedData.resolveTime) : undefined;
+        syncTicketToRequest(targetSyncTicketId, {
+          ttStatus: finalStatus,
+          endTime: finalEndTime,
+          startTime: createData.startTime,
+          title: createData.title,
+          ttType: createData.ttType,
+        }).catch((e) => console.warn("Background syncTicketToRequest in handleSaveOnly failed:", e));
+      }
+
       setSavedSteps(nextSaved);
       setCompletedSteps(nextCompleted);
       setEditing(false);

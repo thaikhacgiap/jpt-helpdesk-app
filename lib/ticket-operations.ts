@@ -267,20 +267,23 @@ export function getTicketRequestCode(ticket: any): string {
 // Helper to extract or resolve request status from a ticket
 export function getTicketRequestStatus(ticket: any, customMap?: Record<string, string>): string {
   if (!ticket) return "";
-  let status = ticket.request_status;
+  const reqCode = getTicketRequestCode(ticket);
+  if (!reqCode) return "";
+
+  // Request status must synchronize with ticket status!
+  let status = ticket.tt_status;
   if (!status) {
-    const reqCode = getTicketRequestCode(ticket);
-    if (reqCode && customMap) {
-      status = customMap[reqCode.toUpperCase()] || customMap[(ticket.request_id || "").toUpperCase()];
-    }
+    status = ticket.request_status;
   }
-  // Fallback to ticket's own status if linked to request
-  if (!status && getTicketRequestCode(ticket)) {
-    status = ticket.tt_status;
+  if (!status && customMap) {
+    status = customMap[reqCode.toUpperCase()] || customMap[(ticket.request_id || "").toUpperCase()];
   }
   if (!status) return "";
-  if (status.toLowerCase() === "resolved") return "Completed";
-  if (status.toLowerCase() === "in progress") return "In progress";
+  const sLower = status.toLowerCase();
+  if (sLower === "resolved" || sLower === "closed") return "Completed";
+  if (sLower === "in progress" || sLower === "in-progress" || sLower === "processing") return "In progress";
+  if (sLower === "on hold" || sLower === "on-hold" || sLower === "hold") return "On Hold";
+  if (sLower === "cancel" || sLower === "cancelled") return "Cancel";
   return status;
 }
 
@@ -314,8 +317,11 @@ export async function syncTicketToRequest(
     if (!rc) return false;
 
     let status = extraUpdates?.ttStatus || tk.tt_status || 'In progress';
-    if (status.toLowerCase() === 'resolved') status = 'Completed';
-    if (status.toLowerCase() === 'in progress') status = 'In progress';
+    const sLower = status.toLowerCase();
+    if (sLower === 'resolved' || sLower === 'closed') status = 'Completed';
+    else if (sLower === 'in progress' || sLower === 'in-progress' || sLower === 'processing') status = 'In progress';
+    else if (sLower === 'on hold' || sLower === 'on-hold' || sLower === 'hold') status = 'On Hold';
+    else if (sLower === 'cancel' || sLower === 'cancelled') status = 'Cancel';
 
     const nowIso = new Date().toISOString();
     const reqUpdates: any = {
@@ -337,14 +343,25 @@ export async function syncTicketToRequest(
       reqUpdates.tt_close_time = finalEnd;
     }
 
+    const rcClean = rc.trim();
+    const crClean = rcClean.replace(/^TH-/i, 'CR-');
+    const thClean = rcClean.replace(/^CR-/i, 'TH-');
+
     const { error: updateErr } = await supabase
       .from('tickets')
       .update(reqUpdates)
-      .or(`ticket_id.eq.${rc},ticket_id.eq.${rc.replace(/^CR-/, 'TH-')},ticket_id.eq.${rc.replace(/^TH-/, 'CR-')},id.eq.${rc}`);
+      .or(`ticket_id.eq.${rcClean},ticket_id.eq.${crClean},ticket_id.eq.${thClean},ticket_id.ilike.${rcClean},ticket_id.ilike.${crClean},ticket_id.ilike.${thClean},id.eq.${rcClean}`);
 
     if (updateErr) {
       console.warn('Error in syncTicketToRequest updating DB:', updateErr.message);
-      return false;
+    }
+
+    // Also update any request that references this ticket_id in document_link
+    if (tk.ticket_id) {
+      await supabase
+        .from('tickets')
+        .update(reqUpdates)
+        .eq('document_link', tk.ticket_id);
     }
 
     // Also synchronize local storage cache for requests if running in browser
@@ -379,6 +396,126 @@ export async function syncTicketToRequest(
   } catch (err) {
     console.warn('syncTicketToRequest caught error:', err);
     return false;
+  }
+}
+
+/**
+ * Automatically synchronizes request statuses in database and localStorage with ticket statuses
+ * for all linked requests where ticket status and request status differ.
+ */
+export async function syncAllTicketRequestStatuses(): Promise<{ syncedCount: number }> {
+  try {
+    const { data: allRows, error } = await supabase
+      .from('tickets')
+      .select('id, ticket_id, request_code, tt_status, start_time, end_time, close_time, tt_close_time, title, document_link, remark');
+
+    if (error || !allRows) return { syncedCount: 0 };
+
+    const requests = allRows.filter(r => {
+      const tid = (r.ticket_id || '').toUpperCase();
+      return tid.startsWith('CR-') || tid.startsWith('TH-') || tid.startsWith('SR-') || tid.startsWith('TR-');
+    });
+
+    const tickets = allRows.filter(t => {
+      const tid = (t.ticket_id || '').toUpperCase();
+      return !tid.startsWith('CR-') && !tid.startsWith('TH-') && !tid.startsWith('SR-') && !tid.startsWith('TR-') && !tid.startsWith('BTR-');
+    });
+
+    let syncedCount = 0;
+    const nowIso = new Date().toISOString();
+
+    for (const tk of tickets) {
+      const rc = tk.request_code || getTicketRequestCode(tk);
+      if (!rc || !tk.tt_status) continue;
+
+      let targetStatus = tk.tt_status;
+      const sLower = targetStatus.toLowerCase();
+      if (sLower === 'resolved' || sLower === 'closed') targetStatus = 'Completed';
+      else if (sLower === 'in progress' || sLower === 'in-progress' || sLower === 'processing') targetStatus = 'In progress';
+      else if (sLower === 'on hold' || sLower === 'on-hold' || sLower === 'hold') targetStatus = 'On Hold';
+      else if (sLower === 'cancel' || sLower === 'cancelled') targetStatus = 'Cancel';
+
+      const rcUpper = rc.toUpperCase();
+      const thUpper = rcUpper.replace(/^CR-/, 'TH-');
+      const crUpper = rcUpper.replace(/^TH-/, 'CR-');
+
+      const matchedReq = requests.find(r => {
+        const rTid = (r.ticket_id || '').toUpperCase();
+        return rTid === rcUpper || rTid === thUpper || rTid === crUpper || r.id === rc;
+      });
+
+      if (matchedReq) {
+        let reqCurrentStatus = matchedReq.tt_status || 'New';
+        if (reqCurrentStatus.toLowerCase() === 'resolved') reqCurrentStatus = 'Completed';
+        if (reqCurrentStatus.toLowerCase() === 'in progress') reqCurrentStatus = 'In progress';
+
+        if (reqCurrentStatus !== targetStatus) {
+          const reqUpdates: any = {
+            tt_status: targetStatus,
+            document_link: tk.ticket_id,
+            updated_at: nowIso,
+          };
+          if (targetStatus === 'Completed') {
+            const finalEnd = tk.end_time || tk.tt_close_time || tk.close_time || nowIso;
+            reqUpdates.end_time = finalEnd;
+            reqUpdates.close_time = finalEnd;
+            reqUpdates.tt_close_time = finalEnd;
+          }
+
+          const { error: updErr } = await supabase
+            .from('tickets')
+            .update(reqUpdates)
+            .eq('id', matchedReq.id);
+
+          if (!updErr) {
+            syncedCount++;
+            matchedReq.tt_status = targetStatus;
+          }
+        }
+      }
+    }
+
+    // Also sync localStorage 'jpt_requests'
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('jpt_requests');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            let changed = false;
+            tickets.forEach(tk => {
+              const rc = tk.request_code || getTicketRequestCode(tk);
+              if (!rc || !tk.tt_status) return;
+
+              let targetStatus = tk.tt_status;
+              const sLower = targetStatus.toLowerCase();
+              if (sLower === 'resolved' || sLower === 'closed') targetStatus = 'Completed';
+              else if (sLower === 'in progress') targetStatus = 'In progress';
+              else if (sLower === 'on hold') targetStatus = 'On Hold';
+
+              const rcUpper = rc.toUpperCase();
+              list.forEach((item: any) => {
+                const code = (item.code || item.id || '').toUpperCase();
+                if (code === rcUpper || code === rcUpper.replace(/^CR-/, 'TH-') || code === rcUpper.replace(/^TH-/, 'CR-')) {
+                  if (item.status !== targetStatus) {
+                    item.status = targetStatus;
+                    changed = true;
+                  }
+                }
+              });
+            });
+            if (changed) {
+              localStorage.setItem('jpt_requests', JSON.stringify(list));
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return { syncedCount };
+  } catch (err) {
+    console.warn('syncAllTicketRequestStatuses error:', err);
+    return { syncedCount: 0 };
   }
 }
 
@@ -440,22 +577,20 @@ export async function fetchTickets(): Promise<Ticket[]> {
     }).map(t => {
       const reqCode = getTicketRequestCode(t);
       let reqStatus = (t as any).request_status;
+      // Synchronize request status with ticket status: if ticket has tt_status, request status follows ticket status
+      let reqStatus = t.tt_status;
       if (!reqStatus && reqCode) {
         reqStatus = requestStatusMap.get(reqCode.toUpperCase())
           || requestStatusMap.get((t.request_id || '').toUpperCase())
+          || (t as any).request_status
           || '';
       }
-      // If linked request status is New or unset, but the ticket itself has already progressed,
-      // the request status must follow the ticket's active status (In progress, Completed, etc.)
-      if (reqCode && t.tt_status && (!reqStatus || reqStatus.toLowerCase() === 'new' || reqStatus === 'Chờ tiếp nhận')) {
-        reqStatus = t.tt_status;
-      }
-      if (!reqStatus && reqCode && t.tt_status) {
-        reqStatus = t.tt_status;
-      }
       if (reqStatus) {
-        if (reqStatus.toLowerCase() === 'resolved') reqStatus = 'Completed';
-        if (reqStatus.toLowerCase() === 'in progress') reqStatus = 'In progress';
+        const sLower = reqStatus.toLowerCase();
+        if (sLower === 'resolved' || sLower === 'closed') reqStatus = 'Completed';
+        else if (sLower === 'in progress' || sLower === 'in-progress' || sLower === 'processing') reqStatus = 'In progress';
+        else if (sLower === 'on hold' || sLower === 'on-hold' || sLower === 'hold') reqStatus = 'On Hold';
+        else if (sLower === 'cancel' || sLower === 'cancelled') reqStatus = 'Cancel';
       }
       return {
         ...t,
@@ -463,6 +598,13 @@ export async function fetchTickets(): Promise<Ticket[]> {
         request_status: reqStatus || undefined,
       };
     });
+
+    // Run background sync for any out-of-sync requests in database
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        syncAllTicketRequestStatuses().catch(e => console.warn('Background sync error:', e));
+      }, 100);
+    }
 
     return ticketsOnly;
   } catch (error) {
