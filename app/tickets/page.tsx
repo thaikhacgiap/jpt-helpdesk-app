@@ -77,32 +77,34 @@ interface Ticket {
 }
 
 interface Filters {
-  tt_type: string;
-  contract_scope: string;
-  category: string;
-  priority: string;
-  tt_status: string;
-  sla_status: string;
+  tt_type: string[];
+  contract_scope: string[];
+  category: string[];
+  priority: string[];
+  tt_status: string[];
+  sla_status: string[];
   customer: string;
   contract: string;
-  creator: string;
+  creator: string[];
   createdAtFrom: string;
   createdAtTo: string;
   closedAtFrom: string;
   closedAtTo: string;
 }
 
-/* ─── Dropdown component ───────────────────────────────────── */
+/* ─── Dropdown component (Multi-Choice) ─────────────────────── */
 function FilterDropdown({
   label,
   options,
   value,
   onChange,
+  counts,
 }: {
   label: string;
   options: string[];
-  value: string;
-  onChange: (v: string) => void;
+  value: string[];
+  onChange: (v: string[]) => void;
+  counts?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -115,52 +117,154 @@ function FilterDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const toggleOption = (opt: string) => {
+    if (value.includes(opt)) {
+      onChange(value.filter((v) => v !== opt));
+    } else {
+      onChange([...value, opt]);
+    }
+  };
+
+  const selectAll = () => {
+    onChange([...options]);
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
+  const isAllSelected = options.length > 0 && options.every((opt) => value.includes(opt));
+  const isSelected = value.length > 0;
+
   return (
     <div ref={ref} className="relative w-full">
-      <button
+      <div
         onClick={() => setOpen((o) => !o)}
-        className={`w-full h-[44px] px-3.5 rounded-xl border text-left flex items-center justify-between transition shadow-2xs ${
-          value
-            ? "border-teal-500 bg-teal-50/10 text-teal-700 font-normal"
+        className={`w-full h-[44px] px-3 rounded-xl border text-left flex items-center justify-between transition shadow-2xs cursor-pointer select-none ${
+          isSelected
+            ? "border-teal-500 bg-teal-50/20 text-teal-800"
             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
         }`}
       >
-        <div className="flex flex-col min-w-0">
-          <span className="text-[11px] font-normal text-slate-400 uppercase tracking-wider leading-tight">{label}</span>
-          <span className={`text-sm font-normal mt-0.5 truncate ${value ? "text-teal-700" : "text-slate-700"}`}>
-            {value || "Tất cả"}
+        <div className="flex flex-col min-w-0 pr-1 flex-1">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-tight truncate">
+            {label}
           </span>
+          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+            {value.length === 0 ? (
+              <span className="text-xs sm:text-sm font-normal text-slate-600 truncate">Tất cả</span>
+            ) : value.length === 1 ? (
+              <span className="text-xs sm:text-sm font-medium text-teal-800 truncate">{value[0]}</span>
+            ) : (
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-xs sm:text-sm font-medium text-teal-800 truncate">{value[0]}</span>
+                <span className="shrink-0 px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-teal-600 text-white">
+                  +{value.length - 1}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
-        <ChevronDown size={13} className={`text-slate-400 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {isSelected && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearAll();
+              }}
+              title="Bỏ chọn tất cả"
+              className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
+            >
+              <X size={12} />
+            </button>
+          )}
+          <ChevronDown
+            size={13}
+            className={`text-slate-400 transition-transform ${open ? "rotate-180 text-teal-600" : ""}`}
+          />
+        </div>
+      </div>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px] max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-100">
-          <button
-            onClick={() => {
-              onChange("");
-              setOpen(false);
-            }}
-            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition ${
-              !value ? "bg-teal-50 text-teal-700 font-normal" : "text-slate-700"
-            }`}
-          >
-            Tất cả (Bỏ chọn)
-          </button>
-          {options.map((opt) => (
+        <div className="absolute top-full left-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-xl py-2 min-w-[200px] max-w-[280px] w-full animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Quick actions: Chọn tất cả / Bỏ chọn */}
+          <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100 text-[11px]">
             <button
-              key={opt}
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition ${
-                value === opt ? "bg-teal-50 text-teal-700 font-normal" : "text-slate-700"
+              type="button"
+              onClick={selectAll}
+              disabled={isAllSelected}
+              className={`font-medium transition cursor-pointer ${
+                isAllSelected
+                  ? "text-slate-300 cursor-not-allowed"
+                  : "text-teal-600 hover:text-teal-700 hover:underline"
               }`}
             >
-              {opt}
+              Chọn tất cả
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={clearAll}
+              disabled={!isSelected}
+              className={`font-medium transition cursor-pointer ${
+                !isSelected
+                  ? "text-slate-300 cursor-not-allowed"
+                  : "text-red-600 hover:text-red-700 hover:underline"
+              }`}
+            >
+              Bỏ chọn ({value.length})
+            </button>
+          </div>
+
+          {/* Options with checkboxes */}
+          <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
+            {options.map((opt) => {
+              const checked = value.includes(opt);
+              const count = counts ? counts[opt] : undefined;
+              return (
+                <div
+                  key={opt}
+                  onClick={() => toggleOption(opt)}
+                  className={`w-full flex items-center justify-between px-3 py-1.5 text-xs sm:text-sm hover:bg-slate-50 transition cursor-pointer select-none ${
+                    checked ? "bg-teal-50/60 text-teal-900 font-medium" : "text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <div
+                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition ${
+                        checked
+                          ? "bg-teal-600 border-teal-600 text-white"
+                          : "border-slate-300 bg-white"
+                      }`}
+                    >
+                      {checked && <Check size={11} strokeWidth={3} />}
+                    </div>
+                    <span className="truncate">{opt}</span>
+                  </div>
+                  {count !== undefined && (
+                    <span
+                      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full ${
+                        checked ? "bg-teal-100 text-teal-800 font-medium" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="px-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="px-2.5 py-1 text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition cursor-pointer shadow-xs"
+            >
+              Đóng ({value.length})
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -603,15 +707,15 @@ export default function TicketsPage() {
   }, []);
 
   const [filters, setFilters] = useState<Filters>({
-    tt_type: "",
-    contract_scope: "",
-    category: "",
-    priority: "",
-    tt_status: "",
-    sla_status: "",
+    tt_type: [],
+    contract_scope: [],
+    category: [],
+    priority: [],
+    tt_status: [],
+    sla_status: [],
     customer: "",
     contract: "",
-    creator: "",
+    creator: [],
     createdAtFrom: "",
     createdAtTo: "",
     closedAtFrom: "",
@@ -1073,8 +1177,56 @@ export default function TicketsPage() {
     }
   };
 
-  const setFilter = (key: keyof Filters) => (val: string) =>
+  const setFilter = <K extends keyof Filters>(key: K) => (val: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: val }));
+
+  const removeArrayFilterItem = (key: keyof Filters, item: string) => {
+    setFilters((f) => {
+      const arr = (f[key] as unknown as string[]) || [];
+      return { ...f, [key]: arr.filter((x) => x !== item) };
+    });
+    setCurrentPage(1);
+  };
+
+  // Precomputed counts for multi-choice filters
+  const filterCounts = useMemo(() => {
+    const counts = {
+      tt_type: {} as Record<string, number>,
+      contract_scope: {} as Record<string, number>,
+      category: {} as Record<string, number>,
+      priority: {} as Record<string, number>,
+      tt_status: {} as Record<string, number>,
+      sla_status: {} as Record<string, number>,
+      creator: {} as Record<string, number>,
+    };
+
+    const validTickets = tickets.filter((t) => {
+      const tid = (t.ticket_id || "").toUpperCase();
+      if (tid.startsWith("CR-") || tid.startsWith("TH-") || tid.startsWith("SR-") || tid.startsWith("TR-") || tid.startsWith("BTR-")) {
+        return false;
+      }
+      if (t.tt_type === "Maintenance" || t.tt_type?.toLowerCase() === "maintenance") {
+        return false;
+      }
+      return true;
+    });
+
+    validTickets.forEach((t) => {
+      if (t.tt_type) counts.tt_type[t.tt_type] = (counts.tt_type[t.tt_type] || 0) + 1;
+      if (t.contract_scope) counts.contract_scope[t.contract_scope] = (counts.contract_scope[t.contract_scope] || 0) + 1;
+      if (t.category) counts.category[t.category] = (counts.category[t.category] || 0) + 1;
+      if (t.priority) counts.priority[t.priority] = (counts.priority[t.priority] || 0) + 1;
+      if (t.tt_status) counts.tt_status[t.tt_status] = (counts.tt_status[t.tt_status] || 0) + 1;
+      const sla = getTicketSlaInfo(t).status;
+      if (sla) counts.sla_status[sla] = (counts.sla_status[sla] || 0) + 1;
+      if (t.creator_name?.trim()) {
+        const c = t.creator_name.trim();
+        counts.creator[c] = (counts.creator[c] || 0) + 1;
+      }
+    });
+
+    return counts;
+  }, [tickets]);
 
   // Options for advanced filters
   const allFilterCustomers = useMemo(() => {
@@ -1138,12 +1290,12 @@ export default function TicketsPage() {
       const matchReqStatus = getTicketStatus(t).toLowerCase().includes(q);
       if (!matchObj && !matchReqCode && !matchReqStatus) return false;
     }
-    if (filters.tt_type && t.tt_type !== filters.tt_type) return false;
-    if (filters.contract_scope && t.contract_scope !== filters.contract_scope) return false;
-    if (filters.category && t.category !== filters.category) return false;
-    if (filters.priority && t.priority !== filters.priority) return false;
-    if (filters.tt_status && t.tt_status !== filters.tt_status) return false;
-    if (filters.sla_status && getTicketSlaInfo(t).status !== filters.sla_status) return false;
+    if (filters.tt_type.length > 0 && !filters.tt_type.includes(t.tt_type || "")) return false;
+    if (filters.contract_scope.length > 0 && !filters.contract_scope.includes(t.contract_scope || "")) return false;
+    if (filters.category.length > 0 && !filters.category.includes(t.category || "")) return false;
+    if (filters.priority.length > 0 && !filters.priority.includes(t.priority || "")) return false;
+    if (filters.tt_status.length > 0 && !filters.tt_status.includes(t.tt_status || "")) return false;
+    if (filters.sla_status.length > 0 && !filters.sla_status.includes(getTicketSlaInfo(t).status)) return false;
 
     // Advanced Filters
     if (filters.customer) {
@@ -1160,9 +1312,9 @@ export default function TicketsPage() {
       if (!matchContract) return false;
     }
 
-    if (filters.creator) {
-      const targetCreator = filters.creator.toLowerCase().trim();
-      const matchCreator = t.creator_name && t.creator_name.toLowerCase().trim() === targetCreator;
+    if (filters.creator.length > 0) {
+      const tCreator = (t.creator_name || "").toLowerCase().trim();
+      const matchCreator = filters.creator.some((c) => c.toLowerCase().trim() === tCreator);
       if (!matchCreator) return false;
     }
 
@@ -1198,42 +1350,59 @@ export default function TicketsPage() {
   });
 
   const advancedFiltersCount = [
-    filters.customer,
-    filters.contract,
-    filters.creator,
-    filters.createdAtFrom,
-    filters.createdAtTo,
-    filters.closedAtFrom,
-    filters.closedAtTo,
+    Boolean(filters.customer),
+    Boolean(filters.contract),
+    filters.creator.length > 0,
+    Boolean(filters.createdAtFrom),
+    Boolean(filters.createdAtTo),
+    Boolean(filters.closedAtFrom),
+    Boolean(filters.closedAtTo),
   ].filter(Boolean).length;
 
   const basicFiltersCount = [
-    filters.tt_type,
-    filters.contract_scope,
-    filters.category,
-    filters.priority,
-    filters.tt_status,
-    filters.sla_status,
+    filters.tt_type.length > 0,
+    filters.contract_scope.length > 0,
+    filters.category.length > 0,
+    filters.priority.length > 0,
+    filters.tt_status.length > 0,
+    filters.sla_status.length > 0,
   ].filter(Boolean).length;
 
   const activeFiltersCount = basicFiltersCount + advancedFiltersCount + (search.trim() ? 1 : 0);
 
   const clearAllFilters = () => {
     setFilters({
-      tt_type: "",
-      contract_scope: "",
-      category: "",
-      priority: "",
-      tt_status: "",
-      sla_status: "",
+      tt_type: [],
+      contract_scope: [],
+      category: [],
+      priority: [],
+      tt_status: [],
+      sla_status: [],
       customer: "",
       contract: "",
-      creator: "",
+      creator: [],
       createdAtFrom: "",
       createdAtTo: "",
       closedAtFrom: "",
       closedAtTo: "",
     });
+    setSearch("");
+    setCurrentPage(1);
+  };
+
+  const clearAdvancedFilters = () => {
+    setFilters((prev) => ({
+      ...prev,
+      customer: "",
+      contract: "",
+      creator: [],
+      createdAtFrom: "",
+      createdAtTo: "",
+      closedAtFrom: "",
+      closedAtTo: "",
+    }));
+    setCurrentPage(1);
+  };
     setSearch("");
     setCurrentPage(1);
   };
@@ -1738,36 +1907,42 @@ export default function TicketsPage() {
           label="TT Type"
           options={TT_TYPE_OPTIONS}
           value={filters.tt_type}
+          counts={filterCounts.tt_type}
           onChange={(v) => { setFilter("tt_type")(v); setCurrentPage(1); }}
         />
         <FilterDropdown
           label="Contract Scope"
           options={CONTRACT_SCOPE_OPTIONS}
           value={filters.contract_scope}
+          counts={filterCounts.contract_scope}
           onChange={(v) => { setFilter("contract_scope")(v); setCurrentPage(1); }}
         />
         <FilterDropdown
           label="Category"
           options={CATEGORY_OPTIONS}
           value={filters.category}
+          counts={filterCounts.category}
           onChange={(v) => { setFilter("category")(v); setCurrentPage(1); }}
         />
         <FilterDropdown
           label="Priority"
           options={PRIORITY_OPTIONS}
           value={filters.priority}
+          counts={filterCounts.priority}
           onChange={(v) => { setFilter("priority")(v); setCurrentPage(1); }}
         />
         <FilterDropdown
           label="TT Status"
           options={TT_STATUS_OPTIONS}
           value={filters.tt_status}
+          counts={filterCounts.tt_status}
           onChange={(v) => { setFilter("tt_status")(v); setCurrentPage(1); }}
         />
         <FilterDropdown
           label="SLA Status"
           options={SLA_STATUS_OPTIONS}
           value={filters.sla_status}
+          counts={filterCounts.sla_status}
           onChange={(v) => { setFilter("sla_status")(v); setCurrentPage(1); }}
         />
         
@@ -1887,19 +2062,13 @@ export default function TicketsPage() {
                 <User size={13} className="text-teal-600" />
                 <span>Người tạo ticket</span>
               </label>
-              <div className="relative">
-                <select
-                  value={filters.creator}
-                  onChange={(e) => { setFilter("creator")(e.target.value); setCurrentPage(1); }}
-                  className="w-full h-10 px-3 pr-8 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none transition cursor-pointer"
-                >
-                  <option value="">-- Tất cả người tạo --</option>
-                  {availableCreators.map((creator) => (
-                    <option key={creator} value={creator}>{creator}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
+              <FilterDropdown
+                label="Người tạo"
+                options={availableCreators}
+                value={filters.creator}
+                counts={filterCounts.creator}
+                onChange={(v) => { setFilter("creator")(v); setCurrentPage(1); }}
+              />
             </div>
 
             {/* 4. Khoảng thời gian tạo */}
@@ -2081,13 +2250,13 @@ export default function TicketsPage() {
               <button type="button" onClick={() => setFilter("contract")("")} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
           )}
-          {filters.creator && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+          {filters.creator.map((creator) => (
+            <span key={creator} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
               <User size={11} className="text-teal-600" />
-              <span>Người tạo: <b>{filters.creator}</b></span>
-              <button type="button" onClick={() => setFilter("creator")("")} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
+              <span>Người tạo: <b>{creator}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("creator", creator)} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
+          ))}
           {(filters.createdAtFrom || filters.createdAtTo) && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
               <Calendar size={11} className="text-teal-600" />
@@ -2102,42 +2271,42 @@ export default function TicketsPage() {
               <button type="button" onClick={() => setFilters(p => ({ ...p, closedAtFrom: "", closedAtTo: "" }))} className="hover:text-teal-950 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
           )}
-          {filters.tt_type && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>Loại: <b>{filters.tt_type}</b></span>
-              <button type="button" onClick={() => setFilter("tt_type")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          {filters.tt_type.map((type) => (
+            <span key={type} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Loại: <b>{type}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("tt_type", type)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
-          {filters.tt_status && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>Trạng thái: <b>{filters.tt_status}</b></span>
-              <button type="button" onClick={() => setFilter("tt_status")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          ))}
+          {filters.tt_status.map((status) => (
+            <span key={status} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Trạng thái: <b>{status}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("tt_status", status)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
-          {filters.priority && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>Ưu tiên: <b>{filters.priority}</b></span>
-              <button type="button" onClick={() => setFilter("priority")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          ))}
+          {filters.priority.map((pri) => (
+            <span key={pri} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Ưu tiên: <b>{pri}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("priority", pri)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
-          {filters.category && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>Danh mục: <b>{filters.category}</b></span>
-              <button type="button" onClick={() => setFilter("category")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          ))}
+          {filters.category.map((cat) => (
+            <span key={cat} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Danh mục: <b>{cat}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("category", cat)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
-          {filters.contract_scope && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>Scope: <b>{filters.contract_scope}</b></span>
-              <button type="button" onClick={() => setFilter("contract_scope")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          ))}
+          {filters.contract_scope.map((scope) => (
+            <span key={scope} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>Scope: <b>{scope}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("contract_scope", scope)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
-          {filters.sla_status && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span>SLA: <b>{filters.sla_status}</b></span>
-              <button type="button" onClick={() => setFilter("sla_status")("")} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
+          ))}
+          {filters.sla_status.map((sla) => (
+            <span key={sla} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span>SLA: <b>{sla}</b></span>
+              <button type="button" onClick={() => removeArrayFilterItem("sla_status", sla)} className="hover:text-slate-900 p-0.5 cursor-pointer"><X size={11} /></button>
             </span>
-          )}
+          ))}
           <button
             type="button"
             onClick={clearAllFilters}
