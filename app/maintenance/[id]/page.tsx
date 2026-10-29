@@ -1116,10 +1116,6 @@ export default function MaintenanceDetailPage() {
     );
   };
 
-  const showAssigneeAndStatusFields = 
-    form.isSubtask || 
-    (!form.isSubtask && (!editingTask || !currentTasks.some(t => t.parentId === editingTask.id)));
-
   return (
     <MainLayout>
       <div className="flex flex-col h-[calc(100vh-48px)] overflow-hidden">
@@ -1443,8 +1439,9 @@ export default function MaintenanceDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 overflow-x-auto overflow-y-auto min-h-[460px] relative bg-white border border-slate-200 rounded-xl shadow-xs custom-scrollbar">
-                <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
+              <div className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                <div className="flex-1 overflow-x-auto overflow-y-auto min-h-[460px] relative custom-scrollbar">
+                  <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                   <thead className="select-none">
                     <tr className="bg-[#1E40AF] text-white">
                       <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-16 whitespace-nowrap shadow-sm">
