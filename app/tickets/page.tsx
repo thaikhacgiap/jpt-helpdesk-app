@@ -1405,23 +1405,6 @@ export default function TicketsPage() {
     }));
     setCurrentPage(1);
   };
-    setSearch("");
-    setCurrentPage(1);
-  };
-
-  const clearAdvancedFilters = () => {
-    setFilters((prev) => ({
-      ...prev,
-      customer: "",
-      contract: "",
-      creator: "",
-      createdAtFrom: "",
-      createdAtTo: "",
-      closedAtFrom: "",
-      closedAtTo: "",
-    }));
-    setCurrentPage(1);
-  };
 
   // Export CSV/Excel
   const handleExport = () => {
