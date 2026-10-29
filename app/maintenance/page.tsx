@@ -5,7 +5,7 @@ import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User } from "lucide-react";
+import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User, ChevronDown, Check } from "lucide-react";
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
@@ -197,6 +197,40 @@ const getPlanStatus = (t: any, progressPercent: number): { label: string; status
   };
 };
 
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  id: 150,
+  customer: 240,
+  contract: 220,
+  creator: 160,
+  created_at: 160,
+  hold_time: 90,
+  status: 130,
+  progress: 170,
+  actions: 90,
+};
+
+const MIN_COL_WIDTHS: Record<string, number> = {
+  id: 100,
+  customer: 140,
+  contract: 120,
+  creator: 110,
+  created_at: 120,
+  hold_time: 70,
+  status: 100,
+  progress: 120,
+  actions: 80,
+};
+
+const STORAGE_COL_WIDTHS_KEY = "jpt_maintenance_col_widths";
+
+const STATUS_OPTIONS = [
+  { key: "New", label: "Mới tạo", badgeClass: "bg-blue-100 text-blue-700 border border-blue-200" },
+  { key: "Processing", label: "Processing", badgeClass: "bg-yellow-100 text-yellow-700 border border-yellow-200" },
+  { key: "Completed", label: "Completed", badgeClass: "bg-green-100 text-green-700 border border-green-200" },
+  { key: "On Hold", label: "Tạm ngưng", badgeClass: "bg-red-100 text-red-600 border border-red-200" },
+  { key: "Closed", label: "Đã đóng", badgeClass: "bg-slate-100 text-slate-700 border border-slate-200" },
+];
+
 export default function MaintenancePage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -209,12 +243,113 @@ export default function MaintenancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"list" | "timeline">("list");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [customerFilter, setCustomerFilter] = useState("All");
   const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("month");
   const [sortField, setSortField] = useState<"customer" | "created_at" | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Column Resizing state
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(STORAGE_COL_WIDTHS_KEY);
+        if (saved) {
+          return { ...DEFAULT_COL_WIDTHS, ...JSON.parse(saved) };
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_COL_WIDTHS;
+  });
+
+  const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+
+  const handleMouseDown = (colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = {
+      colKey,
+      startX: e.clientX,
+      startWidth: colWidths[colKey] || DEFAULT_COL_WIDTHS[colKey] || 120,
+    };
+
+    let latestWidths = { ...colWidths };
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { colKey, startX, startWidth } = resizingRef.current;
+      const delta = moveEvent.clientX - startX;
+      const minW = MIN_COL_WIDTHS[colKey] || 70;
+      const newWidth = Math.max(minW, startWidth + delta);
+      latestWidths = {
+        ...latestWidths,
+        [colKey]: newWidth,
+      };
+      setColWidths({ ...latestWidths });
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      try {
+        localStorage.setItem(STORAGE_COL_WIDTHS_KEY, JSON.stringify(latestWidths));
+      } catch (e) {}
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleResetColWidths = () => {
+    setColWidths(DEFAULT_COL_WIDTHS);
+    try {
+      localStorage.removeItem(STORAGE_COL_WIDTHS_KEY);
+    } catch (e) {}
+  };
+
+  // Close status dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setIsStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleStatus = (key: string) => {
+    setStatusFilter(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  // Count tickets per status
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      New: 0,
+      Processing: 0,
+      Completed: 0,
+      "On Hold": 0,
+      Closed: 0,
+    };
+    tickets.forEach(t => {
+      const p = calculatePlanProgress(t);
+      const s = getPlanStatus(t, p);
+      if (counts[s.statusKey] !== undefined) {
+        counts[s.statusKey]++;
+      }
+    });
+    return counts;
+  }, [tickets]);
   
   const [form, setForm] = useState({
     customerId: "",
@@ -454,16 +589,18 @@ export default function MaintenancePage() {
       const planStatus = getPlanStatus(t, progressVal);
       
       let matchesStatus = true;
-      if (statusFilter && statusFilter !== "All") {
-        if (statusFilter === "Completed") {
-          matchesStatus = planStatus.statusKey === "Completed" || t.tt_status === "Resolved" || t.tt_status === "Completed";
-        } else if (statusFilter === "Processing") {
-          matchesStatus = planStatus.statusKey === "Processing" || t.tt_status === "In Progress" || t.tt_status === "Processing";
-        } else if (statusFilter === "New") {
-          matchesStatus = planStatus.statusKey === "New" || t.tt_status === "New";
-        } else {
-          matchesStatus = planStatus.statusKey === statusFilter || t.tt_status === statusFilter;
-        }
+      if (statusFilter && statusFilter.length > 0) {
+        matchesStatus = statusFilter.some(sKey => {
+          if (sKey === "Completed") {
+            return planStatus.statusKey === "Completed" || t.tt_status === "Resolved" || t.tt_status === "Completed";
+          } else if (sKey === "Processing") {
+            return planStatus.statusKey === "Processing" || t.tt_status === "In Progress" || t.tt_status === "Processing";
+          } else if (sKey === "New") {
+            return planStatus.statusKey === "New" || t.tt_status === "New";
+          } else {
+            return planStatus.statusKey === sKey || t.tt_status === sKey;
+          }
+        });
       }
 
       const matchesCustomer = !customerFilter || customerFilter === "All" || customerFilter === "" || t.customer_id === customerFilter || (t.customer?.name === customerFilter) || (t.customer_name === customerFilter);
@@ -854,19 +991,104 @@ export default function MaintenancePage() {
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
 
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-          >
-            <option value="All">Tất cả tình trạng</option>
-            <option value="New">Mới tạo</option>
-            <option value="Processing">Processing</option>
-            <option value="Completed">Completed</option>
-            <option value="On Hold">Tạm ngưng</option>
-            <option value="Closed">Đã đóng</option>
-          </select>
+          {/* Status Multi-Select Filter */}
+          <div className="relative" ref={statusDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsStatusDropdownOpen(prev => !prev)}
+              className={`h-10 px-3.5 border rounded-xl text-sm bg-white flex items-center gap-2 shadow-sm transition cursor-pointer select-none ${
+                statusFilter.length > 0
+                  ? "border-blue-400 ring-2 ring-blue-500/10 font-medium text-blue-900"
+                  : "border-slate-200 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <Filter size={14} className={statusFilter.length > 0 ? "text-blue-600" : "text-slate-400"} />
+              {statusFilter.length === 0 ? (
+                <span>Tất cả tình trạng</span>
+              ) : statusFilter.length === 1 ? (
+                <div className="flex items-center gap-1.5">
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATUS_OPTIONS.find(o => o.key === statusFilter[0])?.badgeClass}`}>
+                    {STATUS_OPTIONS.find(o => o.key === statusFilter[0])?.label}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span>Tình trạng</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white leading-none">
+                    {statusFilter.length}
+                  </span>
+                </div>
+              )}
+              {statusFilter.length > 0 ? (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter([]);
+                  }}
+                  className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                  title="Xóa chọn tình trạng"
+                >
+                  <X size={13} />
+                </span>
+              ) : (
+                <ChevronDown size={14} className={`text-slate-400 transition-transform ${isStatusDropdownOpen ? "rotate-180" : ""}`} />
+              )}
+            </button>
+
+            {isStatusDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 animate-in fade-in-50 slide-in-from-top-1">
+                <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-100 mb-1">
+                  <span className="text-xs font-semibold text-slate-600">Lọc theo tình trạng</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter(STATUS_OPTIONS.map(o => o.key))}
+                      className="text-[11px] text-blue-600 hover:underline font-medium cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter([])}
+                      className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  {STATUS_OPTIONS.map((opt) => {
+                    const isChecked = statusFilter.includes(opt.key);
+                    const count = statusCounts[opt.key] || 0;
+                    return (
+                      <div
+                        key={opt.key}
+                        onClick={() => toggleStatus(opt.key)}
+                        className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer select-none transition ${
+                          isChecked ? "bg-blue-50/70" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer pointer-events-none"
+                          />
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${opt.badgeClass}`}>
+                            {opt.label}
+                          </span>
+                        </div>
+                        <span className="text-slate-400 font-medium">({count})</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Customer Filter */}
           <div className="w-56 sm:w-64">
@@ -880,142 +1102,278 @@ export default function MaintenancePage() {
               placeholder="Tất cả khách hàng"
             />
           </div>
+
+          {/* Clear Filters Button */}
+          {(statusFilter.length > 0 || (customerFilter && customerFilter !== "All") || search) && (
+            <button
+              onClick={() => {
+                setStatusFilter([]);
+                setCustomerFilter("All");
+                setSearch("");
+              }}
+              className="h-10 px-3 flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl border border-red-200 transition cursor-pointer"
+              title="Xóa tất cả bộ lọc"
+            >
+              <X size={14} />
+              <span>Xóa bộ lọc</span>
+            </button>
+          )}
         </div>
+
+        {/* Right toolbar controls */}
+        {activeTab === "list" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetColWidths}
+              className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 bg-white shadow-xs transition cursor-pointer"
+              title="Khôi phục độ rộng cột mặc định"
+            >
+              <RotateCcw size={13} />
+              <span className="hidden sm:inline">Đặt lại cột</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
       {activeTab === "list" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-xs text-slate-500 font-medium text-left">
-              <th className="px-6 py-3">ID</th>
-              <th 
-                className="px-4 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition group"
-                onClick={() => handleSort("customer")}
-                title="Bấm để sắp xếp theo tên khách hàng"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className={sortField === "customer" ? "font-semibold text-blue-700" : ""}>Tên khách hàng</span>
-                  <span className="text-slate-400 group-hover:text-slate-600">
-                    {sortField === "customer" ? (
-                      sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
-                    ) : (
-                      <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
-                    )}
-                  </span>
-                </div>
-              </th>
-              <th className="px-4 py-3">Tên hợp đồng</th>
-              <th className="px-4 py-3">Người tạo</th>
-              <th 
-                className="px-4 py-3 cursor-pointer select-none hover:bg-slate-100/80 transition group"
-                onClick={() => handleSort("created_at")}
-                title="Bấm để sắp xếp theo thời gian tạo"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className={sortField === "created_at" ? "font-semibold text-blue-700" : ""}>Thời gian tạo</span>
-                  <span className="text-slate-400 group-hover:text-slate-600">
-                    {sortField === "created_at" ? (
-                      sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
-                    ) : (
-                      <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
-                    )}
-                  </span>
-                </div>
-              </th>
-              <th className="px-4 py-3 text-center">Tổng kỳ</th>
-              <th className="px-4 py-3">Tình trạng</th>
-              <th className="px-4 py-3">Tiến độ</th>
-              <th className="px-4 py-3 text-center">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={9} className="py-12 text-center text-slate-400">
-                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  Đang tải...
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="py-14 text-center text-slate-400">
-                  <Wrench size={36} className="mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">{search ? "Không tìm thấy kết quả" : "Chưa có kế hoạch bảo trì nào"}</p>
-                  <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
-                    + Tạo kế hoạch đầu tiên
-                  </button>
-                </td>
-              </tr>
-            ) : (
-              filtered.map((t: any, i: number) => {
-                const progressVal = calculatePlanProgress(t);
-                const statusInfo = getPlanStatus(t, progressVal);
-                return (
-                  <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition">
-                    <td className="px-6 py-3.5 font-medium text-blue-600">
-                      <Link href={`/maintenance/${t.id}`} className="hover:underline">
-                        {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-700 max-w-[200px] truncate" title={t.customer?.name || t.customer_name}>
-                      {t.customer?.name || t.customer_name || "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-500 max-w-[200px] truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
-                      {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-700 max-w-[150px] truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
-                      <div className="flex items-center gap-1.5">
-                        <User size={13} className="text-slate-400 shrink-0" />
-                        <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs" title={t.created_at || ""}>
-                      {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
-                    </td>
-                    <td className="px-4 py-3.5 text-center font-medium text-slate-500">{t.hold_time || 0}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
-                        {statusInfo.label}
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="min-w-full text-sm table-fixed border-collapse">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr className="text-xs text-slate-500 font-medium text-left">
+                  {/* ID */}
+                  <th 
+                    style={{ width: `${colWidths.id}px`, minWidth: `${colWidths.id}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">ID</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("id", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Customer */}
+                  <th 
+                    style={{ width: `${colWidths.customer}px`, minWidth: `${colWidths.customer}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
+                    onClick={() => handleSort("customer")}
+                    title="Bấm để sắp xếp theo tên khách hàng • Kéo viền phải để chỉnh kích thước"
+                  >
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <span className={sortField === "customer" ? "font-semibold text-blue-700" : ""}>Tên khách hàng</span>
+                      <span className="text-slate-400 group-hover:text-slate-600">
+                        {sortField === "customer" ? (
+                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                        ) : (
+                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
+                        )}
                       </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2 min-w-[130px]">
-                        <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
-                            style={{ width: `${progressVal}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold text-slate-600 min-w-[32px]">{progressVal}%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button 
-                          onClick={() => handleEdit(t)}
-                          className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
-                          title="Sửa kế hoạch"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(t.id)}
-                          className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
-                          title="Xóa kế hoạch"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                    </div>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("customer", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Contract */}
+                  <th 
+                    style={{ width: `${colWidths.contract}px`, minWidth: `${colWidths.contract}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">Tên hợp đồng</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("contract", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Creator */}
+                  <th 
+                    style={{ width: `${colWidths.creator}px`, minWidth: `${colWidths.creator}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">Người tạo</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("creator", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Created At */}
+                  <th 
+                    style={{ width: `${colWidths.created_at}px`, minWidth: `${colWidths.created_at}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
+                    onClick={() => handleSort("created_at")}
+                    title="Bấm để sắp xếp theo thời gian tạo • Kéo viền phải để chỉnh kích thước"
+                  >
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <span className={sortField === "created_at" ? "font-semibold text-blue-700" : ""}>Thời gian tạo</span>
+                      <span className="text-slate-400 group-hover:text-slate-600">
+                        {sortField === "created_at" ? (
+                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                        ) : (
+                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
+                        )}
+                      </span>
+                    </div>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("created_at", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Hold Time */}
+                  <th 
+                    style={{ width: `${colWidths.hold_time}px`, minWidth: `${colWidths.hold_time}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 text-center select-none group"
+                  >
+                    <span className="truncate">Tổng kỳ</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("hold_time", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Status */}
+                  <th 
+                    style={{ width: `${colWidths.status}px`, minWidth: `${colWidths.status}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">Tình trạng</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("status", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Progress */}
+                  <th 
+                    style={{ width: `${colWidths.progress}px`, minWidth: `${colWidths.progress}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">Tiến độ</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("progress", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Actions */}
+                  <th 
+                    style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }}
+                    className="relative px-4 py-3 text-center select-none group"
+                  >
+                    <span className="truncate">Thao tác</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                      Đang tải...
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-14 text-center text-slate-400">
+                      <Wrench size={36} className="mx-auto mb-2 opacity-20" />
+                      <p className="text-sm">{search || statusFilter.length > 0 || customerFilter !== "All" ? "Không tìm thấy kết quả phù hợp bộ lọc" : "Chưa có kế hoạch bảo trì nào"}</p>
+                      <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
+                        + Tạo kế hoạch đầu tiên
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((t: any, i: number) => {
+                    const progressVal = calculatePlanProgress(t);
+                    const statusInfo = getPlanStatus(t, progressVal);
+                    return (
+                      <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition">
+                        <td style={{ width: `${colWidths.id}px` }} className="px-4 py-3.5 font-medium text-blue-600 border-r border-b border-slate-200 truncate">
+                          <Link href={`/maintenance/${t.id}`} className="hover:underline">
+                            {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
+                          </Link>
+                        </td>
+                        <td style={{ width: `${colWidths.customer}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
+                          {t.customer?.name || t.customer_name || "—"}
+                        </td>
+                        <td style={{ width: `${colWidths.contract}px` }} className="px-4 py-3.5 text-slate-500 border-r border-b border-slate-200 truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
+                          {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
+                        </td>
+                        <td style={{ width: `${colWidths.creator}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
+                          <div className="flex items-center gap-1.5 truncate">
+                            <User size={13} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
+                          </div>
+                        </td>
+                        <td style={{ width: `${colWidths.created_at}px` }} className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs border-r border-b border-slate-200 truncate" title={t.created_at || ""}>
+                          {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
+                        </td>
+                        <td style={{ width: `${colWidths.hold_time}px` }} className="px-4 py-3.5 text-center font-medium text-slate-500 border-r border-b border-slate-200 truncate">
+                          {t.hold_time || 0}
+                        </td>
+                        <td style={{ width: `${colWidths.status}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
+                          <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td style={{ width: `${colWidths.progress}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
+                                style={{ width: `${progressVal}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-slate-600 min-w-[32px]">{progressVal}%</span>
+                          </div>
+                        </td>
+                        <td style={{ width: `${colWidths.actions}px` }} className="px-4 py-3.5 text-center border-b border-slate-200">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button 
+                              onClick={() => handleEdit(t)}
+                              className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
+                              title="Sửa kế hoạch"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(t.id)}
+                              className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
+                              title="Xóa kế hoạch"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Timeline View */}
