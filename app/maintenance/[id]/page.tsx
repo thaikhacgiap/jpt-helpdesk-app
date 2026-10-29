@@ -56,6 +56,86 @@ const formatCycleDateInputDisplay = (dateStr: string) => {
   return `${month}/${day}/${year}`;
 };
 
+// Click-to-edit Staff Assignee Cell (Array mode) — giống InlineStaffCell của triển khai dự án
+function InlineStaffCellArray({
+  value,
+  staffList,
+  onChange,
+}: {
+  value: string[];
+  staffList: any[];
+  onChange: (val: string[]) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        if (target.closest('.staff-search-dropdown') || target.closest('[data-staff-select-portal]')) {
+          return;
+        }
+        setIsEditing(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div ref={containerRef} className="w-full min-w-[150px] max-w-[220px] mx-auto py-0.5">
+        <StaffSearchSelect
+          mode="multiple"
+          size="sm"
+          staffList={staffList}
+          value={value}
+          outputFormat="array"
+          onChange={(newVal) => {
+            const arr = Array.isArray(newVal) ? newVal : [newVal].filter(Boolean);
+            onChange(arr as string[]);
+          }}
+          placeholder="Chọn nhân sự..."
+          dropdownPosition="fixed"
+        />
+        <div className="flex justify-end mt-1">
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 hover:bg-blue-50 rounded cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className="flex flex-wrap items-center justify-center gap-1 cursor-pointer py-1 px-1.5 rounded hover:bg-blue-50/80 border border-transparent hover:border-blue-300 transition min-h-[28px]"
+      title="Bấm vào để thay đổi người thực hiện"
+    >
+      {value && value.length > 0 ? (
+        value.map((name) => (
+          <span
+            key={name}
+            className="inline-block max-w-[130px] truncate text-[11px] px-2 py-0.5 bg-slate-100 hover:bg-blue-100 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-800 rounded-full font-semibold align-middle transition"
+            title={name}
+          >
+            {name}
+          </span>
+        ))
+      ) : (
+        <span className="text-slate-400 text-xs italic">+ Chọn...</span>
+      )}
+    </div>
+  );
+}
+
 export default function MaintenanceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1629,22 +1709,11 @@ export default function MaintenanceDetailPage() {
                                 <span className="text-slate-400 italic text-[10px]">Tự động từ tasks</span>
                               )
                             ) : (
-                              <div className="w-full min-w-[130px] max-w-[200px] mx-auto py-0.5">
-                                <StaffSearchSelect
-                                  size="sm"
-                                  mode="multiple"
-                                  outputFormat="array"
-                                  value={t.assignees || []}
-                                  onChange={(val) => {
-                                    const arr = Array.isArray(val) ? val : [val].filter(Boolean);
-                                    updateTaskField(t.id, "assignees", arr);
-                                  }}
-                                  staffList={staffList}
-                                  placeholder="+ Chọn..."
-                                  dropdownPosition="fixed"
-                                  className="w-full text-xs"
-                                />
-                              </div>
+                              <InlineStaffCellArray
+                                value={t.assignees || []}
+                                staffList={staffList}
+                                onChange={(arr) => updateTaskField(t.id, "assignees", arr)}
+                              />
                             )}
                           </td>
 
