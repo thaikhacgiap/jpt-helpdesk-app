@@ -56,6 +56,78 @@ const formatCycleDateInputDisplay = (dateStr: string) => {
   return `${month}/${day}/${year}`;
 };
 
+// Click-to-edit Date Cell — giống hệt triển khai dự án
+function InlineDateCell({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value?: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      try {
+        if (typeof inputRef.current.showPicker === 'function') {
+          inputRef.current.showPicker();
+        }
+      } catch (e) {}
+    }
+  }, [isEditing]);
+
+  const formatDisplay = (valStr?: string) => {
+    if (!valStr) return "";
+    const clean = valStr.substring(0, 10);
+    const parts = clean.split("-");
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return clean;
+  };
+
+  if (disabled) {
+    return <span className="text-slate-400 text-xs">—</span>;
+  }
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="date"
+        defaultValue={value ? value.substring(0, 10) : ""}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+        onBlur={(e) => {
+          onChange(e.target.value);
+          setIsEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") {
+            setIsEditing(false);
+          }
+        }}
+        className="w-full px-1.5 py-0.5 border border-blue-500 rounded text-xs text-slate-800 bg-white outline-none cursor-pointer text-center shadow-xs"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className="cursor-pointer py-1 px-1.5 rounded hover:bg-blue-50/80 border border-transparent hover:border-blue-300 transition text-center select-none"
+      title="Bấm vào để thay đổi thời gian"
+    >
+      <span className={value ? "text-slate-700 font-medium text-xs" : "text-slate-400 text-xs"}>
+        {value ? formatDisplay(value) : "—"}
+      </span>
+    </div>
+  );
+}
+
 // Click-to-edit Staff Assignee Cell (Array mode) — giống InlineStaffCell của triển khai dự án
 function InlineStaffCellArray({
   value,
@@ -123,14 +195,14 @@ function InlineStaffCellArray({
         value.map((name) => (
           <span
             key={name}
-            className="inline-block max-w-[130px] truncate text-[11px] px-2 py-0.5 bg-slate-100 hover:bg-blue-100 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-800 rounded-full font-semibold align-middle transition"
+            className="inline-block max-w-[130px] truncate text-[11px] px-2.5 py-0.5 bg-slate-100 hover:bg-blue-100 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-800 rounded-full font-semibold align-middle transition"
             title={name}
           >
             {name}
           </span>
         ))
       ) : (
-        <span className="text-slate-400 text-xs italic">+ Chọn...</span>
+        <span className="text-slate-400 text-xs italic">—</span>
       )}
     </div>
   );
@@ -1365,7 +1437,7 @@ export default function MaintenanceDetailPage() {
                     title="Thêm giai đoạn mới (Phase)"
                   >
                     <Plus size={13} />
-                    <span>+ Phase</span>
+                    <span>Phase</span>
                   </button>
 
                   {/* + Main task */}
@@ -1375,7 +1447,7 @@ export default function MaintenanceDetailPage() {
                     title="Thêm công việc chính (Main task)"
                   >
                     <Plus size={13} />
-                    <span>+ Main task</span>
+                    <span>Main task</span>
                   </button>
 
                   {/* + Sub task */}
@@ -1385,7 +1457,7 @@ export default function MaintenanceDetailPage() {
                     title="Thêm công việc con (Sub task)"
                   >
                     <Plus size={13} />
-                    <span>+ Sub task</span>
+                    <span>Sub task</span>
                   </button>
 
                   {/* 1. Tải file mẫu */}
@@ -1569,8 +1641,8 @@ export default function MaintenanceDetailPage() {
                       }
 
                       const isPhase = t.level === 1;
-                      const isMain = t.level === 2;
-                      const isSub = t.level > 2 || (!isPhase && !isMain);
+                      const isMain = t.hasChildren && t.level > 1;
+                      const isSub = !isPhase && !isMain;
                       const stats = getTaskComputedStats(t, sortedTasks);
                       const isCollapsed = collapsedParents[t.id];
 
@@ -1579,7 +1651,7 @@ export default function MaintenanceDetailPage() {
                           key={t.id} 
                           className={`border-b border-slate-200 transition ${
                             isPhase
-                              ? "bg-[#BFDBFE] font-black text-blue-950"
+                              ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
                               : isMain
                               ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
                               : "bg-white hover:bg-slate-50/40 text-slate-700"
@@ -1593,7 +1665,7 @@ export default function MaintenanceDetailPage() {
                           {/* Cột No (1, 1.1, 1.1.1...) */}
                           <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
                             <div className="flex items-center justify-center gap-1">
-                              {t.hasChildren && (
+                              {(isPhase || isMain) && t.hasChildren && (
                                 <button
                                   type="button"
                                   onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
@@ -1617,65 +1689,60 @@ export default function MaintenanceDetailPage() {
                               <div className="pl-3 font-bold text-slate-800 text-xs whitespace-nowrap" title={t.name}>
                                 {t.name}
                               </div>
-                            ) : (
+                            ) : t.level > 2 ? (
                               <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap" title={t.name}>
                                 <span className="text-slate-400 font-mono">↳</span>
                                 <span className="whitespace-nowrap">{t.name}</span>
+                              </div>
+                            ) : (
+                              <div className="pl-3 text-slate-700 font-medium text-xs whitespace-nowrap" title={t.name}>
+                                <span>{t.name}</span>
                               </div>
                             )}
                           </td>
 
                           {/* Thời gian bắt đầu */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                             {stats.isAuto ? (
                               <span className="text-[11px] font-semibold text-blue-900">
                                 {stats.startDate ? formatDateVN(stats.startDate) : "—"}
                               </span>
                             ) : (
-                              <input
-                                type="date"
-                                value={t.startDate || ""}
-                                onChange={(e) => updateTaskField(t.id, "startDate", e.target.value)}
-                                className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
-                                title="Nhấp để sửa ngày bắt đầu (dự kiến)"
+                              <InlineDateCell
+                                value={t.startDate}
+                                onChange={(val) => updateTaskField(t.id, "startDate", val)}
                               />
                             )}
                           </td>
 
                           {/* Thời gian kết thúc */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                             {stats.isAuto ? (
                               <span className="text-[11px] font-semibold text-blue-900">
                                 {stats.endDate ? formatDateVN(stats.endDate) : "—"}
                               </span>
                             ) : (
-                              <input
-                                type="date"
-                                value={t.endDate || ""}
-                                onChange={(e) => updateTaskField(t.id, "endDate", e.target.value)}
-                                className="w-full text-center text-xs py-1 px-1 bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition text-slate-700"
-                                title="Nhấp để sửa ngày kết thúc (dự kiến)"
+                              <InlineDateCell
+                                value={t.endDate}
+                                onChange={(val) => updateTaskField(t.id, "endDate", val)}
                               />
                             )}
                           </td>
 
                           {/* Thời gian bắt đầu thực tế */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                             {stats.isAuto ? (
                               <span className="text-slate-400 text-xs">—</span>
                             ) : (
-                              <input
-                                type="date"
-                                value={t.actualStartDate || ""}
-                                onChange={(e) => updateTaskField(t.id, "actualStartDate", e.target.value)}
-                                className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
-                                title="Nhấp để sửa ngày bắt đầu (thực tế)"
+                              <InlineDateCell
+                                value={t.actualStartDate}
+                                onChange={(val) => updateTaskField(t.id, "actualStartDate", val)}
                               />
                             )}
                           </td>
 
                           {/* Thời gian kết thúc thực tế */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
                             {stats.isAuto ? (
                               stats.actualEndDate ? (
                                 <span className="text-emerald-700 font-bold text-xs">{formatDateVN(stats.actualEndDate)}</span>
@@ -1683,18 +1750,15 @@ export default function MaintenanceDetailPage() {
                                 <span className="text-slate-400 text-xs">—</span>
                               )
                             ) : (
-                              <input
-                                type="date"
-                                value={t.actualEndDate || ""}
-                                onChange={(e) => updateTaskField(t.id, "actualEndDate", e.target.value)}
-                                className="w-full text-center text-xs py-1 px-1 text-blue-700 font-semibold bg-transparent hover:bg-blue-50/50 focus:bg-white border border-transparent hover:border-blue-300 focus:border-blue-500 rounded-lg outline-none cursor-pointer transition"
-                                title="Nhấp để sửa ngày kết thúc (thực tế)"
+                              <InlineDateCell
+                                value={t.actualEndDate}
+                                onChange={(val) => updateTaskField(t.id, "actualEndDate", val)}
                               />
                             )}
                           </td>
 
                           {/* Người thực hiện */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap">
                             {stats.isAuto ? (
                               stats.assignees.length > 0 ? (
                                 <div className="flex items-center justify-center">
@@ -1720,7 +1784,7 @@ export default function MaintenanceDetailPage() {
                           {/* % Hoàn thành */}
                           <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
                             {stats.isAuto ? (
-                              <div className="flex items-center justify-center gap-0.5" title={isPhase ? "Tự động tính từ các công việc con" : "Tự động tính từ các công việc con"}>
+                              <div className="flex items-center justify-center gap-0.5" title="Tự động tính từ các công việc con">
                                 <span className={`font-black text-xs ${isPhase ? 'text-blue-900' : 'text-slate-800'}`}>
                                   {stats.progress}%
                                 </span>
@@ -1746,14 +1810,14 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Trạng thái */}
-                          <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
                             {stats.isAuto ? (
-                              <span className={`inline-block px-2.5 py-1 text-[11px] font-bold rounded-full border tracking-wide whitespace-nowrap shadow-2xs ${
+                              <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
                                 stats.progress === 100
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  ? 'bg-[#2ecc71] text-white'
                                   : stats.progress > 0
-                                  ? 'bg-blue-50 text-blue-700 border-blue-300'
-                                  : 'bg-slate-50 text-slate-600 border-slate-300'
+                                  ? 'bg-[#e67e22] text-white'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
                               }`}>
                                 {stats.progress === 100 ? 'Hoàn thành' : stats.progress > 0 ? 'Đang thực hiện' : 'Chưa thực hiện'}
                               </span>
@@ -1761,30 +1825,28 @@ export default function MaintenanceDetailPage() {
                               <select
                                 value={t.status || "Chưa bắt đầu"}
                                 onChange={(e) => updateTaskField(t.id, "status", e.target.value)}
-                                className={`w-full max-w-[125px] text-[11px] font-bold py-1 px-2 rounded-full border outline-none cursor-pointer transition shadow-2xs ${
-                                  t.status === "Hoàn thành"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                                    : t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện"
-                                    ? "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-                                    : t.status === "Đang Kế Hoạch" || t.status === "Đang kế hoạch"
-                                    ? "bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100"
-                                    : t.status === "Tạm dừng"
-                                    ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
-                                    : "bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100"
+                                className={`px-2 py-0.5 text-[10px] font-bold rounded tracking-wide border cursor-pointer outline-none transition ${
+                                  t.status === 'Hoàn thành'
+                                    ? "bg-[#2ecc71] text-white border-emerald-600"
+                                    : t.status === 'Đang Thực Hiện' || t.status === 'Đang thực hiện'
+                                    ? "bg-[#e67e22] text-white border-amber-600"
+                                    : t.status === 'Đang Kế Hoạch' || t.status === 'Đang kế hoạch'
+                                    ? "bg-sky-500 text-white border-sky-600"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
                                 }`}
                                 title="Bấm để chọn trạng thái"
                               >
-                                <option value="Chưa bắt đầu">Chưa bắt đầu</option>
-                                <option value="Đang Kế Hoạch">Đang Kế Hoạch</option>
-                                <option value="Đang Thực Hiện">Đang Thực Hiện</option>
-                                <option value="Hoàn thành">Hoàn thành</option>
-                                <option value="Tạm dừng">Tạm dừng</option>
+                                <option value="Chưa bắt đầu" className="bg-white text-slate-800">Chưa thực hiện</option>
+                                <option value="Đang Kế Hoạch" className="bg-white text-slate-800">Đang Kế Hoạch</option>
+                                <option value="Đang Thực Hiện" className="bg-white text-slate-800">Đang thực hiện</option>
+                                <option value="Hoàn thành" className="bg-white text-slate-800">Hoàn thành</option>
+                                <option value="Tạm dừng" className="bg-white text-slate-800">Tạm dừng</option>
                               </select>
                             )}
                           </td>
 
                           {/* Ghi chú */}
-                          <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
+                          <td className="py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
                             <input
                               type="text"
                               defaultValue={t.notes || ""}
@@ -1799,9 +1861,9 @@ export default function MaintenanceDetailPage() {
                                   (e.target as HTMLInputElement).blur();
                                 }
                               }}
-                              placeholder="Ghi chú..."
-                              className="w-full text-xs text-slate-700 bg-transparent hover:bg-slate-50 focus:bg-white px-2 py-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded-lg outline-none transition placeholder:text-slate-300"
-                              title={t.notes ? t.notes : "Nhấp để nhập ghi chú..."}
+                              placeholder="Bấm để ghi chú..."
+                              className="w-full px-1.5 py-0.5 text-xs text-slate-650 italic bg-transparent hover:bg-slate-50 focus:bg-white focus:not-italic focus:text-slate-800 focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition truncate focus:overflow-visible"
+                              title={t.notes ? t.notes : "Bấm vào đây để viết ghi chú"}
                             />
                           </td>
 
