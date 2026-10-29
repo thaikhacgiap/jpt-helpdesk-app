@@ -1180,11 +1180,13 @@ export default function TicketsPage() {
   const setFilter = <K extends keyof Filters>(key: K) => (val: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: val }));
 
-  const removeArrayFilterItem = (key: keyof Filters, item: string) => {
-    setFilters((f) => {
-      const arr = (f[key] as unknown as string[]) || [];
-      return { ...f, [key]: arr.filter((x) => x !== item) };
-    });
+  type MultiFilterKey = "tt_type" | "contract_scope" | "category" | "priority" | "tt_status" | "sla_status" | "creator";
+
+  const removeArrayFilterItem = (key: MultiFilterKey, item: string) => {
+    setFilters((f) => ({
+      ...f,
+      [key]: f[key].filter((x) => x !== item),
+    }));
     setCurrentPage(1);
   };
 
