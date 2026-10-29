@@ -9,8 +9,8 @@ import StaffSearchSelect from "@/components/common/staff-search-select";
 import { 
   ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X,
   CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
-  ChevronDown, ChevronRight, ArrowUpDown, Info, Lightbulb, ListOrdered,
-  CircleDot, PauseCircle, FileSpreadsheet
+  ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
+  Info, Lightbulb, ListOrdered, CircleDot, PauseCircle, FileSpreadsheet
 } from "lucide-react";
 import { 
   generateDefaultTasks, 
@@ -55,6 +55,55 @@ const formatCycleDateInputDisplay = (dateStr: string) => {
   const year = d.getFullYear();
   return `${month}/${day}/${year}`;
 };
+
+// Dedicated component for moving rows by direct number input — giống triển khai dự án
+function MoveRowInput({
+  rowIndex,
+  totalRows,
+  onMoveToRow,
+}: {
+  rowIndex: number;
+  totalRows: number;
+  onMoveToRow: (fromIdx: number, targetRow: number) => void;
+}) {
+  const currentNum = rowIndex + 1;
+  const [val, setVal] = useState<string>(String(currentNum));
+
+  useEffect(() => {
+    setVal(String(rowIndex + 1));
+  }, [rowIndex]);
+
+  const submitChange = (newValStr: string) => {
+    const num = parseInt(newValStr.trim(), 10);
+    if (isNaN(num) || num < 1 || num > totalRows || num === currentNum) {
+      setVal(String(currentNum));
+      return;
+    }
+    onMoveToRow(rowIndex, num);
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={totalRows}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitChange(val);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      onBlur={() => {
+        submitChange(val);
+      }}
+      className="w-10 text-center font-mono text-xs font-black bg-white border border-indigo-400 text-indigo-850 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+      title="Nhập số hàng và nhấn Enter để chuyển đến vị trí cần"
+    />
+  );
+}
 
 // Click-to-edit Date Cell — giống hệt triển khai dự án
 function InlineDateCell({
@@ -229,6 +278,11 @@ export default function MaintenanceDetailPage() {
   });
   const [cycleMeta, setCycleMeta] = useState<{ [key: string]: { startDate: string } }>({});
   
+  // Move mode states (giống triển khai dự án)
+  const [isMoveMode, setIsMoveMode] = useState(false);
+  const [moveModeDragIdx, setMoveModeDragIdx] = useState<number | null>(null);
+  const [moveModeOverIdx, setMoveModeOverIdx] = useState<number | null>(null);
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
@@ -582,6 +636,78 @@ export default function MaintenanceDetailPage() {
       cycleMeta,
       tasks: cycleTasks
     });
+  };
+
+  // Move mode operations for current cycle tasks — giống hệt triển khai dự án
+  const handleMovePlanRow = async (fromIdx: number, toIdx: number) => {
+    const currentList = cycleTasks[activeCycle] ? [...cycleTasks[activeCycle]] : [];
+    if (currentList.length === 0) return;
+    const currentSorted = getSortedHierarchicalTasks(currentList);
+    const total = currentSorted.length;
+    if (fromIdx < 0 || fromIdx >= total || toIdx < 0 || toIdx >= total || fromIdx === toIdx) return;
+
+    // Sắp xếp lại thứ tự của các task trong sortedTasks
+    const newSorted = [...currentSorted];
+    const [movedItem] = newSorted.splice(fromIdx, 1);
+    newSorted.splice(toIdx, 0, movedItem);
+
+    // Gán lại orderIndex dựa theo thứ tự mới
+    const orderMap = new Map<string, number>();
+    newSorted.forEach((t, i) => {
+      orderMap.set(t.id, i);
+    });
+
+    const updatedList = currentList.map(t => ({
+      ...t,
+      orderIndex: orderMap.has(t.id) ? orderMap.get(t.id)! : t.orderIndex,
+    })).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+    const updatedCycleTasks = {
+      ...cycleTasks,
+      [activeCycle]: updatedList,
+    };
+
+    setCycleTasks(updatedCycleTasks);
+    await saveTasksToDB(updatedCycleTasks);
+  };
+
+  const handleMovePlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
+    const targetRow = typeof targetRowVal === "number" ? targetRowVal : parseInt(String(targetRowVal).trim(), 10);
+    const currentList = cycleTasks[activeCycle] || [];
+    const currentSorted = getSortedHierarchicalTasks(currentList);
+    const total = currentSorted.length;
+    if (isNaN(targetRow) || targetRow < 1 || targetRow > total) return;
+    const toIdx = targetRow - 1;
+    if (toIdx === fromIdx) return;
+    handleMovePlanRow(fromIdx, toIdx);
+  };
+
+  const handleMoveModeDragStart = (idx: number) => {
+    setMoveModeDragIdx(idx);
+  };
+
+  const handleMoveModeDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (moveModeOverIdx !== idx) {
+      setMoveModeOverIdx(idx);
+    }
+  };
+
+  const handleMoveModeDrop = (idx: number) => {
+    if (moveModeDragIdx === null || moveModeDragIdx === idx) {
+      setMoveModeDragIdx(null);
+      setMoveModeOverIdx(null);
+      return;
+    }
+    handleMovePlanRow(moveModeDragIdx, idx);
+    setMoveModeDragIdx(null);
+    setMoveModeOverIdx(null);
+  };
+
+  const handleMoveModeDragEnd = () => {
+    setMoveModeDragIdx(null);
+    setMoveModeOverIdx(null);
   };
 
   // Helper to get all descendant tasks
@@ -1430,6 +1556,21 @@ export default function MaintenanceDetailPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               {activeTab === "tasks" ? (
                 <>
+                  {/* Nút Di chuyển (giống triển khai dự án) */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMoveMode(!isMoveMode)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
+                      isMoveMode
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700 shadow-sm ring-2 ring-indigo-200"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-250"
+                    }`}
+                    title={isMoveMode ? "Thoát chế độ di chuyển hàng" : "Bật chế độ di chuyển hàng (kéo thả hoặc nhập số hàng)"}
+                  >
+                    <ArrowUpDown size={14} className={isMoveMode ? "text-white" : "text-slate-600"} />
+                    <span>{isMoveMode ? "Xong di chuyển" : "Di chuyển"}</span>
+                  </button>
+
                   {/* + Phase */}
                   <button 
                     onClick={handleQuickAddPhase}
@@ -1592,6 +1733,28 @@ export default function MaintenanceDetailPage() {
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                {/* Move Mode Notice Banner (giống triển khai dự án) */}
+                {isMoveMode && (
+                  <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between gap-3 text-xs text-indigo-900 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                      </span>
+                      <span>
+                        <strong>Chế độ Di chuyển hàng đang bật:</strong> Bạn có thể nhập số hàng mới vào ô tại cột <strong>"Hàng"</strong> rồi nhấn <strong>Enter</strong> để chuyển ngay đến vị trí đó, hoặc dùng nút <strong>▲ / ▼</strong>, hoặc kéo thả hàng.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMoveMode(false)}
+                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer shrink-0"
+                    >
+                      Xong di chuyển
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-x-auto overflow-y-auto min-h-[460px] relative custom-scrollbar">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                   <thead className="select-none">
@@ -1649,8 +1812,14 @@ export default function MaintenanceDetailPage() {
                       return (
                         <tr 
                           key={t.id} 
+                          onDragOver={(e) => isMoveMode && handleMoveModeDragOver(e, rowIdx)}
+                          onDrop={(e) => isMoveMode && handleMoveModeDrop(rowIdx)}
                           className={`border-b border-slate-200 transition ${
-                            isPhase
+                            isMoveMode && moveModeOverIdx === rowIdx && moveModeDragIdx !== rowIdx
+                              ? "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs"
+                              : isMoveMode && moveModeDragIdx === rowIdx
+                              ? "opacity-40 bg-indigo-50/50"
+                              : isPhase
                               ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
                               : isMain
                               ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
@@ -1658,25 +1827,82 @@ export default function MaintenanceDetailPage() {
                           }`}
                         >
                           {/* Cột Hàng (1, 2, 3...) */}
-                          <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
-                            {rowIdx + 1}
-                          </td>
+                          {isMoveMode ? (
+                            <td className="py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 w-16 select-none">
+                              <div className="inline-flex items-center justify-center gap-0.5">
+                                <MoveRowInput
+                                  rowIndex={rowIdx}
+                                  totalRows={sortedTasks.length}
+                                  onMoveToRow={handleMovePlanRowToPosition}
+                                />
+                                <div className="flex flex-col">
+                                  <button
+                                    type="button"
+                                    disabled={rowIdx === 0}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleMovePlanRow(rowIdx, rowIdx - 1);
+                                    }}
+                                    className="p-1 hover:bg-indigo-200 active:bg-indigo-300 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none transition"
+                                    title="Chuyển lên 1 hàng"
+                                  >
+                                    <ArrowUp size={11} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={rowIdx === sortedTasks.length - 1}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleMovePlanRow(rowIdx, rowIdx + 1);
+                                    }}
+                                    className="p-1 hover:bg-indigo-200 active:bg-indigo-300 text-indigo-700 rounded disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none transition"
+                                    title="Chuyển xuống 1 hàng"
+                                  >
+                                    <ArrowDown size={11} />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          ) : (
+                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
+                              {rowIdx + 1}
+                            </td>
+                          )}
 
                           {/* Cột No (1, 1.1, 1.1.1...) */}
                           <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
-                            <div className="flex items-center justify-center gap-1">
-                              {(isPhase || isMain) && t.hasChildren && (
-                                <button
-                                  type="button"
-                                  onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
-                                  className="p-0.5 hover:bg-slate-200/80 rounded text-slate-600 cursor-pointer"
-                                  title={isCollapsed ? "Mở rộng" : "Thu gọn"}
-                                >
-                                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                                </button>
-                              )}
-                              <span>{t.stt}</span>
-                            </div>
+                            {isMoveMode ? (
+                              <div 
+                                draggable={true}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.effectAllowed = "move";
+                                  e.dataTransfer.setData("text/plain", `${rowIdx}`);
+                                  handleMoveModeDragStart(rowIdx);
+                                }}
+                                onDragEnd={handleMoveModeDragEnd}
+                                className="flex items-center justify-center gap-1 cursor-grab active:cursor-grabbing text-indigo-700 font-bold select-none px-1 py-0.5 rounded hover:bg-indigo-100 active:bg-indigo-200 transition"
+                                title="Giữ chuột vào đây để kéo hàng đến vị trí mong muốn"
+                              >
+                                <GripVertical size={14} className="text-indigo-500 shrink-0" />
+                                <span>{t.stt}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                {(isPhase || isMain) && t.hasChildren && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                    className="p-0.5 hover:bg-slate-200/80 rounded text-slate-600 cursor-pointer"
+                                    title={isCollapsed ? "Mở rộng" : "Thu gọn"}
+                                  >
+                                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                                  </button>
+                                )}
+                                <span>{t.stt}</span>
+                              </div>
+                            )}
                           </td>
 
                           {/* Công việc */}
