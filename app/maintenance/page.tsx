@@ -99,7 +99,7 @@ const calculateCycleProgress = (tasks: Task[]) => {
   
   if (leafTasks.length === 0) return 0;
   
-  const completed = leafTasks.filter(t => t.status === "Hoàn thành").length;
+  const completed = leafTasks.filter(t => t.status === "Hoàn thành" || t.progress === 100).length;
   return Math.round((completed / leafTasks.length) * 100);
 };
 
@@ -111,7 +111,17 @@ const calculatePlanProgress = (t: any): number => {
   if (t.remark) {
     try {
       const parsed = JSON.parse(t.remark);
-      const tasksData = parsed?.tasks || (parsed && !parsed.config ? parsed : null);
+      let tasksData = parsed?.tasks;
+      if (!tasksData && parsed?.taskLists) {
+        tasksData = {};
+        Object.keys(parsed.taskLists).forEach(cKey => {
+          const all: Task[] = [];
+          (parsed.taskLists[cKey] || []).forEach((tl: any) => all.push(...(tl.tasks || [])));
+          tasksData[cKey] = all;
+        });
+      } else if (!tasksData && !parsed.config) {
+        tasksData = parsed;
+      }
       if (tasksData && typeof tasksData === "object") {
         let completedCycles = 0;
         for (let i = 1; i <= total; i++) {

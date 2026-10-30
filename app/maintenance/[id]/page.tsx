@@ -333,6 +333,35 @@ export default function MaintenanceDetailPage() {
   const cycleDateInputRef = useRef<HTMLInputElement>(null);
   const [configTotalCycles, setConfigTotalCycles] = useState<number>(1);
 
+  // Helper to sanitize task percentage and status consistency
+  const sanitizeTask = (t: Task): Task => {
+    let prog = t.progress !== undefined ? Number(t.progress) : undefined;
+    const status = (t.status || "").trim();
+    const isCompleted = status === "Hoàn thành";
+
+    if (isCompleted) {
+      if (prog === undefined || prog <= 1) {
+        prog = 100;
+      }
+    } else if (prog !== undefined) {
+      if (prog > 0 && prog <= 1) {
+        // Excel decimal fractional percentage: 0.28 -> 28, 1 -> 100
+        prog = Math.round(prog * 100);
+      }
+    } else {
+      prog = status.toLowerCase().includes("thực hiện") ? 50 : 0;
+    }
+
+    return {
+      ...t,
+      progress: prog !== undefined ? Math.min(100, Math.max(0, prog)) : 0,
+    };
+  };
+
+  const sanitizeTaskList = (tasks: Task[]): Task[] => {
+    return (tasks || []).map(sanitizeTask);
+  };
+
   // Load plan details from Supabase
   const loadPlanDetails = async () => {
     setLoading(true);
@@ -379,6 +408,17 @@ export default function MaintenanceDetailPage() {
           console.warn("Failed to parse remark JSON, initializing empty:", e);
         }
       }
+
+      // Sanitize all loaded tasks to auto-correct Excel fractional progress errors (e.g. 1 -> 100, 0.28 -> 28)
+      Object.keys(tasksData).forEach((cKey) => {
+        tasksData[cKey] = sanitizeTaskList(tasksData[cKey]);
+      });
+      Object.keys(taskListsData).forEach((cKey) => {
+        taskListsData[cKey] = (taskListsData[cKey] || []).map((tab) => ({
+          ...tab,
+          tasks: sanitizeTaskList(tab.tasks),
+        }));
+      });
 
       // If taskListsData is empty but tasksData has items, migrate legacy tasks into default task list per cycle
       if (Object.keys(taskListsData).length === 0 && Object.keys(tasksData).length > 0) {
@@ -1061,9 +1101,14 @@ export default function MaintenanceDetailPage() {
 
   const getTaskComputedStats = (task: HierarchicalTask, allSortedTasks: HierarchicalTask[]) => {
     if (!task.hasChildren) {
-      const progress = task.progress !== undefined 
-        ? task.progress 
+      let progress = task.progress !== undefined 
+        ? Number(task.progress) 
         : (task.status === "Hoàn thành" ? 100 : (task.status === "Đang Thực Hiện" || task.status === "Đang thực hiện") ? 50 : 0);
+      if (task.status === "Hoàn thành" && progress <= 1) {
+        progress = 100;
+      } else if (progress > 0 && progress <= 1 && task.status !== "Hoàn thành") {
+        progress = Math.round(progress * 100);
+      }
       return {
         isAuto: false,
         progress,
@@ -1085,9 +1130,14 @@ export default function MaintenanceDetailPage() {
     let progress = 0;
     if (targetList.length > 0) {
       const totalProg = targetList.reduce((sum, item) => {
-        const p = item.progress !== undefined 
-          ? item.progress 
+        let p = item.progress !== undefined 
+          ? Number(item.progress) 
           : (item.status === "Hoàn thành" ? 100 : (item.status === "Đang Thực Hiện" || item.status === "Đang thực hiện") ? 50 : 0);
+        if (item.status === "Hoàn thành" && p <= 1) {
+          p = 100;
+        } else if (p > 0 && p <= 1 && item.status !== "Hoàn thành") {
+          p = Math.round(p * 100);
+        }
         return sum + p;
       }, 0);
       progress = Math.round(totalProg / targetList.length);
@@ -1102,7 +1152,7 @@ export default function MaintenanceDetailPage() {
     const endDate = validEnds[validEnds.length - 1] || task.endDate || "";
 
     // Actual end date: latest actual end date only if ALL are completed (progress === 100 or status === 'Hoàn thành')
-    const allCompleted = targetList.length > 0 && targetList.every(t => (t.progress === 100 || t.status === "Hoàn thành"));
+    const allCompleted = targetList.length > 0 && targetList.every(t => (t.progress === 100 || t.status === "Hoàn thành" || (t.status === "Hoàn thành" && (t.progress === undefined || t.progress <= 1))));
     const validActualEnds = targetList.map(t => t.actualEndDate).filter(Boolean).sort();
     const actualEndDate = allCompleted && validActualEnds.length > 0 ? validActualEnds[validActualEnds.length - 1] : "";
 
@@ -1111,7 +1161,7 @@ export default function MaintenanceDetailPage() {
     const assignees = [...new Set(allAssignees.map(a => a.trim()).filter(Boolean))];
 
     // Status
-    const status = progress === 100 ? "Hoàn thành" : progress > 0 ? "Đang Thực Hiện" : "Chưa bắt đầu";
+    const status = progress === 100 ? "Hoàn thành" : progress > 0 ? "Đang thực hiện" : "Chưa bắt đầu";
 
     return {
       isAuto: true,
@@ -1146,7 +1196,7 @@ export default function MaintenanceDetailPage() {
           updatedTask.actualEndDate = new Date().toISOString().substring(0, 10);
         }
       } else if (pVal > 0) {
-        updatedTask.status = "Đang Thực Hiện";
+        updatedTask.status = "Đang thực hiện";
       } else {
         updatedTask.status = "Chưa bắt đầu";
       }
@@ -1211,6 +1261,13 @@ export default function MaintenanceDetailPage() {
   // Open modal for editing task
   const handleEditTaskOpen = (task: Task) => {
     setEditingTask(task);
+    const initialProg = task.progress !== undefined 
+      ? Number(task.progress) 
+      : (task.status === "Hoàn thành" ? 100 : (task.status === "Đang Thực Hiện" || task.status === "Đang thực hiện") ? 50 : 0);
+    const resolvedProg = task.status === "Hoàn thành" && initialProg <= 1 
+      ? 100 
+      : (initialProg > 0 && initialProg <= 1 ? Math.round(initialProg * 100) : initialProg);
+
     setForm({
       name: task.name,
       parentId: task.parentId || "",
@@ -1221,7 +1278,7 @@ export default function MaintenanceDetailPage() {
       actualStartDate: task.actualStartDate || "",
       actualEndDate: task.actualEndDate || "",
       status: task.status || "Chưa bắt đầu",
-      progress: task.progress !== undefined ? task.progress : (task.status === "Hoàn thành" ? 100 : (task.status === "Đang Thực Hiện" || task.status === "Đang thực hiện") ? 50 : 0),
+      progress: resolvedProg,
       notes: task.notes || "",
     });
     setIsModalOpen(true);
@@ -1501,7 +1558,6 @@ export default function MaintenanceDetailPage() {
         const actualStartDate = normalizeImportDate(getCell(row, ["bắt đầu (thực tế)", "thực tế bắt đầu", "bắt đầu thực tế", "actual start", "actual start date", "thuc te bat dau"]));
         const actualEndDate = normalizeImportDate(getCell(row, ["kết thúc (thực tế)", "thực tế kết thúc", "kết thúc thực tế", "actual end", "actual end date", "thuc te ket thuc"]));
         const progressRaw = getCell(row, ["% hoàn thành", "tiến độ", "tiến độ (%)", "progress", "%", "tien do"]);
-        const progressNum = progressRaw ? parseInt(progressRaw.replace(/[^0-9]/g, ""), 10) : undefined;
         const status = getCell(row, ["tình trạng", "trạng thái", "status", "tinh trang"]);
         const notes = getCell(row, ["ghi chú", "notes", "note", "comment", "ghi chu"]);
 
@@ -1517,9 +1573,36 @@ export default function MaintenanceDetailPage() {
           sttToIdMap[cleanStt] = newId;
         }
 
-        const calculatedProgress = progressNum !== undefined 
-          ? progressNum 
-          : (status === "Hoàn thành" ? 100 : (status === "Đang Thực Hiện" || status === "Đang thực hiện" ? 50 : 0));
+        let calculatedProgress: number;
+        const cleanProg = (progressRaw || "").trim();
+        const isCompleted = status === "Hoàn thành";
+
+        if (!cleanProg) {
+          calculatedProgress = isCompleted ? 100 : (status.toLowerCase().includes("thực hiện") ? 50 : 0);
+        } else if (cleanProg.includes("%")) {
+          const num = parseFloat(cleanProg.replace("%", "").replace(",", "."));
+          calculatedProgress = isNaN(num) ? (isCompleted ? 100 : 0) : Math.min(100, Math.max(0, Math.round(num)));
+        } else {
+          const parsedFloat = parseFloat(cleanProg.replace(",", "."));
+          if (!isNaN(parsedFloat)) {
+            // In Excel, percentage cells often store decimal numbers: 1 = 100%, 0.28 = 28%, 0.5 = 50%
+            if (parsedFloat > 0 && parsedFloat <= 1) {
+              calculatedProgress = Math.min(100, Math.max(0, Math.round(parsedFloat * 100)));
+            } else {
+              calculatedProgress = Math.min(100, Math.max(0, Math.round(parsedFloat)));
+            }
+          } else {
+            calculatedProgress = isCompleted ? 100 : (status.toLowerCase().includes("thực hiện") ? 50 : 0);
+          }
+        }
+
+        if (isCompleted && calculatedProgress <= 1) {
+          calculatedProgress = 100;
+        }
+
+        const resolvedStatus = calculatedProgress === 100 
+          ? "Hoàn thành" 
+          : (status || (calculatedProgress > 0 ? "Đang thực hiện" : "Chưa bắt đầu"));
 
         importedTasks.push({
           id: newId,
@@ -1531,7 +1614,7 @@ export default function MaintenanceDetailPage() {
           endDate,
           actualStartDate,
           actualEndDate,
-          status: status || "",
+          status: resolvedStatus,
           progress: calculatedProgress,
           notes,
           orderIndex: idx,
@@ -2473,7 +2556,13 @@ export default function MaintenanceDetailPage() {
                                   type="number"
                                   min={0}
                                   max={100}
-                                  value={t.progress !== undefined ? t.progress : (t.status === "Hoàn thành" ? 100 : (t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện") ? 50 : 0)}
+                                  value={
+                                    t.status === "Hoàn thành" && (t.progress === undefined || t.progress <= 1)
+                                      ? 100
+                                      : (t.progress !== undefined 
+                                          ? (t.progress > 0 && t.progress <= 1 ? Math.round(t.progress * 100) : t.progress)
+                                          : (t.status === "Hoàn thành" ? 100 : (t.status === "Đang Thực Hiện" || t.status === "Đang thực hiện") ? 50 : 0))
+                                  }
                                   onChange={(e) => {
                                     const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
                                     updateTaskField(t.id, "progress", val);
@@ -2861,7 +2950,7 @@ export default function MaintenanceDetailPage() {
                         setForm(f => ({
                           ...f,
                           progress: val,
-                          status: val === 100 ? "Hoàn thành" : (val > 0 ? "Đang Thực Hiện" : f.status)
+                          status: val === 100 ? "Hoàn thành" : (val > 0 ? "Đang thực hiện" : (f.status === "Hoàn thành" ? "Chưa bắt đầu" : f.status))
                         }));
                       }}
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
@@ -2879,7 +2968,7 @@ export default function MaintenanceDetailPage() {
                       setForm(f => ({
                         ...f,
                         status: newStatus,
-                        progress: newStatus === "Hoàn thành" ? 100 : (newStatus === "Chưa bắt đầu" ? 0 : f.progress)
+                        progress: newStatus === "Hoàn thành" ? 100 : (newStatus === "Chưa bắt đầu" ? 0 : (f.progress === 100 ? 50 : f.progress))
                       }));
                     }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
