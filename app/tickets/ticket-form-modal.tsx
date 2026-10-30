@@ -3245,7 +3245,7 @@ interface TroubleshootFormProps {
   setActiveRunbookName: (v: string) => void;
   activeSubTab: "troubleshoot" | "hold" | "runbook";
   setActiveSubTab: (v: "troubleshoot" | "hold" | "runbook") => void;
-  onSave: () => Promise<void>;
+  onSave: (overrideHolds?: any[]) => Promise<void>;
   onEdit: () => void;
   submitting: boolean;
   holdsList: any[];
@@ -3318,6 +3318,9 @@ function TroubleshootForm({
   const [quickInput, setQuickInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const [editingHoldIdx, setEditingHoldIdx] = useState<number | null>(null);
+  const [editingHoldBackup, setEditingHoldBackup] = useState<any | null>(null);
 
   const currentUser = getCurrentUser();
   const currentUserName = currentUser?.name || currentUser?.email || "Kỹ thuật viên";
@@ -3695,21 +3698,57 @@ function TroubleshootForm({
   const handleAddHoldRow = () => {
     const tzoffset = new Date().getTimezoneOffset() * 60000;
     const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
-    setHoldsList((prev) => [
-      ...prev,
-      {
-        reason: "",
-        startTime: localISOTime,
-        stopTime: ""
-      }
-    ]);
+    const newHold = {
+      reason: "",
+      startTime: localISOTime,
+      stopTime: ""
+    };
+    const next = [...holdsList, newHold];
+    setHoldsList(next);
+    setEditingHoldIdx(next.length - 1);
+    setEditingHoldBackup(null);
     setTtStatus?.("On Hold");
-    onEdit?.();
   };
 
-  const handleDeleteHoldRow = (idx: number) => {
+  const handleEditHoldRow = (idx: number) => {
+    setEditingHoldIdx(idx);
+    setEditingHoldBackup({ ...holdsList[idx] });
+  };
+
+  const handleCancelHoldRow = (idx: number) => {
+    if (editingHoldBackup) {
+      setHoldsList((prev) => {
+        const next = [...prev];
+        next[idx] = editingHoldBackup;
+        return next;
+      });
+    } else {
+      const target = holdsList[idx];
+      if (!target?.reason?.trim() && !target?.stopTime) {
+        setHoldsList((prev) => prev.filter((_, i) => i !== idx));
+      }
+    }
+    setEditingHoldIdx(null);
+    setEditingHoldBackup(null);
+  };
+
+  const handleSaveHoldRow = async (idx: number) => {
+    setEditingHoldIdx(null);
+    setEditingHoldBackup(null);
+    await onSave?.(holdsList);
+  };
+
+  const handleDeleteHoldRow = async (idx: number) => {
     if (!confirm("Bạn có chắc chắn muốn xóa dòng Hold này?")) return;
-    setHoldsList((prev) => prev.filter((_, i) => i !== idx));
+    const nextList = holdsList.filter((_, i) => i !== idx);
+    setHoldsList(nextList);
+    if (editingHoldIdx === idx) {
+      setEditingHoldIdx(null);
+      setEditingHoldBackup(null);
+    } else if (editingHoldIdx !== null && editingHoldIdx > idx) {
+      setEditingHoldIdx(editingHoldIdx - 1);
+    }
+    await onSave?.(nextList);
   };
 
   return (
@@ -3918,11 +3957,11 @@ function TroubleshootForm({
                   <button
                     type="button"
                     onClick={handleAddHoldRow}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-                    title="Bắt đầu phiên Hold (Tạm dừng) mới"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+                    title="Thêm phiên Hold (Tạm dừng) mới"
                   >
-                    <Pause size={13} />
-                    <span>Hold</span>
+                    <Plus size={14} />
+                    <span>Add</span>
                   </button>
                 </div>
               </div>
@@ -3935,108 +3974,157 @@ function TroubleshootForm({
                       <th className="p-2.5 text-left font-semibold border-r border-slate-200">Lý do</th>
                       <th className="p-2.5 text-center font-semibold w-56 min-w-[210px] border-r border-slate-200">Start Time</th>
                       <th className="p-2.5 text-center font-semibold w-56 min-w-[210px] border-r border-slate-200">Stop Time</th>
-                      <th className="p-2.5 text-center font-semibold w-24">Duration</th>
-                      {editing && <th className="p-2.5 text-center font-semibold w-12 border-l border-slate-200">Xóa</th>}
+                      <th className="p-2.5 text-center font-semibold w-24 border-r border-slate-200">Duration</th>
+                      <th className="p-2.5 text-center font-semibold w-36">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {holdsList.length === 0 ? (
                       <tr>
-                        <td colSpan={editing ? 6 : 5} className="p-8 text-center text-slate-400 italic">
-                          Chưa có bản ghi Hold nào
+                        <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                          Chưa có bản ghi Hold nào. Bấm nút "+ Add" để thêm mới.
                         </td>
                       </tr>
                     ) : (
-                      holdsList.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 border-b border-slate-150 last:border-0 transition-colors">
-                          <td className="p-2.5 text-center font-medium text-slate-500 border-r border-slate-200">{idx + 1}</td>
-                          <td className="p-2.5 border-r border-slate-200">
-                            {editing ? (
-                              <input
-                                type="text"
-                                value={row.reason}
-                                onChange={(e) => handleHoldRowChange(idx, "reason", e.target.value)}
-                                placeholder="Nhập lý do tạm dừng..."
-                                className="w-full bg-white border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-amber-500 p-2 rounded-lg focus:border-amber-500"
-                              />
-                            ) : (
-                              <span className="px-1.5 text-slate-800 block truncate" title={row.reason}>{row.reason || "—"}</span>
-                            )}
-                          </td>
-                          <td className="p-2.5 text-center border-r border-slate-200">
-                            {editing ? (
-                              <DateTimePicker
-                                value={row.startTime}
-                                onChange={(v) => handleHoldRowChange(idx, "startTime", v)}
-                                placeholder="Bắt đầu tạm dừng..."
-                                className="min-h-[36px] py-1 px-2.5 text-xs"
-                              />
-                            ) : (
-                              <span className="px-1.5 text-slate-800 font-mono">{row.startTime ? formatDateWithTime(row.startTime) : "—"}</span>
-                            )}
-                          </td>
-                          <td className="p-2.5 text-center border-r border-slate-200">
-                            {editing ? (
-                              <div className="flex items-center gap-1.5 justify-center">
-                                <DateTimePicker
-                                  value={row.stopTime}
-                                  onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
-                                  placeholder="Kết thúc tạm dừng..."
-                                  className="min-h-[36px] py-1 px-2.5 text-xs flex-1"
+                      holdsList.map((row, idx) => {
+                        const isRowEditing = editingHoldIdx === idx || (editing && editingHoldIdx === null);
+                        return (
+                          <tr key={idx} className={`border-b border-slate-150 last:border-0 transition-colors ${isRowEditing ? "bg-amber-50/40" : "hover:bg-slate-50"}`}>
+                            <td className="p-2.5 text-center font-medium text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                            <td className="p-2.5 border-r border-slate-200">
+                              {isRowEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.reason}
+                                  onChange={(e) => handleHoldRowChange(idx, "reason", e.target.value)}
+                                  placeholder="Nhập lý do tạm dừng..."
+                                  className="w-full bg-white border border-slate-200 outline-none text-xs text-slate-800 focus:ring-1 focus:ring-amber-500 p-2 rounded-lg focus:border-amber-500"
+                                  autoFocus={editingHoldIdx === idx}
                                 />
-                                {!row.stopTime && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const tzoffset = new Date().getTimezoneOffset() * 60000;
-                                      const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
-                                      handleHoldRowChange(idx, "stopTime", localISOTime);
-                                    }}
-                                    className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[11px] font-semibold whitespace-nowrap cursor-pointer"
-                                    title="Đặt giờ hiện tại làm Stop Time"
-                                  >
-                                    Kết thúc
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 justify-center">
-                                <span className={`px-1.5 font-mono ${!row.stopTime && row.startTime ? "text-amber-600 font-semibold" : "text-slate-800"}`}>
-                                  {row.stopTime ? formatDateWithTime(row.stopTime) : (row.startTime ? "Đang tạm dừng..." : "—")}
-                                </span>
-                                {!row.stopTime && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const tzoffset = new Date().getTimezoneOffset() * 60000;
-                                      const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
-                                      handleHoldRowChange(idx, "stopTime", localISOTime);
-                                    }}
-                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[10px] font-semibold whitespace-nowrap cursor-pointer ml-1"
-                                    title="Kết thúc tạm dừng ngay bây giờ"
-                                  >
-                                    Kết thúc
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-2.5 text-center font-bold text-slate-700">
-                            {calculateDuration(row.startTime, row.stopTime)}
-                          </td>
-                          {editing && (
-                            <td className="p-2.5 text-center border-l border-slate-200">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteHoldRow(idx)}
-                                className="text-red-500 hover:text-red-700 transition p-1.5 hover:bg-red-50 rounded animate-fade-in cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              ) : (
+                                <span className="px-1.5 text-slate-800 block truncate" title={row.reason}>{row.reason || "—"}</span>
+                              )}
                             </td>
-                          )}
-                        </tr>
-                      ))
+                            <td className="p-2.5 text-center border-r border-slate-200">
+                              {isRowEditing ? (
+                                <DateTimePicker
+                                  value={row.startTime}
+                                  onChange={(v) => handleHoldRowChange(idx, "startTime", v)}
+                                  placeholder="Bắt đầu tạm dừng..."
+                                  className="min-h-[36px] py-1 px-2.5 text-xs"
+                                />
+                              ) : (
+                                <span className="px-1.5 text-slate-800 font-mono">{row.startTime ? formatDateWithTime(row.startTime) : "—"}</span>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center border-r border-slate-200">
+                              {isRowEditing ? (
+                                <div className="flex items-center gap-1.5 justify-center">
+                                  <DateTimePicker
+                                    value={row.stopTime}
+                                    onChange={(v) => handleHoldRowChange(idx, "stopTime", v)}
+                                    placeholder="Kết thúc tạm dừng..."
+                                    className="min-h-[36px] py-1 px-2.5 text-xs flex-1"
+                                  />
+                                  {!row.stopTime && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const tzoffset = new Date().getTimezoneOffset() * 60000;
+                                        const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
+                                        handleHoldRowChange(idx, "stopTime", localISOTime);
+                                      }}
+                                      className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[11px] font-semibold whitespace-nowrap cursor-pointer"
+                                      title="Đặt giờ hiện tại làm Stop Time"
+                                    >
+                                      Kết thúc
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 justify-center">
+                                  <span className={`px-1.5 font-mono ${!row.stopTime && row.startTime ? "text-amber-600 font-semibold" : "text-slate-800"}`}>
+                                    {row.stopTime ? formatDateWithTime(row.stopTime) : (row.startTime ? "Đang tạm dừng..." : "—")}
+                                  </span>
+                                  {!row.stopTime && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const tzoffset = new Date().getTimezoneOffset() * 60000;
+                                        const localISOTime = new Date(Date.now() - tzoffset).toISOString().slice(0, 16);
+                                        const nextList = [...holdsList];
+                                        nextList[idx] = { ...nextList[idx], stopTime: localISOTime };
+                                        setHoldsList(nextList);
+                                        await onSave?.(nextList);
+                                      }}
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[10px] font-semibold whitespace-nowrap cursor-pointer ml-1"
+                                      title="Kết thúc tạm dừng ngay bây giờ và lưu"
+                                    >
+                                      Kết thúc
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center font-bold text-slate-700 border-r border-slate-200">
+                              {calculateDuration(row.startTime, row.stopTime)}
+                            </td>
+                            <td className="p-2.5 text-center whitespace-nowrap">
+                              {isRowEditing ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveHoldRow(idx)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold transition shadow-xs cursor-pointer"
+                                    title="Lưu dòng này"
+                                  >
+                                    <Save size={12} />
+                                    <span>Save</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancelHoldRow(idx)}
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md text-xs font-medium transition cursor-pointer"
+                                    title="Hủy"
+                                  >
+                                    <X size={12} />
+                                    <span>Cancel</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteHoldRow(idx)}
+                                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition cursor-pointer"
+                                    title="Xóa dòng này"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditHoldRow(idx)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-xs font-semibold transition cursor-pointer"
+                                    title="Chỉnh sửa dòng này"
+                                  >
+                                    <Edit2 size={12} />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteHoldRow(idx)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-md text-xs font-semibold transition cursor-pointer"
+                                    title="Xóa dòng này"
+                                  >
+                                    <Trash2 size={12} />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -5567,7 +5655,7 @@ export default function TicketFormModal({
   };
 
   /* ── SAVE = Save DB + Keep step pink (saved) ── */
-  const handleSave = async () => {
+  const handleSave = async (overrideHolds?: any[]) => {
     setSubmitting(true);
     try {
       const dbId = savedTicketId || ticket?.id || "";
@@ -5637,10 +5725,12 @@ export default function TicketFormModal({
         if (error) { alert("Lỗi lưu arrange resource: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "troubleshoot") {
+        const currentHolds = Array.isArray(overrideHolds) ? overrideHolds : holdsList;
         const runbookObj = getUpdatedRunbookObj(runbookSteps, runbooksList, activeRunbookName);
-        const lastHold = holdsList[holdsList.length - 1];
-        const holdReasonStr = JSON.stringify({ holds: holdsList });
+        const lastHold = currentHolds[currentHolds.length - 1];
+        const holdReasonStr = JSON.stringify({ holds: currentHolds });
         const { error } = await safeTicketUpdate(dbId, {
+          tt_status:   ttStatus,
           hold_time:   lastHold?.startTime || null,
           unhold_time: lastHold?.stopTime  || null,
           hold_reason: holdReasonStr,
