@@ -1542,9 +1542,9 @@ export default function MaintenancePage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden transform scale-100 transition-all">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-slate-50/50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-visible flex flex-col relative">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-slate-50/50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-slate-900">
                 {editingPlan ? "Cập nhật kế hoạch" : "Thêm kế hoạch mới"}
               </h2>
@@ -1554,7 +1554,7 @@ export default function MaintenancePage() {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {/* Customer Select */}
-              <div>
+              <div className="relative z-20">
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                   Khách hàng <span className="text-red-500">*</span>
                 </label>
@@ -1563,6 +1563,7 @@ export default function MaintenancePage() {
                   onChange={(val) => handleCustomerChange(val)}
                   customers={customers}
                   placeholder="-- Chọn khách hàng --"
+                  dropdownPosition="absolute"
                   required
                 />
               </div>
@@ -1594,7 +1595,7 @@ export default function MaintenancePage() {
               </div>
 
               {/* Creator Select */}
-              <div>
+              <div className="relative z-10">
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                   Người tạo
                 </label>
@@ -1603,6 +1604,7 @@ export default function MaintenancePage() {
                   onChange={(val) => setForm(f => ({ ...f, creatorName: typeof val === "string" ? val : "" }))}
                   staffList={staffList}
                   placeholder="-- Chọn người tạo --"
+                  dropdownPosition="absolute"
                   allowClear={true}
                 />
               </div>

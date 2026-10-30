@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Search, User, ChevronDown, Check, X, Users, Loader2 } from "lucide-react";
 import { NhanSu, fetchNhanSu } from "@/lib/nhan-su-operations";
 
@@ -66,10 +67,16 @@ export default function StaffSearchSelect({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const defaultPlaceholder = mode === "multiple" ? "-- Chọn người theo dõi --" : "-- Chọn nhân sự --";
   const effectivePlaceholder = placeholder || defaultPlaceholder;
@@ -109,9 +116,11 @@ export default function StaffSearchSelect({
   // Handle outside click & window resize
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
       ) {
         setIsOpen(false);
         setSearchQuery("");
@@ -420,25 +429,28 @@ export default function StaffSearchSelect({
       )}
 
       {/* Dropdown Menu */}
-      {isOpen && !disabled && (
-        <div
-          style={
-            dropdownPosition === "fixed" && dropdownRect
-              ? {
-                  position: "fixed",
-                  top: dropdownRect.bottom + 4,
-                  left: dropdownRect.left,
-                  width: dropdownRect.width,
-                  zIndex: 9999,
-                }
-              : {}
-          }
-          className={`${
-            dropdownPosition === "fixed"
-              ? ""
-              : "absolute left-0 right-0 top-full mt-1.5 z-50"
-          } bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-72 animate-in fade-in zoom-in-95 duration-100`}
-        >
+      {isOpen && !disabled &&
+        (() => {
+          const dropdownElement = (
+            <div
+              ref={dropdownRef}
+              style={
+                dropdownPosition === "fixed" && dropdownRect
+                  ? {
+                      position: "fixed",
+                      top: dropdownRect.bottom + 4,
+                      left: Math.max(8, Math.min(dropdownRect.left, window.innerWidth - Math.max(dropdownRect.width, 260) - 8)),
+                      width: Math.max(dropdownRect.width, 260),
+                      zIndex: 9999,
+                    }
+                  : {}
+              }
+              className={`${
+                dropdownPosition === "fixed"
+                  ? ""
+                  : "absolute left-0 right-0 top-full mt-1.5 z-50"
+              } bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-72 animate-in fade-in zoom-in-95 duration-100`}
+            >
           {/* Search Box Header */}
           <div className="p-2.5 border-b border-slate-100 bg-slate-50/80 shrink-0">
             <div className="relative flex items-center">
@@ -576,7 +588,13 @@ export default function StaffSearchSelect({
             )}
           </div>
         </div>
-      )}
+      );
+
+      if (dropdownPosition === "fixed" && mounted && typeof document !== "undefined") {
+        return createPortal(dropdownElement, document.body);
+      }
+      return dropdownElement;
+    })()}
     </div>
   );
 }
