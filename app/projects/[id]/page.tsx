@@ -1805,6 +1805,16 @@ export default function ProjectDetailPage() {
     return result;
   };
 
+  // Helper to normalize task progress (handles decimal inputs like 1 -> 100%, and completed status)
+  const normalizeTaskProgress = (task?: ProjectTask | null): number => {
+    if (!task) return 0;
+    let p = task.progress !== undefined ? Number(task.progress) : (task.status === "Completed" ? 100 : 0);
+    if (isNaN(p)) p = 0;
+    if (task.status === "Completed" && p <= 1) return 100;
+    if (p > 0 && p <= 1 && task.status !== "Completed") return Math.round(p * 100);
+    return Math.max(0, Math.min(100, p));
+  };
+
   // 3. Compute stats for a Main task: % của main task = tỷ lệ % của sub task
   const getMainTaskStats = (plan: ProjectTask[], mainIdx: number) => {
     const task = plan[mainIdx];
@@ -1813,11 +1823,11 @@ export default function ProjectDetailPage() {
     if (subs.length === 0) {
       return {
         hasSubs: false,
-        progress: task.progress || 0,
+        progress: normalizeTaskProgress(task),
         subs: []
       };
     }
-    const progress = Math.round(subs.reduce((s, t) => s + (t.progress || 0), 0) / subs.length);
+    const progress = Math.round(subs.reduce((s, t) => s + normalizeTaskProgress(t), 0) / subs.length);
     return {
       hasSubs: true,
       progress,
@@ -1856,7 +1866,7 @@ export default function ProjectDetailPage() {
       }, 0);
       progress = Math.round(mainSum / mainTasks.length);
     } else if (subs.length > 0) {
-      progress = Math.round(subs.reduce((s, t) => s + (t.progress || 0), 0) / subs.length);
+      progress = Math.round(subs.reduce((s, t) => s + normalizeTaskProgress(t), 0) / subs.length);
     }
 
     // Start date: earliest planned start date
@@ -1888,7 +1898,7 @@ export default function ProjectDetailPage() {
         return { progress: stats.progress, isAuto: true };
       }
     }
-    return { progress: task.progress || 0, isAuto: false };
+    return { progress: normalizeTaskProgress(task), isAuto: false };
   };
 
   // 7. Synchronize progress and status across the 3-level hierarchy:
@@ -3463,16 +3473,16 @@ export default function ProjectDetailPage() {
                                   );
                                 }
                                 return (
-                                  <div className="flex items-center justify-center gap-1">
+                                  <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded-md px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white shadow-2xs">
                                     <input
                                       type="number"
                                       min={0}
                                       max={100}
                                       value={task.progress}
                                       onChange={(e) => handleTempTaskChange(idx, "progress", e.target.value)}
-                                      className="w-12 px-1 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-semibold text-right outline-none"
+                                      className="w-10 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     />
-                                    <span className="text-[10px] font-bold text-slate-450">%</span>
+                                    <span className="text-[10px] font-bold text-slate-400 select-none shrink-0">%</span>
                                   </div>
                                 );
                               })()}
@@ -3893,23 +3903,20 @@ export default function ProjectDetailPage() {
                                   );
                                 }
                                 return (
-                                  <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white">
+                                  <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded-md px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white shadow-2xs">
                                     <input
                                       type="number"
                                       min={0}
                                       max={100}
-                                      defaultValue={task.progress}
-                                      key={`${task.id || idx}-prog-${task.progress}`}
-                                      onBlur={(e) => handleInlineTaskProgressChange(task, idx, parseInt(e.target.value, 10))}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          (e.target as HTMLInputElement).blur();
-                                        }
+                                      value={resolved.progress}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        handleInlineTaskProgressChange(task, idx, val);
                                       }}
-                                      className="w-7 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0"
+                                      className="w-10 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                       title="Bấm để đổi % hoàn thành"
                                     />
-                                    <span className="text-[10px] font-bold text-slate-400 select-none">%</span>
+                                    <span className="text-[10px] font-bold text-slate-400 select-none shrink-0">%</span>
                                   </div>
                                 );
                               })()}

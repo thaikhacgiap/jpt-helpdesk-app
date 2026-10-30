@@ -3064,7 +3064,7 @@ export default function MaintenanceDetailPage() {
                                 <span className="text-[10px] text-slate-400 font-semibold select-none">⚙</span>
                               </div>
                             ) : (
-                              <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white">
+                              <div className="inline-flex items-center justify-center gap-0.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-400 rounded-md px-1.5 py-0.5 transition focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 focus-within:bg-white shadow-2xs">
                                 <input
                                   type="number"
                                   min={0}
@@ -3080,10 +3080,10 @@ export default function MaintenanceDetailPage() {
                                     const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
                                     updateTaskField(t.id, "progress", val);
                                   }}
-                                  className="w-7 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0"
+                                  className="w-10 text-right font-extrabold text-slate-800 text-xs bg-transparent outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   title="Nhấp để đổi % hoàn thành"
                                 />
-                                <span className="text-[10px] font-bold text-slate-400 select-none">%</span>
+                                <span className="text-[10px] font-bold text-slate-400 select-none shrink-0">%</span>
                               </div>
                             )}
                           </td>
