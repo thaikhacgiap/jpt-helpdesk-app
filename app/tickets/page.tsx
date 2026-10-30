@@ -13,7 +13,8 @@ import ContractSearchSelect from "@/components/common/contract-search-select";
 import {
   Plus, Trash2, Search, ChevronDown, Pencil, MoreVertical, X,
   Download, SlidersHorizontal, RotateCcw, Settings, ChevronLeft, ChevronRight,
-  Ticket, GripVertical, Layout, Calendar, Building2, User, FileText, Check
+  Ticket, GripVertical, Layout, Calendar, Building2, User, FileText, Check,
+  Lock, Unlock
 } from "lucide-react";
 import ColumnConfigModal, {
   DEFAULT_COLUMN_ORDER, COLUMN_LABELS, DEFAULT_COL_WIDTHS, SYSTEM_TEMPLATES, ColumnTemplate
@@ -1113,6 +1114,38 @@ export default function TicketsPage() {
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
 
+  // Selected ticket row highlight state
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
+  // Column freeze & highlight states for tickets table
+  const [selectedColKey, setSelectedColKey] = useState<string>("ticket_id");
+  const [lockedColKey, setLockedColKey] = useState<string | null>("ticket_id");
+
+  // Helper functions for ticket column freezing & positioning
+  const isTicketColFrozen = (key: string): boolean => {
+    if (!lockedColKey) return false;
+    if (key === "select") return true; // select checkbox column is frozen whenever columns are frozen
+    const visibleOrder = columnOrder.filter((k) => visibleColumns[k]);
+    const targetIdx = visibleOrder.indexOf(key);
+    const lockedIdx = visibleOrder.indexOf(lockedColKey);
+    return targetIdx !== -1 && lockedIdx !== -1 && targetIdx <= lockedIdx;
+  };
+
+  const isLastTicketFrozenCol = (key: string): boolean => {
+    return lockedColKey === key;
+  };
+
+  const getTicketColLeftOffset = (key: string): number => {
+    let left = colWidths.select || 40;
+    if (key === "select") return 0;
+    for (const colKey of columnOrder) {
+      if (!visibleColumns[colKey]) continue;
+      if (colKey === key) break;
+      left += colWidths[colKey] || 120;
+    }
+    return left;
+  };
+
   const handleDeleteTicket = async (ticket: Ticket) => {
     const confirmMsg = `Bạn có chắc chắn muốn xóa ticket "${ticket.ticket_id}${ticket.title ? ' - ' + ticket.title : ''}" không? Thao tác này không thể khôi phục.`;
     if (!window.confirm(confirmMsg)) return;
@@ -1491,7 +1524,7 @@ export default function TicketsPage() {
   const visibleCount = Object.values(visibleColumns).filter(Boolean).length + 2;
 
   // Render individual table cell based on colKey
-  const renderTableCell = (colKey: string, ticket: Ticket, slaInfo: any) => {
+  const renderRawTableCell = (colKey: string, ticket: Ticket, slaInfo: any) => {
     switch (colKey) {
       case "ticket_id":
         return (
@@ -1820,6 +1853,45 @@ export default function TicketsPage() {
       default:
         return null;
     }
+  };
+
+  const renderTableCell = (colKey: string, ticket: Ticket, slaInfo: any, isSelectedRow: boolean) => {
+    const cell = renderRawTableCell(colKey, ticket, slaInfo);
+    if (!cell) return null;
+    const isFrozen = isTicketColFrozen(colKey);
+    const isLast = isLastTicketFrozenCol(colKey);
+    const leftOffset = getTicketColLeftOffset(colKey);
+    const stickyBg = isSelectedRow ? "bg-[#FEF3C7]" : "bg-white group-hover:bg-slate-50";
+
+    const baseClass = (cell.props as any).className || "";
+    const selectedClass = isSelectedRow ? "bg-[#FEF3C7]" : "";
+
+    if (!isFrozen) {
+      if (isSelectedRow) {
+        return {
+          ...cell,
+          props: {
+            ...cell.props,
+            className: `${baseClass} ${selectedClass}`.trim(),
+          },
+        };
+      }
+      return cell;
+    }
+
+    return {
+      ...cell,
+      props: {
+        ...cell.props,
+        style: {
+          ...((cell.props as any).style || {}),
+          left: `${leftOffset}px`,
+        },
+        className: `${baseClass} sticky z-10 ${stickyBg} ${
+          isLast ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+        }`.trim(),
+      },
+    };
   };
 
   return (
@@ -2374,10 +2446,46 @@ export default function TicketsPage() {
             <RotateCcw size={12} />
             <span>Trả về default</span>
           </button>
+
+          {/* Lock / Unlock Column Button */}
+          {selectedColKey && (
+            <button
+              type="button"
+              onClick={() => {
+                if (lockedColKey === selectedColKey) {
+                  setLockedColKey(null);
+                } else {
+                  setLockedColKey(selectedColKey);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs transition cursor-pointer border ${
+                lockedColKey === selectedColKey
+                  ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-amber-200"
+                  : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-teal-500"
+              }`}
+              title={
+                lockedColKey === selectedColKey
+                  ? `Mở khóa cột ${COLUMN_LABELS[selectedColKey] || selectedColKey}`
+                  : `Khóa cột đến "${COLUMN_LABELS[selectedColKey] || selectedColKey}" khi cuộn ngang`
+              }
+            >
+              {lockedColKey === selectedColKey ? (
+                <>
+                  <Unlock size={13} className="shrink-0 text-white" />
+                  <span>Mở khóa ({COLUMN_LABELS[selectedColKey] || selectedColKey})</span>
+                </>
+              ) : (
+                <>
+                  <Lock size={13} className="shrink-0 text-teal-600" />
+                  <span>Khóa cột: <b>{COLUMN_LABELS[selectedColKey] || selectedColKey}</b></span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="text-[11px] text-slate-500 hidden sm:block">
-          💡 <span className="font-medium text-slate-600">Kéo thả tiêu đề</span> để đổi vị trí • <span className="font-medium text-slate-600">Kéo viền phải</span> để chỉnh kích thước
+          💡 <span className="font-medium text-slate-600">Bấm cột để chọn khóa</span> • <span className="font-medium text-slate-600">Kéo thả tiêu đề</span> để đổi vị trí • <span className="font-medium text-slate-600">Kéo viền phải</span> để chỉnh kích thước
         </div>
       </div>
 
@@ -2389,8 +2497,14 @@ export default function TicketsPage() {
               <tr className="bg-slate-50 divide-x divide-slate-200">
                 {/* Select All Checkbox */}
                 <th 
-                  style={{ width: `${colWidths.select}px`, minWidth: `${colWidths.select}px` }}
-                  className="px-3 py-2.5 text-center sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200"
+                  style={{ 
+                    width: `${colWidths.select}px`, 
+                    minWidth: `${colWidths.select}px`,
+                    left: isTicketColFrozen("select") ? 0 : undefined,
+                  }}
+                  className={`px-3 py-2.5 text-center sticky top-0 bg-slate-50 border-b border-r border-slate-200 ${
+                    isTicketColFrozen("select") ? "z-30 left-0" : "z-20"
+                  }`}
                 >
                   <input 
                     type="checkbox" 
@@ -2414,6 +2528,10 @@ export default function TicketsPage() {
                   const label = COLUMN_LABELS[colKey] || colKey;
                   const isDragging = draggedColKey === colKey;
                   const isDragOver = dragOverColKey === colKey;
+                  const isFrozen = isTicketColFrozen(colKey);
+                  const isLastFrozen = isLastTicketFrozenCol(colKey);
+                  const leftOffset = getTicketColLeftOffset(colKey);
+                  const isSelected = selectedColKey === colKey;
 
                   return (
                     <th
@@ -2423,20 +2541,37 @@ export default function TicketsPage() {
                       onDragOver={(e) => handleHeaderDragOver(e, colKey)}
                       onDrop={(e) => handleHeaderDrop(e, colKey)}
                       onDragEnd={() => { setDraggedColKey(null); setDragOverColKey(null); }}
-                      style={{ width: `${colWidths[colKey] || 120}px`, minWidth: `${colWidths[colKey] || 120}px` }}
-                      className={`relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 group select-none cursor-grab active:cursor-grabbing transition-colors ${
+                      onClick={() => setSelectedColKey(colKey)}
+                      style={{ 
+                        width: `${colWidths[colKey] || 120}px`, 
+                        minWidth: `${colWidths[colKey] || 120}px`,
+                        left: isFrozen ? `${leftOffset}px` : undefined,
+                      }}
+                      className={`relative px-3 py-2.5 text-sm font-medium text-slate-700 normal-case whitespace-nowrap sticky top-0 transition-colors select-none cursor-pointer group ${
+                        isFrozen ? "z-30 bg-slate-100" : "z-20 bg-slate-50"
+                      } ${
+                        isSelected ? "ring-2 ring-inset ring-teal-500 font-bold bg-teal-50/80 text-teal-950" : ""
+                      } ${
+                        isLastFrozen ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : "border-r border-slate-200"
+                      } border-b border-slate-200 ${
                         isDragging ? "opacity-30 bg-teal-50" : ""
                       } ${isDragOver ? "bg-teal-100 border-l-2 border-l-teal-600 shadow-inner" : ""}`}
-                      title="Kéo thả để đổi thứ tự cột • Kéo viền phải để chỉnh kích thước"
+                      title="Bấm để chọn cột cần khóa • Kéo thả để đổi thứ tự • Kéo viền phải để chỉnh kích thước"
                     >
                       <div className="flex items-center justify-between gap-1 pr-1.5">
-                        <span className="truncate">{label}</span>
-                        <GripVertical size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                        <div className="flex items-center gap-1.5 truncate">
+                          {isFrozen && <Lock size={12} className="text-amber-600 shrink-0" />}
+                          <span className="truncate">{label}</span>
+                        </div>
+                        <GripVertical size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition shrink-0 cursor-grab" />
                       </div>
                       <div
                         draggable={false}
-                        onMouseDown={(e) => handleMouseDown(colKey, e)}
-                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-30"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(colKey, e);
+                        }}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-teal-500/50 active:bg-teal-600 transition-colors z-40"
                       />
                     </th>
                   );
@@ -2480,10 +2615,29 @@ export default function TicketsPage() {
               ) : (
                 paginatedTickets.map((ticket, index) => {
                   const slaInfo = getTicketSlaInfo(ticket);
+                  const ticketKey = String(ticket.id || ticket.ticket_id || index);
+                  const isSelectedRow = selectedTicketId === ticketKey;
+                  const isSelectFrozen = isTicketColFrozen("select");
+
                   return (
-                    <tr key={ticket.id || index} className="hover:bg-slate-50/70 transition text-sm font-normal divide-x divide-slate-200">
+                    <tr 
+                      key={ticket.id || index} 
+                      onClick={() => setSelectedTicketId(ticketKey)}
+                      className={`group transition text-sm font-normal divide-x divide-slate-200 cursor-pointer ${
+                        isSelectedRow ? "bg-[#FEF3C7] hover:bg-[#FDE68A]" : "hover:bg-slate-50/70"
+                      }`}
+                    >
                       {/* Checkbox */}
-                      <td style={{ width: `${colWidths.select}px`, minWidth: `${colWidths.select}px` }} className="px-3 py-2 text-center whitespace-nowrap border-b border-slate-200">
+                      <td 
+                        style={{ 
+                          width: `${colWidths.select}px`, 
+                          minWidth: `${colWidths.select}px`,
+                          left: isSelectFrozen ? 0 : undefined,
+                        }} 
+                        className={`px-3 py-2 text-center whitespace-nowrap border-b border-slate-200 ${
+                          isSelectFrozen ? `sticky left-0 z-10 ${isSelectedRow ? "bg-[#FEF3C7]" : "bg-white group-hover:bg-slate-50"}` : ""
+                        }`}
+                      >
                         <input 
                           type="checkbox" 
                           checked={selectedRowIds.includes(ticket.id || ticket.ticket_id)}
@@ -2501,11 +2655,11 @@ export default function TicketsPage() {
                       {/* Dynamic Columns */}
                       {columnOrder.map((colKey) => {
                         if (!visibleColumns[colKey]) return null;
-                        return renderTableCell(colKey, ticket, slaInfo);
+                        return renderTableCell(colKey, ticket, slaInfo, isSelectedRow);
                       })}
 
                       {/* Actions */}
-                      <td style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }} className="px-2 py-2 whitespace-nowrap border-b border-slate-200">
+                      <td style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }} className={`px-2 py-2 whitespace-nowrap border-b border-slate-200 ${isSelectedRow ? "bg-[#FEF3C7]" : ""}`}>
                         <div className="flex items-center justify-center gap-1 text-slate-400">
                           <button
                             className="hover:text-teal-600 transition p-1.5 rounded-lg hover:bg-teal-50"

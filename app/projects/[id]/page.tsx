@@ -66,8 +66,27 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  GripVertical
+  GripVertical,
+  Lock,
+  Unlock
 } from "lucide-react";
+
+const TABLE_COLUMNS = [
+  { key: "row", label: "Hàng", width: 64 },
+  { key: "no", label: "No", width: 56 },
+  { key: "name", label: "Công việc", width: 280 },
+  { key: "startDate", label: "Thời gian bắt đầu", width: 112 },
+  { key: "endDate", label: "Thời gian kết thúc", width: 112 },
+  { key: "actualStartDate", label: "Bắt đầu TT", width: 128 },
+  { key: "actualEndDate", label: "Kết thúc TT", width: 128 },
+  { key: "assignees", label: "Người thực hiện", width: 140 },
+  { key: "progress", label: "% Hoàn thành", width: 96 },
+  { key: "status", label: "Trạng thái", width: 128 },
+  { key: "notes", label: "Ghi chú", width: 160 },
+  { key: "actions", label: "Thao tác", width: 80 },
+] as const;
+
+type ColumnKey = typeof TABLE_COLUMNS[number]["key"];
 
 // Helper functions for mock SOW data
 const getSowData = (project: Project) => {
@@ -457,6 +476,37 @@ export default function ProjectDetailPage() {
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
   const [isImportingPlan, setIsImportingPlan] = useState(false);
   const [isExportingPlan, setIsExportingPlan] = useState(false);
+
+  // Selected task row & column freeze states for project plan table
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedColKey, setSelectedColKey] = useState<ColumnKey>("name");
+  const [lockedColKey, setLockedColKey] = useState<ColumnKey | null>("name");
+
+  const getColIndex = (key: ColumnKey) => TABLE_COLUMNS.findIndex(c => c.key === key);
+
+  const getColLeftOffset = (key: ColumnKey): number => {
+    let left = 0;
+    for (const c of TABLE_COLUMNS) {
+      if (c.key === key) break;
+      left += c.width;
+    }
+    return left;
+  };
+
+  const isColFrozen = (key: ColumnKey): boolean => {
+    if (!lockedColKey) return false;
+    return getColIndex(key) <= getColIndex(lockedColKey);
+  };
+
+  const isLastFrozenCol = (key: ColumnKey): boolean => {
+    return lockedColKey === key;
+  };
+
+  const getColumnLabel = (key: ColumnKey | null): string => {
+    if (!key) return "";
+    const found = TABLE_COLUMNS.find(c => c.key === key);
+    return found ? found.label : "";
+  };
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -2726,6 +2776,42 @@ export default function ProjectDetailPage() {
                     <span>{isHeaderHidden ? "Unhide" : "Hide"}</span>
                   </button>
 
+                  {/* Nút Khóa / Mở khóa cột */}
+                  {selectedColKey && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (lockedColKey === selectedColKey) {
+                          setLockedColKey(null);
+                        } else {
+                          setLockedColKey(selectedColKey);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border shadow-2xs ${
+                        lockedColKey === selectedColKey
+                          ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-amber-200"
+                          : "bg-white hover:bg-slate-50 text-slate-700 border-slate-300 hover:border-blue-500"
+                      }`}
+                      title={
+                        lockedColKey === selectedColKey
+                          ? `Mở khóa cột ${getColumnLabel(selectedColKey)}`
+                          : `Khóa cột đến "${getColumnLabel(selectedColKey)}" khi cuộn ngang`
+                      }
+                    >
+                      {lockedColKey === selectedColKey ? (
+                        <>
+                          <Unlock size={13} className="shrink-0 text-white" />
+                          <span>Mở khóa ({getColumnLabel(selectedColKey)})</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock size={13} className="shrink-0 text-amber-600" />
+                          <span>Khóa cột: <b>{getColumnLabel(selectedColKey)}</b></span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
                   <input
                     id="plan-import-file"
                     type="file"
@@ -2764,41 +2850,313 @@ export default function ProjectDetailPage() {
               <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                 <thead className="select-none">
                   <tr className="bg-[#1E40AF] text-white">
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-16 whitespace-nowrap shadow-sm">
-                      Hàng
+                    {/* Cột Hàng */}
+                    <th 
+                      onClick={() => setSelectedColKey("row")}
+                      style={{ 
+                        width: "64px", 
+                        minWidth: "64px", 
+                        maxWidth: "64px",
+                        left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("row") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "row" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Hàng${isColFrozen("row") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("row") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Hàng</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
-                      No
+
+                    {/* Cột No */}
+                    <th 
+                      onClick={() => setSelectedColKey("no")}
+                      style={{ 
+                        width: "56px", 
+                        minWidth: "56px", 
+                        maxWidth: "56px",
+                        left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("no") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "no" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột No${isColFrozen("no") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("no") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>No</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[280px] whitespace-nowrap shadow-sm">
-                      Công việc
+
+                    {/* Cột Công việc */}
+                    <th 
+                      onClick={() => setSelectedColKey("name")}
+                      style={{ 
+                        width: "280px", 
+                        minWidth: "280px",
+                        left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
+                      }}
+                      className={`py-2 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("name") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "name" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Công việc${isColFrozen("name") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        {isColFrozen("name") && <Lock size={12} className="text-amber-300 shrink-0" />}
+                        <span>Công việc</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
-                      Thời gian bắt đầu
+
+                    {/* Cột Thời gian bắt đầu */}
+                    <th 
+                      onClick={() => setSelectedColKey("startDate")}
+                      style={{ 
+                        width: "112px", 
+                        minWidth: "112px",
+                        maxWidth: "112px",
+                        left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("startDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "startDate" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Bắt đầu${isColFrozen("startDate") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("startDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Thời gian bắt đầu</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
-                      Thời gian kết thúc
+
+                    {/* Cột Thời gian kết thúc */}
+                    <th 
+                      onClick={() => setSelectedColKey("endDate")}
+                      style={{ 
+                        width: "112px", 
+                        minWidth: "112px",
+                        maxWidth: "112px",
+                        left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("endDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "endDate" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Kết thúc${isColFrozen("endDate") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("endDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Thời gian kết thúc</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                      Thời gian bắt đầu thực tế
+
+                    {/* Cột Bắt đầu thực tế */}
+                    <th 
+                      onClick={() => setSelectedColKey("actualStartDate")}
+                      style={{ 
+                        width: "128px", 
+                        minWidth: "128px",
+                        maxWidth: "128px",
+                        left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("actualStartDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "actualStartDate" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Bắt đầu TT${isColFrozen("actualStartDate") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("actualStartDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Thời gian bắt đầu TT</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                      Thời gian kết thúc thực tế
+
+                    {/* Cột Kết thúc thực tế */}
+                    <th 
+                      onClick={() => setSelectedColKey("actualEndDate")}
+                      style={{ 
+                        width: "128px", 
+                        minWidth: "128px",
+                        maxWidth: "128px",
+                        left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("actualEndDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "actualEndDate" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Kết thúc TT${isColFrozen("actualEndDate") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("actualEndDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Thời gian kết thúc TT</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[140px] whitespace-nowrap shadow-sm">
-                      Người thực hiện
+
+                    {/* Cột Người thực hiện */}
+                    <th 
+                      onClick={() => setSelectedColKey("assignees")}
+                      style={{ 
+                        width: "140px", 
+                        minWidth: "140px",
+                        left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("assignees") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "assignees" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Người thực hiện${isColFrozen("assignees") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("assignees") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Người thực hiện</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
-                      % Hoàn thành
+
+                    {/* Cột % Hoàn thành */}
+                    <th 
+                      onClick={() => setSelectedColKey("progress")}
+                      style={{ 
+                        width: "96px", 
+                        minWidth: "96px",
+                        maxWidth: "96px",
+                        left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("progress") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "progress" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột % Hoàn thành${isColFrozen("progress") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("progress") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>% Hoàn thành</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                      Trạng thái
+
+                    {/* Cột Trạng thái */}
+                    <th 
+                      onClick={() => setSelectedColKey("status")}
+                      style={{ 
+                        width: "128px", 
+                        minWidth: "128px",
+                        maxWidth: "128px",
+                        left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("status") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "status" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Trạng thái${isColFrozen("status") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("status") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Trạng thái</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[160px] whitespace-nowrap shadow-sm">
-                      Ghi chú
+
+                    {/* Cột Ghi chú */}
+                    <th 
+                      onClick={() => setSelectedColKey("notes")}
+                      style={{ 
+                        width: "160px", 
+                        minWidth: "160px",
+                        left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
+                      }}
+                      className={`py-2 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("notes") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "notes" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Ghi chú${isColFrozen("notes") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("notes") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Ghi chú</span>
+                      </div>
                     </th>
-                    <th className="py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-20 whitespace-nowrap shadow-sm">
-                      Thao tác
+
+                    {/* Cột Thao tác */}
+                    <th 
+                      onClick={() => setSelectedColKey("actions")}
+                      style={{ 
+                        width: "80px", 
+                        minWidth: "80px",
+                        maxWidth: "80px",
+                        left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
+                      }}
+                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                        isColFrozen("actions") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                      } ${
+                        selectedColKey === "actions" 
+                          ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                          : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                      } ${
+                        isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                      }`}
+                      title={`Nhấp để chọn cột Thao tác${isColFrozen("actions") ? " (Đang khóa)" : ""}`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {isColFrozen("actions") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                        <span>Thao tác</span>
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -2816,26 +3174,56 @@ export default function ProjectDetailPage() {
                         const isPhase = level === 'Phase';
                         const isMain = level === 'Main task';
                         const isSub = level === 'Sub task';
+                        const rowKey = task.id || String(idx);
+                        const isSelected = selectedTaskId === rowKey;
+
+                        let rowBg = "border-slate-200 bg-white hover:bg-slate-50/40 text-slate-700";
+                        let stickyBg = "bg-white group-hover:bg-slate-50/40";
+
+                        if (dragOverIndex === idx && dragIndex !== idx) {
+                          rowBg = 'border-t-2 border-t-blue-500 bg-blue-50/60 ring-1 ring-blue-300';
+                          stickyBg = 'bg-blue-50/60';
+                        } else if (dragIndex === idx) {
+                          rowBg = 'opacity-40 bg-blue-50/40';
+                          stickyBg = 'bg-blue-50/40';
+                        } else if (isSelected) {
+                          if (isPhase) {
+                            rowBg = "bg-[#93C5FD] font-black text-blue-950 shadow-sm ring-1 ring-inset ring-blue-600";
+                            stickyBg = "bg-[#93C5FD]";
+                          } else {
+                            rowBg = "bg-[#FEF3C7] font-medium text-amber-950 hover:bg-[#FDE68A] shadow-sm ring-1 ring-inset ring-amber-500";
+                            stickyBg = "bg-[#FEF3C7] group-hover:bg-[#FDE68A]";
+                          }
+                        } else if (isPhase) {
+                          rowBg = 'border-slate-300 bg-[#BFDBFE] font-black text-blue-950';
+                          stickyBg = 'bg-[#BFDBFE]';
+                        } else if (isMain) {
+                          rowBg = 'border-slate-200 bg-[#E2EAF4] font-bold text-slate-900';
+                          stickyBg = 'bg-[#E2EAF4]';
+                        }
 
                         return (
                           <tr 
                             key={task.id || idx} 
+                            onClick={() => setSelectedTaskId(rowKey)}
                             onDragOver={(e) => handleDragOver(e, idx)}
                             onDrop={() => handleDrop(idx)}
-                            className={`border-b transition ${
-                              dragOverIndex === idx && dragIndex !== idx
-                                ? 'border-t-2 border-t-blue-500 bg-blue-50/60 ring-1 ring-blue-300'
-                                : dragIndex === idx
-                                ? 'opacity-40 bg-blue-50/40'
-                                : isPhase
-                                ? 'border-slate-300 bg-[#BFDBFE] font-black text-blue-950'
-                                : isMain
-                                ? 'border-slate-200 bg-[#E2EAF4] font-bold text-slate-900'
-                                : 'border-slate-200 bg-white hover:bg-slate-50/40'
-                            }`}
+                            className={`border-b transition group cursor-pointer ${rowBg}`}
                           >
                             {/* Cột Hàng */}
-                            <td className="p-1 text-center border-b border-r border-slate-200 select-none w-16 whitespace-nowrap bg-blue-50/30">
+                            <td 
+                              style={{ 
+                                width: "64px", 
+                                minWidth: "64px", 
+                                maxWidth: "64px",
+                                left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                              }}
+                              className={`p-1 text-center border-b border-r border-slate-200 select-none whitespace-nowrap ${
+                                isColFrozen("row") ? `sticky z-10 ${stickyBg}` : "bg-blue-50/30"
+                              } ${
+                                isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <MoveRowInput
                                 rowIndex={idx}
                                 totalRows={tempPlan.length}
@@ -2844,7 +3232,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Cột No */}
-                            <td className="p-1 text-center border-b border-r border-slate-200 select-none w-14 whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "56px", 
+                                minWidth: "56px", 
+                                maxWidth: "56px",
+                                left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
+                              }}
+                              className={`p-1 text-center border-b border-r border-slate-200 select-none whitespace-nowrap ${
+                                isColFrozen("no") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <div 
                                 draggable={true}
                                 onDragStart={(e) => {
@@ -2871,7 +3271,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Công việc Input */}
-                            <td className="p-1.5 border-b border-r border-slate-200 whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "280px", 
+                                minWidth: "280px", 
+                                left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
+                              }}
+                              className={`p-1.5 border-b border-r border-slate-200 whitespace-nowrap ${
+                                isColFrozen("name") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <div className={`space-y-1 ${isSub ? 'pl-4' : isMain ? 'pl-2' : ''}`}>
                                 <div className="flex items-center gap-1.5">
                                   {isSub && <span className="text-slate-400 font-mono text-xs select-none">↳</span>}
@@ -2887,7 +3298,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "112px", 
+                                minWidth: "112px", 
+                                maxWidth: "112px",
+                                left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("startDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.startDate) || 'Tự tasks'; })()}
@@ -2901,7 +3324,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* End Date */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "112px", 
+                                minWidth: "112px", 
+                                maxWidth: "112px",
+                                left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("endDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-slate-500 italic">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return formatDate(s.endDate) || 'Tự tasks'; })()}
@@ -2915,7 +3350,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("actualStartDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 text-slate-400">—</span>
                               ) : (
@@ -2927,7 +3374,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual End Date */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("actualEndDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[10px] px-1.5 py-1 text-emerald-600 font-bold">
                                   {(() => { const s = getPhaseStats(tempPlan, idx); return s.actualEndDate ? formatDate(s.actualEndDate) : '—'; })()}
@@ -2941,7 +3400,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Assignee - multi select from staff */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "140px", 
+                                minWidth: "140px", 
+                                left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("assignees") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <div className="text-[10px] text-blue-600 font-medium px-1 flex flex-wrap gap-1 items-center justify-center">
                                   {(() => {
@@ -2967,7 +3437,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Progress % */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "96px", 
+                                minWidth: "96px", 
+                                maxWidth: "96px",
+                                left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("progress") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {(() => {
                                 const resolved = getResolvedTaskProgress(tempPlan, idx);
                                 if (resolved.isAuto) {
@@ -2997,7 +3479,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Status */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap text-center">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
+                                isColFrozen("status") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <select
                                 value={task.status}
                                 onChange={(e) => handleTempTaskChange(idx, "status", e.target.value)}
@@ -3010,7 +3504,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Notes */}
-                            <td className="p-1 border-b border-r border-slate-200 whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "160px", 
+                                minWidth: "160px", 
+                                left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 whitespace-nowrap ${
+                                isColFrozen("notes") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <input
                                 type="text"
                                 value={task.notes || ""}
@@ -3021,7 +3526,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Delete Button */}
-                            <td className="p-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "80px", 
+                                minWidth: "80px", 
+                                maxWidth: "80px",
+                                left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
+                              }}
+                              className={`p-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                                isColFrozen("actions") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <button
                                 type="button"
                                 onClick={() => handleRemoveTempTask(idx)}
@@ -3049,27 +3566,57 @@ export default function ProjectDetailPage() {
                         const isPhase = level === 'Phase';
                         const isMain = level === 'Main task';
                         const isSub = level === 'Sub task';
+                        const rowKey = task.id || String(idx);
+                        const isSelected = selectedTaskId === rowKey;
+
+                        let rowBg = "bg-white hover:bg-slate-50/70 text-slate-700";
+                        let stickyBg = "bg-white group-hover:bg-slate-50/70";
+
+                        if (isMoveMode && moveModeOverIdx === idx && moveModeDragIdx !== idx) {
+                          rowBg = "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs";
+                          stickyBg = "bg-indigo-100/80";
+                        } else if (isMoveMode && moveModeDragIdx === idx) {
+                          rowBg = "opacity-40 bg-indigo-50/50";
+                          stickyBg = "bg-indigo-50/50";
+                        } else if (isSelected) {
+                          if (isPhase) {
+                            rowBg = "bg-[#93C5FD] font-black text-blue-950 shadow-sm ring-1 ring-inset ring-blue-600";
+                            stickyBg = "bg-[#93C5FD]";
+                          } else {
+                            rowBg = "bg-[#FEF3C7] font-medium text-amber-950 hover:bg-[#FDE68A] shadow-sm ring-1 ring-inset ring-amber-500";
+                            stickyBg = "bg-[#FEF3C7] group-hover:bg-[#FDE68A]";
+                          }
+                        } else if (isPhase) {
+                          rowBg = "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in";
+                          stickyBg = "bg-[#BFDBFE]";
+                        } else if (isMain) {
+                          rowBg = "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]";
+                          stickyBg = "bg-[#E2EAF4] group-hover:bg-[#D7E3F1]";
+                        }
 
                         return (
                           <tr 
                             key={task.id || idx} 
+                            onClick={() => setSelectedTaskId(rowKey)}
                             onDragOver={(e) => isMoveMode && handleMoveModeDragOver(e, idx)}
                             onDrop={(e) => isMoveMode && handleMoveModeDrop(idx)}
-                            className={`border-b border-slate-200 transition ${
-                              isMoveMode && moveModeOverIdx === idx && moveModeDragIdx !== idx
-                                ? "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs"
-                                : isMoveMode && moveModeDragIdx === idx
-                                ? "opacity-40 bg-indigo-50/50"
-                                : isPhase
-                                ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
-                                : isMain
-                                ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
-                                : "bg-white hover:bg-slate-50/40 text-slate-700"
-                            }`}
+                            className={`border-b border-slate-200 transition group cursor-pointer ${rowBg}`}
                           >
                             {/* Cột Hàng (1, 2, 3...) */}
                             {isMoveMode ? (
-                              <td className="py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 w-16 select-none">
+                              <td 
+                                style={{ 
+                                  width: "64px", 
+                                  minWidth: "64px", 
+                                  maxWidth: "64px",
+                                  left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                                }}
+                                className={`py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap select-none ${
+                                  isColFrozen("row") ? `sticky z-10 ${stickyBg}` : "bg-indigo-50/70"
+                                } ${
+                                  isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                                }`}
+                              >
                                 <div className="inline-flex items-center justify-center gap-0.5">
                                   <MoveRowInput
                                     rowIndex={idx}
@@ -3107,13 +3654,37 @@ export default function ProjectDetailPage() {
                                 </div>
                               </td>
                             ) : (
-                              <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
+                              <td 
+                                style={{ 
+                                  width: "64px", 
+                                  minWidth: "64px", 
+                                  maxWidth: "64px",
+                                  left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                                }}
+                                className={`py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs ${
+                                  isColFrozen("row") ? `sticky z-10 ${stickyBg}` : "bg-slate-50/40"
+                                } ${
+                                  isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                                }`}
+                              >
                                 {idx + 1}
                               </td>
                             )}
 
                             {/* Cột No (1, 1.1, 1.1.1...) */}
-                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
+                            <td 
+                              style={{ 
+                                width: "56px", 
+                                minWidth: "56px", 
+                                maxWidth: "56px",
+                                left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
+                              }}
+                              className={`py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap ${
+                                isColFrozen("no") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isMoveMode ? (
                                 <div 
                                   draggable={true}
@@ -3135,7 +3706,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Công việc */}
-                            <td className="py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "280px", 
+                                minWidth: "280px", 
+                                left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
+                              }}
+                              className={`py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap ${
+                                isColFrozen("name") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide whitespace-nowrap" title={task.title}>{task.title}</span>
                               ) : isMain ? (
@@ -3149,7 +3731,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Start Date */}
-                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "112px", 
+                                minWidth: "112px", 
+                                maxWidth: "112px",
+                                left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
+                              }}
+                              className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                                isColFrozen("startDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
                                   {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()}
@@ -3163,7 +3757,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* End Date */}
-                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "112px", 
+                                minWidth: "112px", 
+                                maxWidth: "112px",
+                                left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
+                              }}
+                              className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                                isColFrozen("endDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
                                   {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()}
@@ -3177,7 +3783,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual Start Date */}
-                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
+                              }}
+                              className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                                isColFrozen("actualStartDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 <span className="text-slate-400 text-xs">—</span>
                               ) : (
@@ -3189,7 +3807,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Actual End Date - phase: latest when ALL tasks done */}
-                            <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
+                              }}
+                              className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                                isColFrozen("actualEndDate") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (
                                 (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-700 font-bold text-xs">{formatDate(s.actualEndDate)}</span> : <span className="text-slate-400 text-xs">—</span>; })()
                               ) : (
@@ -3201,7 +3831,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Assignee - inline click-to-edit via StaffSearchSelect */}
-                            <td className="py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "140px", 
+                                minWidth: "140px", 
+                                left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
+                              }}
+                              className={`py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                                isColFrozen("assignees") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (() => {
                                 const { assignees } = getPhaseStats(project.plan, idx);
                                 return assignees.length > 0 ? (
@@ -3226,7 +3867,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Progress */}
-                            <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "96px", 
+                                minWidth: "96px", 
+                                maxWidth: "96px",
+                                left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
+                              }}
+                              className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                                isColFrozen("progress") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {(() => {
                                 const resolved = getResolvedTaskProgress(project.plan, idx);
                                 if (resolved.isAuto) {
@@ -3263,7 +3916,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Status */}
-                            <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "128px", 
+                                minWidth: "128px", 
+                                maxWidth: "128px",
+                                left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
+                              }}
+                              className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                                isColFrozen("status") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {isPhase ? (() => {
                                 const s = getPhaseStats(project.plan, idx);
                                 const isCompleted = s.progress === 100;
@@ -3300,7 +3965,18 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Notes - Bấm để viết trực tiếp */}
-                            <td className="py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
+                            <td 
+                              style={{ 
+                                width: "160px", 
+                                minWidth: "160px", 
+                                left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
+                              }}
+                              className={`py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px] ${
+                                isColFrozen("notes") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <input
                                 type="text"
                                 defaultValue={task.notes || ""}
@@ -3318,7 +3994,19 @@ export default function ProjectDetailPage() {
                             </td>
 
                             {/* Action column (Sửa & Xóa buttons) */}
-                            <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                            <td 
+                              style={{ 
+                                width: "80px", 
+                                minWidth: "80px", 
+                                maxWidth: "80px", 
+                                left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
+                              }}
+                              className={`py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                                isColFrozen("actions") ? `sticky z-10 ${stickyBg}` : ""
+                              } ${
+                                isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {!isPhase && (
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
