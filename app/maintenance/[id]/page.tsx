@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import MainLayout from "@/components/layout/main-layout";
 import StaffSearchSelect from "@/components/common/staff-search-select";
 import { 
-  ArrowLeft, Plus, Download, Upload, Pencil, Trash2, X,
+  ArrowLeft, Plus, Minus, Download, Upload, Pencil, Trash2, X,
   CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
   Info, Lightbulb, ListOrdered, CircleDot, PauseCircle, FileSpreadsheet
@@ -319,6 +319,8 @@ export default function MaintenanceDetailPage() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cycleDateInputRef = useRef<HTMLInputElement>(null);
+  const [configTotalCycles, setConfigTotalCycles] = useState<number>(1);
 
   // Load plan details from Supabase
   const loadPlanDetails = async () => {
@@ -337,6 +339,7 @@ export default function MaintenanceDetailPage() {
       }
 
       setPlan(data);
+      setConfigTotalCycles(parseInt(data.hold_time) || 1);
 
       // Parse tasks, config, and recommendations from the remark column
       let tasksData: { [key: string]: Task[] } = {};
@@ -607,6 +610,7 @@ export default function MaintenanceDetailPage() {
 
   // Handle cycle date manual overrides
   const handleCycleDateChange = async (newDate: string) => {
+    if (!newDate) return;
     const updatedMeta = {
       ...cycleMeta,
       [activeCycle]: {
@@ -614,13 +618,23 @@ export default function MaintenanceDetailPage() {
         startDate: newDate
       }
     };
+    let updatedConfig = { ...config };
+    if (activeCycle === "1") {
+      updatedConfig.startDate = newDate;
+      setConfig(updatedConfig);
+    }
     setCycleMeta(updatedMeta);
     
     await saveTasksToDBWrapper({
-      config,
+      config: updatedConfig,
       cycleMeta: updatedMeta,
       tasks: cycleTasks
     });
+
+    if (activeCycle === "1" && planId) {
+      await supabase.from("tickets").update({ start_time: newDate }).eq("id", planId);
+      setPlan((prev: any) => prev ? { ...prev, start_time: newDate } : null);
+    }
   };
 
   // Handle frequency and main start date changes
@@ -636,6 +650,144 @@ export default function MaintenanceDetailPage() {
       cycleMeta,
       tasks: cycleTasks
     });
+  };
+
+  // Thêm lần bảo trì mới
+  const handleAddCycle = async () => {
+    const newTotal = totalCycles + 1;
+    const newCycleNum = String(newTotal);
+
+    // Copy template or clone tasks from cycle 1 if cycle 1 has tasks
+    const updatedTasks = { ...cycleTasks };
+    if (!updatedTasks[newCycleNum] && updatedTasks["1"] && updatedTasks["1"].length > 0) {
+      updatedTasks[newCycleNum] = updatedTasks["1"].map((t) => ({
+        ...t,
+        id: "t_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+        progress: 0,
+        status: "Chưa bắt đầu",
+        actualStartDate: "",
+        actualEndDate: "",
+      }));
+      setCycleTasks(updatedTasks);
+    }
+
+    try {
+      const { error } = await supabase
+        .from("tickets")
+        .update({ hold_time: String(newTotal) })
+        .eq("id", planId);
+
+      if (error) {
+        alert("Lỗi khi thêm lần bảo trì: " + error.message);
+        return;
+      }
+
+      setPlan((prev: any) => prev ? { ...prev, hold_time: String(newTotal) } : null);
+      setConfigTotalCycles(newTotal);
+      setActiveCycle(newCycleNum);
+
+      await saveTasksToDBWrapper({
+        tasks: updatedTasks,
+        config,
+        cycleMeta,
+      });
+    } catch (err) {
+      console.error("Error adding cycle:", err);
+    }
+  };
+
+  // Bớt / xóa lần bảo trì
+  const handleRemoveCycle = async (cycleNumToRemove?: string) => {
+    if (totalCycles <= 1) {
+      alert("Kế hoạch bảo trì phải có ít nhất 1 lần.");
+      return;
+    }
+
+    const targetCycle = cycleNumToRemove || String(totalCycles);
+    const confirmMsg = `Bạn có chắc chắn muốn xóa Lần bảo trì ${targetCycle} không? Toàn bộ công việc và dữ liệu của lần này sẽ bị xóa.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const newTotal = totalCycles - 1;
+    const updatedTasks = { ...cycleTasks };
+    const updatedRecs = { ...cycleRecs };
+    const updatedMeta = { ...cycleMeta };
+
+    // Delete target cycle data
+    delete updatedTasks[targetCycle];
+    delete updatedRecs[targetCycle];
+    delete updatedMeta[targetCycle];
+
+    // If targetCycle was in the middle, re-index higher cycles down by 1
+    const targetNum = parseInt(targetCycle, 10);
+    for (let i = targetNum + 1; i <= totalCycles; i++) {
+      const oldKey = String(i);
+      const newKey = String(i - 1);
+      if (updatedTasks[oldKey]) {
+        updatedTasks[newKey] = updatedTasks[oldKey];
+        delete updatedTasks[oldKey];
+      }
+      if (updatedRecs[oldKey]) {
+        updatedRecs[newKey] = updatedRecs[oldKey];
+        delete updatedRecs[oldKey];
+      }
+      if (updatedMeta[oldKey]) {
+        updatedMeta[newKey] = updatedMeta[oldKey];
+        delete updatedMeta[oldKey];
+      }
+    }
+
+    try {
+      const { error } = await supabase
+        .from("tickets")
+        .update({ hold_time: String(newTotal) })
+        .eq("id", planId);
+
+      if (error) {
+        alert("Lỗi khi bớt lần bảo trì: " + error.message);
+        return;
+      }
+
+      setPlan((prev: any) => prev ? { ...prev, hold_time: String(newTotal) } : null);
+      setConfigTotalCycles(newTotal);
+      setCycleTasks(updatedTasks);
+      setCycleRecs(updatedRecs);
+      setCycleMeta(updatedMeta);
+
+      if (parseInt(activeCycle, 10) > newTotal) {
+        setActiveCycle(String(newTotal));
+      } else if (activeCycle === targetCycle) {
+        setActiveCycle(String(Math.min(targetNum, newTotal)));
+      }
+
+      await saveTasksToDBWrapper({
+        tasks: updatedTasks,
+        recommendations: updatedRecs,
+        config,
+        cycleMeta: updatedMeta,
+      });
+    } catch (err) {
+      console.error("Error removing cycle:", err);
+    }
+  };
+
+  const handleSaveConfigModal = async () => {
+    if (configTotalCycles !== totalCycles && configTotalCycles >= 1) {
+      try {
+        const { error } = await supabase
+          .from("tickets")
+          .update({ hold_time: String(configTotalCycles) })
+          .eq("id", planId);
+        if (!error) {
+          setPlan((prev: any) => prev ? { ...prev, hold_time: String(configTotalCycles) } : null);
+          if (parseInt(activeCycle) > configTotalCycles) {
+            setActiveCycle(String(configTotalCycles));
+          }
+        }
+      } catch (err) {
+        console.error("Error updating total cycles in config modal:", err);
+      }
+    }
+    setIsConfigModalOpen(false);
   };
 
   // Move mode operations for current cycle tasks — giống hệt triển khai dự án
@@ -1442,25 +1594,44 @@ export default function MaintenanceDetailPage() {
         <div className="flex-1 flex gap-6 overflow-hidden">
         {/* Column 1: DANH SÁCH LẦN BẢO TRÌ */}
         <section className="w-80 shrink-0 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-          <div className="bg-slate-50 px-4 py-3.5 border-b border-slate-200 flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-700 tracking-wide uppercase flex items-center gap-1.5">
-              <span>DANH SÁCH LẦN BẢO TRÌ</span>
+          <div className="bg-slate-50 px-3.5 py-3 border-b border-slate-200 flex justify-between items-center gap-2">
+            <h3 className="text-xs font-bold text-slate-800 tracking-wide uppercase flex items-center gap-1.5 min-w-0 truncate">
+              <ClipboardList size={15} className="text-blue-600 shrink-0" />
+              <span className="truncate">LẦN BẢO TRÌ ({totalCycles})</span>
             </h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 shrink-0">
               <button 
+                type="button"
+                onClick={handleAddCycle}
+                className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition shadow-3xs cursor-pointer"
+                title="Thêm 1 lần bảo trì mới"
+              >
+                <Plus size={12} />
+                <span>Thêm</span>
+              </button>
+              {totalCycles > 1 && (
+                <button 
+                  type="button"
+                  onClick={() => handleRemoveCycle(String(totalCycles))}
+                  className="flex items-center gap-0.5 px-1.5 py-1 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                  title={`Bớt lần ${totalCycles}`}
+                >
+                  <Minus size={12} />
+                  <span>Bớt</span>
+                </button>
+              )}
+              <button 
+                type="button"
                 onClick={() => setIsConfigModalOpen(true)}
-                className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 hover:text-blue-600 transition cursor-pointer"
                 title="Cấu hình kế hoạch"
               >
-                <Settings size={16} />
+                <Settings size={15} />
               </button>
-              <span className="text-slate-400">
-                <ClipboardList size={18} />
-              </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 custom-scrollbar">
             {Array.from({ length: totalCycles }).map((_, index) => {
               const cycleNum = String(index + 1);
               const isActive = activeCycle === cycleNum;
@@ -1474,18 +1645,18 @@ export default function MaintenanceDetailPage() {
               const statusText = getCycleStatusText(percent);
 
               return (
-                <button
+                <div
                   key={index}
                   onClick={() => setActiveCycle(cycleNum)}
-                  className={`w-full text-left p-3.5 rounded-xl border flex flex-col gap-2 transition cursor-pointer ${
+                  className={`w-full text-left p-3 rounded-xl border flex flex-col gap-2 transition cursor-pointer group relative ${
                     isActive 
                       ? "bg-blue-50/50 border-blue-600 shadow-sm" 
                       : "bg-white hover:bg-slate-50 border-slate-200"
                   }`}
                 >
                   <div className="flex justify-between items-start w-full">
-                    <div className="flex flex-col">
-                      <span className={`text-xs font-bold ${isActive ? "text-blue-900" : "text-slate-800"}`}>
+                    <div className="flex flex-col min-w-0 pr-1">
+                      <span className={`text-xs font-bold truncate ${isActive ? "text-blue-900" : "text-slate-800"}`}>
                         {label}
                       </span>
                       <span className="text-[10px] text-slate-400 font-medium mt-0.5">
@@ -1493,31 +1664,47 @@ export default function MaintenanceDetailPage() {
                       </span>
                     </div>
 
-                    {percent > 0 ? (
-                      <div className="flex flex-col items-end shrink-0">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          percent === 100 
-                            ? "bg-green-100 text-green-700" 
-                            : "bg-blue-100 text-blue-700"
-                        }`}>
-                          {percent}%
-                        </span>
-                        <span className={`text-[10px] font-bold mt-1 ${
-                          percent === 100 ? "text-green-600" : "text-blue-600"
-                        }`}>
-                          {statusText}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-end shrink-0">
-                        <span className="text-slate-300">
-                          <CheckCircle2 size={14} className="opacity-45" />
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400 mt-1">
-                          Chưa bắt đầu
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {percent > 0 ? (
+                        <div className="flex flex-col items-end shrink-0">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            percent === 100 
+                              ? "bg-green-100 text-green-700" 
+                              : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {percent}%
+                          </span>
+                          <span className={`text-[10px] font-bold mt-0.5 ${
+                            percent === 100 ? "text-green-600" : "text-blue-600"
+                          }`}>
+                            {statusText}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-end shrink-0">
+                          <span className="text-slate-300">
+                            <CheckCircle2 size={13} className="opacity-45" />
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400 mt-0.5">
+                            Chưa bắt đầu
+                          </span>
+                        </div>
+                      )}
+
+                      {totalCycles > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveCycle(cycleNum);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 hover:opacity-100 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition ml-0.5 cursor-pointer"
+                          title={`Xóa Lần ${cycleNum}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Progress bar inside card */}
@@ -1529,142 +1716,140 @@ export default function MaintenanceDetailPage() {
                       style={{ width: `${percent || 0}%` }}
                     />
                   </div>
-                </button>
+                </div>
               );
             })}
+
+            {/* Quick add cycle button at the bottom of the list */}
+            <button
+              type="button"
+              onClick={handleAddCycle}
+              className="w-full py-2 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/20 hover:bg-blue-50 text-blue-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-3xs"
+            >
+              <Plus size={13} />
+              <span>Thêm lần bảo trì ({totalCycles + 1})</span>
+            </button>
           </div>
         </section>
 
         {/* Column 2: CHI TIẾT CÔNG VIỆC/KHUYẾN NGHỊ — LẦN X */}
-        <section className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden p-6 space-y-4">
-          {/* Header & Controls Toolbar matching screenshot */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0">
-                <Calendar className="w-6 h-6" />
+        <section className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden p-4 space-y-3">
+          {/* Header & Controls Toolbar (Compact & Optimized) */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-1 border-b border-slate-100/80">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase leading-tight">
                   {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle}` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
                 </h2>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                   Theo dõi tiến độ &nbsp;·&nbsp; Quản lý hiệu quả &nbsp;·&nbsp; Hoàn thành đúng hạn
                 </p>
               </div>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               {activeTab === "tasks" ? (
                 <>
                   {/* Nút Di chuyển (giống triển khai dự án) */}
                   <button
                     type="button"
                     onClick={() => setIsMoveMode(!isMoveMode)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer shadow-3xs ${
                       isMoveMode
-                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700 shadow-sm ring-2 ring-indigo-200"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-250"
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700 shadow-xs ring-2 ring-indigo-200"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
                     }`}
-                    title={isMoveMode ? "Thoát chế độ di chuyển hàng" : "Bật chế độ di chuyển hàng (kéo thả hoặc nhập số hàng)"}
+                    title={isMoveMode ? "Thoát chế độ di chuyển hàng" : "Bật chế độ di chuyển hàng"}
                   >
-                    <ArrowUpDown size={14} className={isMoveMode ? "text-white" : "text-slate-600"} />
+                    <ArrowUpDown size={13} className={isMoveMode ? "text-white" : "text-slate-600"} />
                     <span>{isMoveMode ? "Xong di chuyển" : "Di chuyển"}</span>
                   </button>
 
                   {/* + Phase */}
                   <button 
                     onClick={handleQuickAddPhase}
-                    className="flex items-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition cursor-pointer shadow-3xs"
                     title="Thêm giai đoạn mới (Phase)"
                   >
                     <Plus size={13} />
                     <span>Phase</span>
                   </button>
 
-                  {/* + Main task */}
-                  <button 
-                    onClick={handleQuickAddMainTask}
-                    className="flex items-center gap-1 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
-                    title="Thêm công việc chính (Main task)"
-                  >
-                    <Plus size={13} />
-                    <span>Main task</span>
-                  </button>
-
-                  {/* + Sub task */}
-                  <button 
-                    onClick={handleQuickAddSubTask}
-                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm hover:shadow-md"
-                    title="Thêm công việc con (Sub task)"
-                  >
-                    <Plus size={13} />
-                    <span>Sub task</span>
-                  </button>
-
                   {/* 1. Tải file mẫu */}
                   <button 
                     onClick={() => handleExportExcel(true)}
-                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-3xs transition cursor-pointer"
                     title="Tải file mẫu Excel (.xlsx)"
                   >
-                    <Download size={14} className="text-slate-500" />
-                    <span>Tải file mẫu</span>
+                    <Download size={13} className="text-slate-500" />
+                    <span>Tải mẫu</span>
                   </button>
 
                   {/* 2. Xuất Excel */}
                   <button 
                     onClick={() => handleExportExcel(false)}
-                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-3xs transition cursor-pointer"
                     title="Xuất công việc ra file Excel (.xlsx)"
                   >
-                    <FileSpreadsheet size={14} className="text-emerald-600" />
+                    <FileSpreadsheet size={13} className="text-emerald-600" />
                     <span>Xuất Excel</span>
                   </button>
 
                   {/* 3. Nhập Excel */}
                   <button 
                     onClick={triggerImportFile}
-                    className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    className="px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-3xs transition cursor-pointer"
                     title="Nhập dữ liệu công việc từ file Excel / CSV"
                   >
-                    <Upload size={14} className="text-blue-600" />
+                    <Upload size={13} className="text-blue-600" />
                     <span>Nhập Excel</span>
                   </button>
                 </>
               ) : (
                 <button 
                   onClick={handleRecCreateOpen}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition cursor-pointer"
                 >
-                  <Plus size={15} />
+                  <Plus size={14} />
                   <span>Tạo khuyến nghị</span>
                 </button>
               )}
 
               {/* NGÀY BẮT ĐẦU */}
-              <div className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 shadow-xs relative">
-                <Calendar size={14} className="text-slate-600" />
-                <span className="uppercase text-[11px] text-slate-500 font-bold">NGÀY BẮT ĐẦU:</span>
-                <span className="text-xs font-bold text-slate-800">
-                  {formatCycleDateInputDisplay(getCycleStartDate(activeCycle))}
-                </span>
+              <div 
+                onClick={() => {
+                  try {
+                    cycleDateInputRef.current?.showPicker();
+                  } catch {
+                    cycleDateInputRef.current?.focus();
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-200 hover:border-blue-500 bg-white hover:bg-blue-50/30 rounded-lg text-xs font-semibold text-slate-700 shadow-3xs transition cursor-pointer select-none group"
+                title="Bấm để chọn và thay đổi ngày bắt đầu"
+              >
+                <Calendar size={13} className="text-blue-600 shrink-0 group-hover:scale-110 transition-transform" />
+                <span className="uppercase text-[10px] text-slate-500 font-bold shrink-0">NGÀY BẮT ĐẦU:</span>
                 <input 
+                  ref={cycleDateInputRef}
                   type="date" 
-                  value={getCycleStartDate(activeCycle)}
+                  value={getCycleStartDate(activeCycle) || ""}
                   onChange={(e) => handleCycleDateChange(e.target.value)}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs font-bold text-blue-700 bg-transparent border-none outline-none p-0 cursor-pointer focus:ring-0 w-[115px]"
                   title="Nhấp để thay đổi ngày bắt đầu"
                 />
-                <Calendar size={14} className="text-slate-400 ml-0.5" />
               </div>
             </div>
           </div>
 
           {/* Tabs switcher */}
-          <div className="flex border-b border-slate-200 shrink-0 gap-8">
+          <div className="flex border-b border-slate-200 shrink-0 gap-6">
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`pb-3 text-xs font-bold uppercase flex items-center gap-2 transition-all cursor-pointer border-b-2 ${
+              className={`pb-2 text-xs font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer border-b-2 ${
                 activeTab === "tasks"
                   ? "border-blue-600 text-blue-600 font-extrabold"
                   : "border-transparent text-slate-500 hover:text-slate-700"
@@ -2635,6 +2820,35 @@ export default function MaintenanceDetailPage() {
             
             <div className="p-5 space-y-4">
               <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tổng số lần bảo trì:</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={configTotalCycles}
+                    onChange={e => setConfigTotalCycles(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setConfigTotalCycles(prev => Math.max(1, prev - 1))}
+                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-700 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfigTotalCycles(prev => prev + 1)}
+                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-700 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Ngày bắt đầu lần 1:</label>
                 <input
                   type="date"
@@ -2661,7 +2875,7 @@ export default function MaintenanceDetailPage() {
               
               <div className="flex justify-end pt-2">
                 <button
-                  onClick={() => setIsConfigModalOpen(false)}
+                  onClick={handleSaveConfigModal}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-3xs"
                 >
                   Hoàn tất
