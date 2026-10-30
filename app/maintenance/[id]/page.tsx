@@ -10,7 +10,8 @@ import {
   ArrowLeft, Plus, Minus, Download, Upload, Pencil, Trash2, X,
   CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
-  Info, Lightbulb, ListOrdered, CircleDot, PauseCircle, FileSpreadsheet
+  Info, Lightbulb, ListOrdered, CircleDot, PauseCircle, FileSpreadsheet,
+  Pin, Check
 } from "lucide-react";
 import { 
   generateDefaultTasks, 
@@ -293,6 +294,13 @@ export default function MaintenanceDetailPage() {
   const [isMoveMode, setIsMoveMode] = useState(false);
   const [moveModeDragIdx, setMoveModeDragIdx] = useState<number | null>(null);
   const [moveModeOverIdx, setMoveModeOverIdx] = useState<number | null>(null);
+
+  // Selected task row highlight state
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // Freeze column state: "task" (Khóa đến Công việc), "no" (Khóa đến No), "row" (Khóa đến Hàng), "none" (Không khóa)
+  const [freezeCol, setFreezeCol] = useState<"task" | "no" | "row" | "none">("task");
+  const [showFreezeMenu, setShowFreezeMenu] = useState(false);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2051,6 +2059,87 @@ export default function MaintenanceDetailPage() {
                     <Upload size={13} className="text-blue-600" />
                     <span>Nhập Excel</span>
                   </button>
+
+                  {/* 4. Khóa cột */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowFreezeMenu(!showFreezeMenu)}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer shadow-3xs ${
+                        freezeCol !== "none"
+                          ? "bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                      title="Khóa/Ghim cột khi cuộn ngang bảng"
+                    >
+                      <Pin size={13} className={freezeCol !== "none" ? "rotate-45 text-sky-600 fill-sky-600" : "text-slate-500"} />
+                      <span>
+                        {freezeCol === "task"
+                          ? "Khóa: Công việc"
+                          : freezeCol === "no"
+                          ? "Khóa: Cột No"
+                          : freezeCol === "row"
+                          ? "Khóa: Cột Hàng"
+                          : "Khóa cột: Tắt"}
+                      </span>
+                      <ChevronDown size={12} className="opacity-70" />
+                    </button>
+
+                    {showFreezeMenu && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowFreezeMenu(false)} 
+                        />
+                        <div className="absolute right-0 sm:left-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+                          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                            Khóa cột khi cuộn ngang
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setFreezeCol("task"); setShowFreezeMenu(false); }}
+                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
+                              freezeCol === "task" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
+                            }`}
+                          >
+                            <span>Khóa đến cột Công việc (Khuyên dùng)</span>
+                            {freezeCol === "task" && <Check size={14} className="text-sky-600" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setFreezeCol("no"); setShowFreezeMenu(false); }}
+                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
+                              freezeCol === "no" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
+                            }`}
+                          >
+                            <span>Khóa đến cột No</span>
+                            {freezeCol === "no" && <Check size={14} className="text-sky-600" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setFreezeCol("row"); setShowFreezeMenu(false); }}
+                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
+                              freezeCol === "row" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
+                            }`}
+                          >
+                            <span>Khóa đến cột Hàng</span>
+                            {freezeCol === "row" && <Check size={14} className="text-sky-600" />}
+                          </button>
+                          <div className="my-1 border-t border-slate-100" />
+                          <button
+                            type="button"
+                            onClick={() => { setFreezeCol("none"); setShowFreezeMenu(false); }}
+                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-red-50 text-slate-600 hover:text-red-600 transition cursor-pointer ${
+                              freezeCol === "none" ? "font-bold text-red-600" : ""
+                            }`}
+                          >
+                            <span>Tắt khóa cột (Cuộn tự do)</span>
+                            {freezeCol === "none" && <Check size={14} className="text-red-600" />}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </>
               ) : (
                 <button 
@@ -2293,14 +2382,50 @@ export default function MaintenanceDetailPage() {
                   <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                   <thead className="select-none">
                     <tr className="bg-[#1E40AF] text-white">
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-16 whitespace-nowrap shadow-sm">
+                      <th 
+                        style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
+                          freezeCol !== "none" ? "left-0 z-30" : "z-20"
+                        } ${
+                          freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                      >
                         Hàng
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-14 whitespace-nowrap shadow-sm">
+                      <th 
+                        style={{ width: "56px", minWidth: "56px", maxWidth: "56px" }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
+                          freezeCol === "no" || freezeCol === "task" ? "left-[64px] z-30" : "z-20"
+                        } ${
+                          freezeCol === "no" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                      >
                         No
                       </th>
-                      <th className="py-2.5 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[280px] whitespace-nowrap shadow-sm">
-                        Công việc
+                      <th 
+                        style={{ minWidth: "280px" }}
+                        className={`py-2.5 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
+                          freezeCol === "task" ? "left-[120px] z-30 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : "z-20"
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span>Công việc</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFreezeCol(prev => prev === "task" ? "none" : "task");
+                            }}
+                            className={`p-1 rounded transition cursor-pointer ${
+                              freezeCol === "task" 
+                                ? "text-amber-300 hover:text-white" 
+                                : "text-blue-300 hover:text-white opacity-60 hover:opacity-100"
+                            }`}
+                            title={freezeCol === "task" ? "Đang khóa cột Công việc. Bấm để bỏ khóa" : "Bấm để khóa cột Công việc khi cuộn ngang"}
+                          >
+                            <Pin size={12} className={freezeCol === "task" ? "rotate-45 fill-amber-300" : ""} />
+                          </button>
+                        </div>
                       </th>
                       <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
                         Thời gian bắt đầu
@@ -2342,27 +2467,52 @@ export default function MaintenanceDetailPage() {
                       const isSub = !isPhase && !isMain;
                       const stats = getTaskComputedStats(t, sortedTasks);
                       const isCollapsed = collapsedParents[t.id];
+                      const isSelected = selectedTaskId === t.id;
+
+                      // Backgrounds for row and sticky frozen cells
+                      let rowBg = "bg-white hover:bg-slate-50/70 text-slate-700";
+                      let stickyBg = "bg-white group-hover:bg-slate-50/70";
+
+                      if (isMoveMode && moveModeOverIdx === rowIdx && moveModeDragIdx !== rowIdx) {
+                        rowBg = "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs";
+                        stickyBg = "bg-indigo-100/80";
+                      } else if (isMoveMode && moveModeDragIdx === rowIdx) {
+                        rowBg = "opacity-40 bg-indigo-50/50";
+                        stickyBg = "bg-indigo-50/50";
+                      } else if (isSelected) {
+                        if (isPhase) {
+                          rowBg = "bg-[#93C5FD] font-black text-blue-950 shadow-sm ring-1 ring-inset ring-blue-600";
+                          stickyBg = "bg-[#93C5FD]";
+                        } else {
+                          rowBg = "bg-[#FEF3C7] font-medium text-amber-950 hover:bg-[#FDE68A] shadow-sm ring-1 ring-inset ring-amber-500";
+                          stickyBg = "bg-[#FEF3C7] group-hover:bg-[#FDE68A]";
+                        }
+                      } else if (isPhase) {
+                        rowBg = "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in";
+                        stickyBg = "bg-[#BFDBFE]";
+                      } else if (isMain) {
+                        rowBg = "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]";
+                        stickyBg = "bg-[#E2EAF4] group-hover:bg-[#D7E3F1]";
+                      }
 
                       return (
                         <tr 
                           key={t.id} 
+                          onClick={() => setSelectedTaskId(t.id)}
                           onDragOver={(e) => isMoveMode && handleMoveModeDragOver(e, rowIdx)}
                           onDrop={(e) => isMoveMode && handleMoveModeDrop(rowIdx)}
-                          className={`border-b border-slate-200 transition ${
-                            isMoveMode && moveModeOverIdx === rowIdx && moveModeDragIdx !== rowIdx
-                              ? "border-t-2 border-t-indigo-600 bg-indigo-100/80 shadow-xs"
-                              : isMoveMode && moveModeDragIdx === rowIdx
-                              ? "opacity-40 bg-indigo-50/50"
-                              : isPhase
-                              ? "bg-[#BFDBFE] font-black text-blue-950 animate-fade-in"
-                              : isMain
-                              ? "bg-[#E2EAF4] font-bold text-slate-900 hover:bg-[#D7E3F1]"
-                              : "bg-white hover:bg-slate-50/40 text-slate-700"
-                          }`}
+                          className={`border-b border-slate-200 transition group cursor-pointer ${rowBg}`}
                         >
                           {/* Cột Hàng (1, 2, 3...) */}
                           {isMoveMode ? (
-                            <td className="py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 w-16 select-none">
+                            <td 
+                              style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
+                              className={`py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 select-none ${
+                                freezeCol !== "none" ? "sticky left-0 z-10 bg-indigo-50/70" : ""
+                              } ${
+                                freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               <div className="inline-flex items-center justify-center gap-0.5">
                                 <MoveRowInput
                                   rowIndex={rowIdx}
@@ -2400,13 +2550,33 @@ export default function MaintenanceDetailPage() {
                               </div>
                             </td>
                           ) : (
-                            <td className="py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs bg-slate-50/40 w-16">
+                            <td 
+                              style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
+                              className={`py-1 px-2 text-center font-mono font-bold border-b border-r border-slate-200 whitespace-nowrap text-xs ${
+                                isSelected 
+                                  ? (isPhase ? "border-l-4 border-l-blue-700 text-blue-950 font-black" : "border-l-4 border-l-amber-600 text-amber-950 font-black") 
+                                  : "text-slate-500"
+                              } ${
+                                freezeCol !== "none" ? `sticky left-0 z-10 ${stickyBg}` : (isSelected ? stickyBg : "bg-slate-50/40")
+                              } ${
+                                freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              }`}
+                            >
                               {rowIdx + 1}
                             </td>
                           )}
 
                           {/* Cột No (1, 1.1, 1.1.1...) */}
-                          <td className="py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap w-14">
+                          <td 
+                            style={{ width: "56px", minWidth: "56px", maxWidth: "56px" }}
+                            className={`py-1 px-2 text-center font-mono font-bold border-b border-r border-slate-200 whitespace-nowrap ${
+                              isSelected ? "text-amber-950" : "text-slate-700"
+                            } ${
+                              freezeCol === "no" || freezeCol === "task" ? `sticky left-[64px] z-10 ${stickyBg}` : ""
+                            } ${
+                              freezeCol === "no" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {isMoveMode ? (
                               <div 
                                 draggable={true}
@@ -2427,7 +2597,10 @@ export default function MaintenanceDetailPage() {
                                 {(isPhase || isMain) && t.hasChildren && (
                                   <button
                                     type="button"
-                                    onClick={() => setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCollapsedParents(prev => ({ ...prev, [t.id]: !prev[t.id] }));
+                                    }}
                                     className="p-0.5 hover:bg-slate-200/80 rounded text-slate-600 cursor-pointer"
                                     title={isCollapsed ? "Mở rộng" : "Thu gọn"}
                                   >
@@ -2440,7 +2613,12 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Công việc */}
-                          <td className="py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap">
+                          <td 
+                            style={{ minWidth: "280px" }}
+                            className={`py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap ${
+                              freezeCol === "task" ? `sticky left-[120px] z-10 ${stickyBg} shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300` : ""
+                            }`}
+                          >
                             {isPhase ? (
                               <span className="text-slate-900 text-xs font-black uppercase tracking-wide whitespace-nowrap" title={t.name}>
                                 {t.name}
@@ -2638,7 +2816,10 @@ export default function MaintenanceDetailPage() {
                             <div className="flex items-center justify-center gap-1.5">
                               <button 
                                 type="button"
-                                onClick={() => handleAddTaskOpen(t.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddTaskOpen(t.id);
+                                }}
                                 className="flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 transition cursor-pointer"
                                 title="Thêm công việc con vào mục này"
                               >
@@ -2648,7 +2829,10 @@ export default function MaintenanceDetailPage() {
                               <span className="text-slate-300 select-none">|</span>
                               <button 
                                 type="button"
-                                onClick={() => handleEditTaskOpen(t)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditTaskOpen(t);
+                                }}
                                 className="flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
                                 title="Sửa công việc này"
                               >
@@ -2658,7 +2842,10 @@ export default function MaintenanceDetailPage() {
                               <span className="text-slate-300 select-none">|</span>
                               <button 
                                 type="button"
-                                onClick={() => handleDeleteTask(t.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTask(t.id);
+                                }}
                                 className="flex items-center gap-0.5 text-[11px] font-semibold text-red-500 hover:text-red-700 transition cursor-pointer"
                                 title="Xóa công việc này"
                               >
