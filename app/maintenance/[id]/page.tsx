@@ -11,7 +11,7 @@ import {
   CheckCircle2, Clock, Calculator, Settings, ClipboardList, Calendar,
   ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
   Info, Lightbulb, ListOrdered, CircleDot, PauseCircle, FileSpreadsheet,
-  Pin, Check
+  Check, Lock, Unlock
 } from "lucide-react";
 import { 
   generateDefaultTasks, 
@@ -27,6 +27,23 @@ export interface TaskListTab {
   name: string;
   tasks: Task[];
 }
+
+const TABLE_COLUMNS = [
+  { key: "row", label: "Hàng", width: 64 },
+  { key: "no", label: "No", width: 56 },
+  { key: "name", label: "Công việc", width: 300 },
+  { key: "startDate", label: "Bắt đầu", width: 112 },
+  { key: "endDate", label: "Kết thúc", width: 112 },
+  { key: "actualStartDate", label: "Bắt đầu TT", width: 128 },
+  { key: "actualEndDate", label: "Kết thúc TT", width: 128 },
+  { key: "assignees", label: "Người thực hiện", width: 140 },
+  { key: "progress", label: "% Hoàn thành", width: 96 },
+  { key: "status", label: "Trạng thái", width: 128 },
+  { key: "notes", label: "Ghi chú", width: 160 },
+  { key: "actions", label: "Thao tác", width: 96 },
+] as const;
+
+type ColumnKey = typeof TABLE_COLUMNS[number]["key"];
 
 interface Recommendation {
   id: string;
@@ -298,9 +315,36 @@ export default function MaintenanceDetailPage() {
   // Selected task row highlight state
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
-  // Freeze column state: "task" (Khóa đến Công việc), "no" (Khóa đến No), "row" (Khóa đến Hàng), "none" (Không khóa)
-  const [freezeCol, setFreezeCol] = useState<"task" | "no" | "row" | "none">("task");
-  const [showFreezeMenu, setShowFreezeMenu] = useState(false);
+  // Column freeze & highlight states
+  const [selectedColKey, setSelectedColKey] = useState<ColumnKey>("name");
+  const [lockedColKey, setLockedColKey] = useState<ColumnKey | null>("name");
+
+  // Helper functions for column freezing & positioning
+  const getColIndex = (key: ColumnKey) => TABLE_COLUMNS.findIndex(c => c.key === key);
+
+  const getColLeftOffset = (key: ColumnKey): number => {
+    let left = 0;
+    for (const c of TABLE_COLUMNS) {
+      if (c.key === key) break;
+      left += c.width;
+    }
+    return left;
+  };
+
+  const isColFrozen = (key: ColumnKey): boolean => {
+    if (!lockedColKey) return false;
+    return getColIndex(key) <= getColIndex(lockedColKey);
+  };
+
+  const isLastFrozenCol = (key: ColumnKey): boolean => {
+    return lockedColKey === key;
+  };
+
+  const getColumnLabel = (key: ColumnKey | null): string => {
+    if (!key) return "";
+    const found = TABLE_COLUMNS.find(c => c.key === key);
+    return found ? found.label : "";
+  };
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2060,84 +2104,46 @@ export default function MaintenanceDetailPage() {
                     <span>Nhập Excel</span>
                   </button>
 
-                  {/* 4. Khóa cột */}
-                  <div className="relative">
+                  {/* 4. Nút Khóa / Mở khóa cột */}
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setShowFreezeMenu(!showFreezeMenu)}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer shadow-3xs ${
-                        freezeCol !== "none"
-                          ? "bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      onClick={() => {
+                        if (lockedColKey === selectedColKey) {
+                          setLockedColKey(null);
+                        } else {
+                          setLockedColKey(selectedColKey);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer shadow-3xs ${
+                        lockedColKey === selectedColKey
+                          ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-200"
+                          : "bg-blue-600 hover:bg-blue-700 text-white border-blue-700 shadow-xs"
                       }`}
-                      title="Khóa/Ghim cột khi cuộn ngang bảng"
+                      title={
+                        lockedColKey === selectedColKey
+                          ? `Đang khóa đến cột "${getColumnLabel(selectedColKey)}". Bấm để mở khóa`
+                          : `Bấm để khóa từ bên trái đến cột "${getColumnLabel(selectedColKey)}"`
+                      }
                     >
-                      <Pin size={13} className={freezeCol !== "none" ? "rotate-45 text-sky-600 fill-sky-600" : "text-slate-500"} />
+                      {lockedColKey === selectedColKey ? <Unlock size={13} /> : <Lock size={13} />}
                       <span>
-                        {freezeCol === "task"
-                          ? "Khóa: Công việc"
-                          : freezeCol === "no"
-                          ? "Khóa: Cột No"
-                          : freezeCol === "row"
-                          ? "Khóa: Cột Hàng"
-                          : "Khóa cột: Tắt"}
+                        {lockedColKey === selectedColKey
+                          ? `Mở khóa (${getColumnLabel(selectedColKey)})`
+                          : `Khóa cột: ${getColumnLabel(selectedColKey)}`}
                       </span>
-                      <ChevronDown size={12} className="opacity-70" />
                     </button>
 
-                    {showFreezeMenu && (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-40" 
-                          onClick={() => setShowFreezeMenu(false)} 
-                        />
-                        <div className="absolute right-0 sm:left-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
-                          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                            Khóa cột khi cuộn ngang
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => { setFreezeCol("task"); setShowFreezeMenu(false); }}
-                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
-                              freezeCol === "task" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
-                            }`}
-                          >
-                            <span>Khóa đến cột Công việc (Khuyên dùng)</span>
-                            {freezeCol === "task" && <Check size={14} className="text-sky-600" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setFreezeCol("no"); setShowFreezeMenu(false); }}
-                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
-                              freezeCol === "no" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
-                            }`}
-                          >
-                            <span>Khóa đến cột No</span>
-                            {freezeCol === "no" && <Check size={14} className="text-sky-600" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setFreezeCol("row"); setShowFreezeMenu(false); }}
-                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sky-50 transition cursor-pointer ${
-                              freezeCol === "row" ? "text-sky-700 font-bold bg-sky-50/70" : "text-slate-700 font-medium"
-                            }`}
-                          >
-                            <span>Khóa đến cột Hàng</span>
-                            {freezeCol === "row" && <Check size={14} className="text-sky-600" />}
-                          </button>
-                          <div className="my-1 border-t border-slate-100" />
-                          <button
-                            type="button"
-                            onClick={() => { setFreezeCol("none"); setShowFreezeMenu(false); }}
-                            className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-red-50 text-slate-600 hover:text-red-600 transition cursor-pointer ${
-                              freezeCol === "none" ? "font-bold text-red-600" : ""
-                            }`}
-                          >
-                            <span>Tắt khóa cột (Cuộn tự do)</span>
-                            {freezeCol === "none" && <Check size={14} className="text-red-600" />}
-                          </button>
-                        </div>
-                      </>
+                    {lockedColKey && lockedColKey !== selectedColKey && (
+                      <button
+                        type="button"
+                        onClick={() => setLockedColKey(null)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 transition cursor-pointer shadow-3xs"
+                        title={`Hủy khóa các cột đang cố định (${getColumnLabel(lockedColKey)})`}
+                      >
+                        <Unlock size={12} className="text-red-500" />
+                        <span>Mở khóa ({getColumnLabel(lockedColKey)})</span>
+                      </button>
                     )}
                   </div>
                 </>
@@ -2382,77 +2388,332 @@ export default function MaintenanceDetailPage() {
                   <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
                   <thead className="select-none">
                     <tr className="bg-[#1E40AF] text-white">
+                      {/* Cột Hàng */}
                       <th 
-                        style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
-                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
-                          freezeCol !== "none" ? "left-0 z-30" : "z-20"
+                        onClick={() => setSelectedColKey("row")}
+                        style={{ 
+                          width: "64px", 
+                          minWidth: "64px", 
+                          maxWidth: "64px",
+                          left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("row") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                         } ${
-                          freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
-                        }`}
-                      >
-                        Hàng
-                      </th>
-                      <th 
-                        style={{ width: "56px", minWidth: "56px", maxWidth: "56px" }}
-                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
-                          freezeCol === "no" || freezeCol === "task" ? "left-[64px] z-30" : "z-20"
+                          selectedColKey === "row" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
                         } ${
-                          freezeCol === "no" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                          isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                         }`}
+                        title={`Nhấp để chọn cột Hàng${isColFrozen("row") ? " (Đang khóa)" : ""}`}
                       >
-                        No
-                      </th>
-                      <th 
-                        style={{ minWidth: "280px" }}
-                        className={`py-2.5 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 whitespace-nowrap shadow-sm ${
-                          freezeCol === "task" ? "left-[120px] z-30 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : "z-20"
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span>Công việc</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFreezeCol(prev => prev === "task" ? "none" : "task");
-                            }}
-                            className={`p-1 rounded transition cursor-pointer ${
-                              freezeCol === "task" 
-                                ? "text-amber-300 hover:text-white" 
-                                : "text-blue-300 hover:text-white opacity-60 hover:opacity-100"
-                            }`}
-                            title={freezeCol === "task" ? "Đang khóa cột Công việc. Bấm để bỏ khóa" : "Bấm để khóa cột Công việc khi cuộn ngang"}
-                          >
-                            <Pin size={12} className={freezeCol === "task" ? "rotate-45 fill-amber-300" : ""} />
-                          </button>
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("row") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Hàng</span>
+                          {selectedColKey === "row" && !isColFrozen("row") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
                         </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
-                        Thời gian bắt đầu
+
+                      {/* Cột No */}
+                      <th 
+                        onClick={() => setSelectedColKey("no")}
+                        style={{ 
+                          width: "56px", 
+                          minWidth: "56px", 
+                          maxWidth: "56px",
+                          left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("no") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "no" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột No${isColFrozen("no") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("no") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>No</span>
+                          {selectedColKey === "no" && !isColFrozen("no") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-28 whitespace-nowrap shadow-sm">
-                        Thời gian kết thúc
+
+                      {/* Cột Công việc */}
+                      <th 
+                        onClick={() => setSelectedColKey("name")}
+                        style={{ 
+                          minWidth: "280px",
+                          left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("name") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "name" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Công việc${isColFrozen("name") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          {isColFrozen("name") && <Lock size={12} className="text-amber-300 shrink-0" />}
+                          <span>Công việc</span>
+                          {selectedColKey === "name" && !isColFrozen("name") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                        Thời gian bắt đầu thực tế
+
+                      {/* Cột Thời gian bắt đầu */}
+                      <th 
+                        onClick={() => setSelectedColKey("startDate")}
+                        style={{ 
+                          width: "112px",
+                          left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("startDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "startDate" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Thời gian bắt đầu${isColFrozen("startDate") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("startDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Thời gian bắt đầu</span>
+                          {selectedColKey === "startDate" && !isColFrozen("startDate") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                        Thời gian kết thúc thực tế
+
+                      {/* Cột Thời gian kết thúc */}
+                      <th 
+                        onClick={() => setSelectedColKey("endDate")}
+                        style={{ 
+                          width: "112px",
+                          left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("endDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "endDate" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Thời gian kết thúc${isColFrozen("endDate") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("endDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Thời gian kết thúc</span>
+                          {selectedColKey === "endDate" && !isColFrozen("endDate") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[140px] whitespace-nowrap shadow-sm">
-                        Người thực hiện
+
+                      {/* Cột Thời gian bắt đầu thực tế */}
+                      <th 
+                        onClick={() => setSelectedColKey("actualStartDate")}
+                        style={{ 
+                          width: "128px",
+                          left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("actualStartDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "actualStartDate" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Thời gian bắt đầu thực tế${isColFrozen("actualStartDate") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("actualStartDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Thời gian bắt đầu thực tế</span>
+                          {selectedColKey === "actualStartDate" && !isColFrozen("actualStartDate") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
-                        % Hoàn thành
+
+                      {/* Cột Thời gian kết thúc thực tế */}
+                      <th 
+                        onClick={() => setSelectedColKey("actualEndDate")}
+                        style={{ 
+                          width: "128px",
+                          left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("actualEndDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "actualEndDate" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Thời gian kết thúc thực tế${isColFrozen("actualEndDate") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("actualEndDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Thời gian kết thúc thực tế</span>
+                          {selectedColKey === "actualEndDate" && !isColFrozen("actualEndDate") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-32 whitespace-nowrap shadow-sm">
-                        Trạng thái
+
+                      {/* Cột Người thực hiện */}
+                      <th 
+                        onClick={() => setSelectedColKey("assignees")}
+                        style={{ 
+                          minWidth: "140px",
+                          left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("assignees") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "assignees" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Người thực hiện${isColFrozen("assignees") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("assignees") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Người thực hiện</span>
+                          {selectedColKey === "assignees" && !isColFrozen("assignees") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 min-w-[160px] whitespace-nowrap shadow-sm">
-                        Ghi chú
+
+                      {/* Cột % Hoàn thành */}
+                      <th 
+                        onClick={() => setSelectedColKey("progress")}
+                        style={{ 
+                          width: "96px",
+                          left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("progress") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "progress" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột % Hoàn thành${isColFrozen("progress") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("progress") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>% Hoàn thành</span>
+                          {selectedColKey === "progress" && !isColFrozen("progress") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
-                      <th className="py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm bg-[#1E40AF] text-white sticky top-0 z-20 w-24 whitespace-nowrap shadow-sm">
-                        Thao tác
+
+                      {/* Cột Trạng thái */}
+                      <th 
+                        onClick={() => setSelectedColKey("status")}
+                        style={{ 
+                          width: "128px",
+                          left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("status") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "status" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Trạng thái${isColFrozen("status") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("status") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Trạng thái</span>
+                          {selectedColKey === "status" && !isColFrozen("status") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
+                      </th>
+
+                      {/* Cột Ghi chú */}
+                      <th 
+                        onClick={() => setSelectedColKey("notes")}
+                        style={{ 
+                          minWidth: "160px",
+                          left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("notes") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "notes" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Ghi chú${isColFrozen("notes") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("notes") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Ghi chú</span>
+                          {selectedColKey === "notes" && !isColFrozen("notes") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
+                      </th>
+
+                      {/* Cột Thao tác */}
+                      <th 
+                        onClick={() => setSelectedColKey("actions")}
+                        style={{ 
+                          width: "96px",
+                          left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
+                        }}
+                        className={`py-2.5 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-xs sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                          isColFrozen("actions") ? "sticky top-0 z-30" : "sticky top-0 z-20"
+                        } ${
+                          selectedColKey === "actions" 
+                            ? "bg-[#172554] text-amber-300 ring-2 ring-inset ring-amber-400" 
+                            : "bg-[#1E40AF] text-white hover:bg-blue-800"
+                        } ${
+                          isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
+                        }`}
+                        title={`Nhấp để chọn cột Thao tác${isColFrozen("actions") ? " (Đang khóa)" : ""}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isColFrozen("actions") && <Lock size={11} className="text-amber-300 shrink-0" />}
+                          <span>Thao tác</span>
+                          {selectedColKey === "actions" && !isColFrozen("actions") && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse shrink-0" />
+                          )}
+                        </div>
                       </th>
                     </tr>
                   </thead>
@@ -2506,11 +2767,16 @@ export default function MaintenanceDetailPage() {
                           {/* Cột Hàng (1, 2, 3...) */}
                           {isMoveMode ? (
                             <td 
-                              style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
+                              style={{ 
+                                width: "64px", 
+                                minWidth: "64px", 
+                                maxWidth: "64px",
+                                left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                              }}
                               className={`py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap bg-indigo-50/70 select-none ${
-                                freezeCol !== "none" ? "sticky left-0 z-10 bg-indigo-50/70" : ""
+                                isColFrozen("row") ? "sticky left-0 z-10 bg-indigo-50/70" : ""
                               } ${
-                                freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                                isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                               }`}
                             >
                               <div className="inline-flex items-center justify-center gap-0.5">
@@ -2551,15 +2817,20 @@ export default function MaintenanceDetailPage() {
                             </td>
                           ) : (
                             <td 
-                              style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }}
+                              style={{ 
+                                width: "64px", 
+                                minWidth: "64px", 
+                                maxWidth: "64px",
+                                left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
+                              }}
                               className={`py-1 px-2 text-center font-mono font-bold border-b border-r border-slate-200 whitespace-nowrap text-xs ${
                                 isSelected 
                                   ? (isPhase ? "border-l-4 border-l-blue-700 text-blue-950 font-black" : "border-l-4 border-l-amber-600 text-amber-950 font-black") 
                                   : "text-slate-500"
                               } ${
-                                freezeCol !== "none" ? `sticky left-0 z-10 ${stickyBg}` : (isSelected ? stickyBg : "bg-slate-50/40")
+                                isColFrozen("row") ? `sticky z-10 ${stickyBg}` : (isSelected ? stickyBg : "bg-slate-50/40")
                               } ${
-                                freezeCol === "row" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                                isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                               }`}
                             >
                               {rowIdx + 1}
@@ -2568,13 +2839,18 @@ export default function MaintenanceDetailPage() {
 
                           {/* Cột No (1, 1.1, 1.1.1...) */}
                           <td 
-                            style={{ width: "56px", minWidth: "56px", maxWidth: "56px" }}
+                            style={{ 
+                              width: "56px", 
+                              minWidth: "56px", 
+                              maxWidth: "56px",
+                              left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
+                            }}
                             className={`py-1 px-2 text-center font-mono font-bold border-b border-r border-slate-200 whitespace-nowrap ${
                               isSelected ? "text-amber-950" : "text-slate-700"
                             } ${
-                              freezeCol === "no" || freezeCol === "task" ? `sticky left-[64px] z-10 ${stickyBg}` : ""
+                              isColFrozen("no") ? `sticky z-10 ${stickyBg}` : ""
                             } ${
-                              freezeCol === "no" ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                              isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                             }`}
                           >
                             {isMoveMode ? (
@@ -2614,9 +2890,14 @@ export default function MaintenanceDetailPage() {
 
                           {/* Công việc */}
                           <td 
-                            style={{ minWidth: "280px" }}
+                            style={{ 
+                              minWidth: "280px",
+                              left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
+                            }}
                             className={`py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap ${
-                              freezeCol === "task" ? `sticky left-[120px] z-10 ${stickyBg} shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300` : ""
+                              isColFrozen("name") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                             }`}
                           >
                             {isPhase ? (
@@ -2640,7 +2921,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Thời gian bắt đầu */}
-                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
+                            }}
+                            className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                              isColFrozen("startDate") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               <span className="text-[11px] font-semibold text-blue-900">
                                 {stats.startDate ? formatDateVN(stats.startDate) : "—"}
@@ -2654,7 +2944,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Thời gian kết thúc */}
-                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
+                            }}
+                            className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                              isColFrozen("endDate") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               <span className="text-[11px] font-semibold text-blue-900">
                                 {stats.endDate ? formatDateVN(stats.endDate) : "—"}
@@ -2668,7 +2967,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Thời gian bắt đầu thực tế */}
-                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
+                            }}
+                            className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                              isColFrozen("actualStartDate") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               <span className="text-slate-400 text-xs">—</span>
                             ) : (
@@ -2680,7 +2988,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Thời gian kết thúc thực tế */}
-                          <td className="py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
+                            }}
+                            className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
+                              isColFrozen("actualEndDate") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               stats.actualEndDate ? (
                                 <span className="text-emerald-700 font-bold text-xs">{formatDateVN(stats.actualEndDate)}</span>
@@ -2696,7 +3013,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Người thực hiện */}
-                          <td className="py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
+                            }}
+                            className={`py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                              isColFrozen("assignees") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               stats.assignees.length > 0 ? (
                                 <div className="flex items-center justify-center">
@@ -2720,7 +3046,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* % Hoàn thành */}
-                          <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
+                            }}
+                            className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                              isColFrozen("progress") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               <div className="flex items-center justify-center gap-0.5" title="Tự động tính từ các công việc con">
                                 <span className={`font-black text-xs ${isPhase ? 'text-blue-900' : 'text-slate-800'}`}>
@@ -2754,7 +3089,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Trạng thái */}
-                          <td className="py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
+                            }}
+                            className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                              isColFrozen("status") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             {stats.isAuto ? (
                               <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded tracking-wide whitespace-nowrap ${
                                 stats.progress === 100
@@ -2790,7 +3134,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Ghi chú */}
-                          <td className="py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px]">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
+                            }}
+                            className={`py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px] ${
+                              isColFrozen("notes") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             <input
                               type="text"
                               defaultValue={t.notes || ""}
@@ -2812,7 +3165,16 @@ export default function MaintenanceDetailPage() {
                           </td>
 
                           {/* Thao tác */}
-                          <td className="py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap">
+                          <td 
+                            style={{ 
+                              left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
+                            }}
+                            className={`py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap ${
+                              isColFrozen("actions") ? `sticky z-10 ${stickyBg}` : ""
+                            } ${
+                              isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
+                            }`}
+                          >
                             <div className="flex items-center justify-center gap-1.5">
                               <button 
                                 type="button"
