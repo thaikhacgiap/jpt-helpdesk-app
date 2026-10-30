@@ -21,6 +21,12 @@ import {
 
 type Task = MaintenanceTask;
 
+export interface TaskListTab {
+  id: string;
+  name: string;
+  tasks: Task[];
+}
+
 interface Recommendation {
   id: string;
   category: string;       // Hardware, Database, Software, Network, Security, Khác
@@ -271,6 +277,11 @@ export default function MaintenanceDetailPage() {
   const [collapsedParents, setCollapsedParents] = useState<{ [key: string]: boolean }>({});
   
   const [activeTab, setActiveTab] = useState<"tasks" | "recommendations">("tasks");
+  const [cycleTaskLists, setCycleTaskLists] = useState<{ [key: string]: TaskListTab[] }>({});
+  const [activeTaskListId, setActiveTaskListId] = useState<string>("default");
+  const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [editingListName, setEditingListName] = useState<string>("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
   
   const [config, setConfig] = useState({
     interval: "monthly",
@@ -343,6 +354,7 @@ export default function MaintenanceDetailPage() {
 
       // Parse tasks, config, and recommendations from the remark column
       let tasksData: { [key: string]: Task[] } = {};
+      let taskListsData: { [key: string]: TaskListTab[] } = {};
       let recommendationsData: { [key: string]: Recommendation[] } = {};
       let parsedConfig = { 
         interval: "monthly", 
@@ -353,8 +365,9 @@ export default function MaintenanceDetailPage() {
       if (data.remark) {
         try {
           const parsed = JSON.parse(data.remark);
-          if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
+          if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined || parsed.taskLists !== undefined)) {
             tasksData = parsed.tasks || {};
+            taskListsData = parsed.taskLists || {};
             recommendationsData = parsed.recommendations || {};
             parsedConfig = parsed.config || parsedConfig;
             parsedMeta = parsed.cycleMeta || {};
@@ -367,11 +380,25 @@ export default function MaintenanceDetailPage() {
         }
       }
 
+      // If taskListsData is empty but tasksData has items, migrate legacy tasks into default task list per cycle
+      if (Object.keys(taskListsData).length === 0 && Object.keys(tasksData).length > 0) {
+        Object.keys(tasksData).forEach((cKey) => {
+          taskListsData[cKey] = [
+            {
+              id: "default",
+              name: "Danh sách công việc",
+              tasks: tasksData[cKey] || []
+            }
+          ];
+        });
+      }
+
       if (!parsedConfig.startDate && data.start_time) {
         parsedConfig.startDate = data.start_time.substring(0, 10);
       }
 
       setCycleTasks(tasksData);
+      setCycleTaskLists(taskListsData);
       setCycleRecs(recommendationsData);
       setConfig(parsedConfig);
       setCycleMeta(parsedMeta);
@@ -405,9 +432,40 @@ export default function MaintenanceDetailPage() {
   // Total periods in the plan
   const totalCycles = plan ? (parseInt(plan.hold_time) || 1) : 1;
 
-  // Filter tasks for the active cycle
-  const currentTasks = cycleTasks[activeCycle] || [];
+  // Filter tasks for the active cycle and active task list
+  const currentTaskLists: TaskListTab[] = (cycleTaskLists[activeCycle] && cycleTaskLists[activeCycle].length > 0)
+    ? cycleTaskLists[activeCycle]
+    : [
+        {
+          id: "default",
+          name: "Danh sách công việc",
+          tasks: cycleTasks[activeCycle] || []
+        }
+      ];
+
+  const currentTaskList = currentTaskLists.find(l => l.id === activeTaskListId) || currentTaskLists[0];
+  const currentTasks = currentTaskList ? currentTaskList.tasks : [];
   const sortedTasks = getSortedHierarchicalTasks(currentTasks);
+
+  // Sync activeTaskListId when activeCycle or cycleTaskLists changes
+  useEffect(() => {
+    const lists = cycleTaskLists[activeCycle] || [];
+    if (lists.length > 0) {
+      if (!lists.some(l => l.id === activeTaskListId)) {
+        setActiveTaskListId(lists[0].id);
+      }
+    } else {
+      setActiveTaskListId("default");
+    }
+  }, [activeCycle, cycleTaskLists]);
+
+  // Autofocus input when renaming a task list tab
+  useEffect(() => {
+    if (editingListId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [editingListId]);
 
   // Helper to determine if a task is visible given collapsed parents
   const isTaskVisible = (task: HierarchicalTask, allTasks: MaintenanceTask[]) => {
@@ -538,22 +596,31 @@ export default function MaintenanceDetailPage() {
 
   // Save all plan data to Supabase (remark, progress, sla_time, tt_status)
   const savePlanData = async (
-    updatedTasks: { [key: string]: Task[] },
+    updatedTaskLists: { [key: string]: TaskListTab[] },
     updatedRecs: { [key: string]: Recommendation[] },
     updatedConfig = config,
     updatedMeta = cycleMeta
   ) => {
     try {
+      const flattenedTasks: { [key: string]: Task[] } = {};
+      Object.keys(updatedTaskLists).forEach((cKey) => {
+        const lists = updatedTaskLists[cKey] || [];
+        const all: Task[] = [];
+        lists.forEach((l) => all.push(...l.tasks));
+        flattenedTasks[cKey] = all;
+      });
+
       const payload = {
         config: updatedConfig,
         cycleMeta: updatedMeta,
-        tasks: updatedTasks,
+        taskLists: updatedTaskLists,
+        tasks: flattenedTasks,
         recommendations: updatedRecs
       };
       const remarkJSON = JSON.stringify(payload);
       
-      const overallProgress = calculateOverallProgress(updatedTasks, totalCycles);
-      const currentPeriodVal = determineCurrentPeriod(updatedTasks, totalCycles);
+      const overallProgress = calculateOverallProgress(flattenedTasks, totalCycles);
+      const currentPeriodVal = determineCurrentPeriod(flattenedTasks, totalCycles);
       
       let newStatus = plan?.tt_status || "New";
       if (overallProgress === 100 && totalCycles > 0 && plan?.tt_status !== "Closed") {
@@ -562,7 +629,7 @@ export default function MaintenanceDetailPage() {
         let hasAnyActivity = overallProgress > 0;
         if (!hasAnyActivity) {
           for (let i = 1; i <= totalCycles; i++) {
-            const list = updatedTasks[String(i)] || [];
+            const list = flattenedTasks[String(i)] || [];
             if (list.some(t => t.status === "Đang thực hiện" || t.status === "Hoàn thành")) {
               hasAnyActivity = true;
               break;
@@ -594,18 +661,144 @@ export default function MaintenanceDetailPage() {
     }
   };
 
-  // Save all cycles tasks to supabase
-  const saveTasksToDB = async (updatedTasks: { [key: string]: Task[] }) => {
-    await savePlanData(updatedTasks, cycleRecs);
+  // Helper to save tasks of the currently active task list
+  const saveCurrentListTasks = async (newTasks: Task[]) => {
+    const currentLists = (cycleTaskLists[activeCycle] && cycleTaskLists[activeCycle].length > 0)
+      ? cycleTaskLists[activeCycle].map(l => ({ ...l, tasks: [...l.tasks] }))
+      : [{ id: "default", name: "Danh sách công việc", tasks: [] }];
+    
+    const targetIdx = currentLists.findIndex(l => l.id === activeTaskListId);
+    if (targetIdx >= 0) {
+      currentLists[targetIdx].tasks = newTasks;
+    } else if (currentLists.length > 0) {
+      currentLists[0].tasks = newTasks;
+    }
+    
+    const updatedAll = {
+      ...cycleTaskLists,
+      [activeCycle]: currentLists
+    };
+    setCycleTaskLists(updatedAll);
+    
+    const allCycleTasks: Task[] = [];
+    currentLists.forEach(l => allCycleTasks.push(...l.tasks));
+    setCycleTasks(prev => ({
+      ...prev,
+      [activeCycle]: allCycleTasks
+    }));
+
+    await savePlanData(updatedAll, cycleRecs);
   };
 
   // Save changes to database with explicit config/meta payload
-  const saveTasksToDBWrapper = async (payload: { config: any; cycleMeta: any; tasks: any }) => {
-    await savePlanData(payload.tasks, cycleRecs, payload.config, payload.cycleMeta);
+  const saveTasksToDBWrapper = async (payload: { config?: any; cycleMeta?: any; tasks?: any; taskLists?: any; recommendations?: any }) => {
+    await savePlanData(
+      payload.taskLists || cycleTaskLists,
+      payload.recommendations || cycleRecs,
+      payload.config || config,
+      payload.cycleMeta || cycleMeta
+    );
   };
 
   const saveRecsToDB = async (updatedRecs: { [key: string]: Recommendation[] }) => {
-    await savePlanData(cycleTasks, updatedRecs);
+    await savePlanData(cycleTaskLists, updatedRecs);
+  };
+
+  // Thêm danh sách công việc mới (tạo tab mới)
+  const handleCreateTaskList = async () => {
+    const currentLists = (cycleTaskLists[activeCycle] && cycleTaskLists[activeCycle].length > 0)
+      ? [...cycleTaskLists[activeCycle]]
+      : [{ id: "default", name: "Danh sách công việc", tasks: cycleTasks[activeCycle] || [] }];
+    
+    const nextNum = currentLists.length + 1;
+    const newListId = "tl_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+    const newListName = `Danh sách công việc ${nextNum}`;
+    
+    const newList: TaskListTab = {
+      id: newListId,
+      name: newListName,
+      tasks: []
+    };
+
+    const updatedLists = [...currentLists, newList];
+    const updatedAll = {
+      ...cycleTaskLists,
+      [activeCycle]: updatedLists
+    };
+
+    setCycleTaskLists(updatedAll);
+    setActiveTab("tasks");
+    setActiveTaskListId(newListId);
+    setEditingListId(newListId);
+    setEditingListName(newListName);
+    await savePlanData(updatedAll, cycleRecs);
+  };
+
+  // Xóa danh sách công việc (tab)
+  const handleDeleteTaskList = async (listId: string, listName: string) => {
+    const currentLists = cycleTaskLists[activeCycle] || [];
+    if (currentLists.length <= 1) {
+      alert("Mỗi lần bảo trì phải có ít nhất 1 danh sách công việc.");
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa danh sách công việc "${listName}"? Toàn bộ công việc trong danh sách này sẽ bị xóa.`)) {
+      return;
+    }
+
+    const updatedLists = currentLists.filter(l => l.id !== listId);
+    const updatedAll = {
+      ...cycleTaskLists,
+      [activeCycle]: updatedLists
+    };
+
+    setCycleTaskLists(updatedAll);
+    if (activeTaskListId === listId) {
+      setActiveTaskListId(updatedLists[0]?.id || "default");
+    }
+    await savePlanData(updatedAll, cycleRecs);
+  };
+
+  // Bắt đầu đổi tên danh sách công việc
+  const handleStartRename = (list: TaskListTab) => {
+    setEditingListId(list.id);
+    setEditingListName(list.name);
+  };
+
+  // Lưu tên danh sách công việc sau khi sửa
+  const handleSaveRename = async () => {
+    if (!editingListId) return;
+    const trimmed = editingListName.trim();
+    if (!trimmed) {
+      setEditingListId(null);
+      return;
+    }
+
+    const currentLists = cycleTaskLists[activeCycle] ? [...cycleTaskLists[activeCycle]] : [];
+    const targetIdx = currentLists.findIndex(l => l.id === editingListId);
+    if (targetIdx >= 0 && currentLists[targetIdx].name !== trimmed) {
+      currentLists[targetIdx] = {
+        ...currentLists[targetIdx],
+        name: trimmed
+      };
+      const updatedAll = {
+        ...cycleTaskLists,
+        [activeCycle]: currentLists
+      };
+      setCycleTaskLists(updatedAll);
+      await savePlanData(updatedAll, cycleRecs);
+    }
+    setEditingListId(null);
+  };
+
+  const handleCancelRename = () => {
+    setEditingListId(null);
+  };
+
+  // Khởi tạo nhanh bảng mẫu mặc định vào danh sách hiện tại
+  const handlePopulateDefaultTemplate = async () => {
+    const defaultTasks = generateDefaultTasks(getCycleStartDate(activeCycle));
+    await saveCurrentListTasks(defaultTasks);
   };
 
   // Handle cycle date manual overrides
@@ -625,11 +818,7 @@ export default function MaintenanceDetailPage() {
     }
     setCycleMeta(updatedMeta);
     
-    await saveTasksToDBWrapper({
-      config: updatedConfig,
-      cycleMeta: updatedMeta,
-      tasks: cycleTasks
-    });
+    await savePlanData(cycleTaskLists, cycleRecs, updatedConfig, updatedMeta);
 
     if (activeCycle === "1" && planId) {
       await supabase.from("tickets").update({ start_time: newDate }).eq("id", planId);
@@ -645,11 +834,7 @@ export default function MaintenanceDetailPage() {
     };
     setConfig(updatedConfig);
     
-    await saveTasksToDBWrapper({
-      config: updatedConfig,
-      cycleMeta,
-      tasks: cycleTasks
-    });
+    await savePlanData(cycleTaskLists, cycleRecs, updatedConfig, cycleMeta);
   };
 
   // Thêm lần bảo trì mới
@@ -657,18 +842,30 @@ export default function MaintenanceDetailPage() {
     const newTotal = totalCycles + 1;
     const newCycleNum = String(newTotal);
 
-    // Copy template or clone tasks from cycle 1 if cycle 1 has tasks
-    const updatedTasks = { ...cycleTasks };
-    if (!updatedTasks[newCycleNum] && updatedTasks["1"] && updatedTasks["1"].length > 0) {
-      updatedTasks[newCycleNum] = updatedTasks["1"].map((t) => ({
-        ...t,
-        id: "t_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
-        progress: 0,
-        status: "Chưa bắt đầu",
-        actualStartDate: "",
-        actualEndDate: "",
+    // Copy template or clone task lists from cycle 1 if cycle 1 has lists
+    const updatedTaskLists = { ...cycleTaskLists };
+    if (!updatedTaskLists[newCycleNum]) {
+      const cycle1Lists = updatedTaskLists["1"] || [
+        {
+          id: "default",
+          name: "Danh sách công việc",
+          tasks: cycleTasks["1"] || []
+        }
+      ];
+
+      updatedTaskLists[newCycleNum] = cycle1Lists.map((l) => ({
+        ...l,
+        id: "tl_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+        tasks: l.tasks.map((t) => ({
+          ...t,
+          id: "t_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+          progress: 0,
+          status: "Chưa bắt đầu",
+          actualStartDate: "",
+          actualEndDate: "",
+        }))
       }));
-      setCycleTasks(updatedTasks);
+      setCycleTaskLists(updatedTaskLists);
     }
 
     try {
@@ -686,11 +883,7 @@ export default function MaintenanceDetailPage() {
       setConfigTotalCycles(newTotal);
       setActiveCycle(newCycleNum);
 
-      await saveTasksToDBWrapper({
-        tasks: updatedTasks,
-        config,
-        cycleMeta,
-      });
+      await savePlanData(updatedTaskLists, cycleRecs, config, cycleMeta);
     } catch (err) {
       console.error("Error adding cycle:", err);
     }
@@ -708,12 +901,12 @@ export default function MaintenanceDetailPage() {
     if (!window.confirm(confirmMsg)) return;
 
     const newTotal = totalCycles - 1;
-    const updatedTasks = { ...cycleTasks };
+    const updatedTaskLists = { ...cycleTaskLists };
     const updatedRecs = { ...cycleRecs };
     const updatedMeta = { ...cycleMeta };
 
     // Delete target cycle data
-    delete updatedTasks[targetCycle];
+    delete updatedTaskLists[targetCycle];
     delete updatedRecs[targetCycle];
     delete updatedMeta[targetCycle];
 
@@ -722,9 +915,9 @@ export default function MaintenanceDetailPage() {
     for (let i = targetNum + 1; i <= totalCycles; i++) {
       const oldKey = String(i);
       const newKey = String(i - 1);
-      if (updatedTasks[oldKey]) {
-        updatedTasks[newKey] = updatedTasks[oldKey];
-        delete updatedTasks[oldKey];
+      if (updatedTaskLists[oldKey]) {
+        updatedTaskLists[newKey] = updatedTaskLists[oldKey];
+        delete updatedTaskLists[oldKey];
       }
       if (updatedRecs[oldKey]) {
         updatedRecs[newKey] = updatedRecs[oldKey];
@@ -749,7 +942,7 @@ export default function MaintenanceDetailPage() {
 
       setPlan((prev: any) => prev ? { ...prev, hold_time: String(newTotal) } : null);
       setConfigTotalCycles(newTotal);
-      setCycleTasks(updatedTasks);
+      setCycleTaskLists(updatedTaskLists);
       setCycleRecs(updatedRecs);
       setCycleMeta(updatedMeta);
 
@@ -759,12 +952,7 @@ export default function MaintenanceDetailPage() {
         setActiveCycle(String(Math.min(targetNum, newTotal)));
       }
 
-      await saveTasksToDBWrapper({
-        tasks: updatedTasks,
-        recommendations: updatedRecs,
-        config,
-        cycleMeta: updatedMeta,
-      });
+      await savePlanData(updatedTaskLists, updatedRecs, config, updatedMeta);
     } catch (err) {
       console.error("Error removing cycle:", err);
     }
@@ -792,7 +980,7 @@ export default function MaintenanceDetailPage() {
 
   // Move mode operations for current cycle tasks — giống hệt triển khai dự án
   const handleMovePlanRow = async (fromIdx: number, toIdx: number) => {
-    const currentList = cycleTasks[activeCycle] ? [...cycleTasks[activeCycle]] : [];
+    const currentList = [...currentTasks];
     if (currentList.length === 0) return;
     const currentSorted = getSortedHierarchicalTasks(currentList);
     const total = currentSorted.length;
@@ -814,18 +1002,12 @@ export default function MaintenanceDetailPage() {
       orderIndex: orderMap.has(t.id) ? orderMap.get(t.id)! : t.orderIndex,
     })).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
-    const updatedCycleTasks = {
-      ...cycleTasks,
-      [activeCycle]: updatedList,
-    };
-
-    setCycleTasks(updatedCycleTasks);
-    await saveTasksToDB(updatedCycleTasks);
+    await saveCurrentListTasks(updatedList);
   };
 
   const handleMovePlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
     const targetRow = typeof targetRowVal === "number" ? targetRowVal : parseInt(String(targetRowVal).trim(), 10);
-    const currentList = cycleTasks[activeCycle] || [];
+    const currentList = currentTasks;
     const currentSorted = getSortedHierarchicalTasks(currentList);
     const total = currentSorted.length;
     if (isNaN(targetRow) || targetRow < 1 || targetRow > total) return;
@@ -945,7 +1127,7 @@ export default function MaintenanceDetailPage() {
 
   // Fast inline update for any task field directly on table
   const updateTaskField = async (taskId: string, field: keyof Task, value: any) => {
-    const currentList = cycleTasks[activeCycle] ? [...cycleTasks[activeCycle]] : [];
+    const currentList = [...currentTasks];
     const idx = currentList.findIndex(t => t.id === taskId);
     if (idx === -1) return;
 
@@ -985,15 +1167,8 @@ export default function MaintenanceDetailPage() {
 
     currentList[idx] = updatedTask;
 
-    const updatedCycleTasks = {
-      ...cycleTasks,
-      [activeCycle]: currentList,
-    };
-
-    setCycleTasks(updatedCycleTasks);
-
     try {
-      await saveTasksToDB(updatedCycleTasks);
+      await saveCurrentListTasks(currentList);
     } catch (err) {
       console.error("Error updating task field inline:", err);
     }
@@ -1064,8 +1239,7 @@ export default function MaintenanceDetailPage() {
 
     setSubmitting(true);
     try {
-      const updatedCycleTasks = { ...cycleTasks };
-      const currentList = updatedCycleTasks[activeCycle] ? [...updatedCycleTasks[activeCycle]] : [];
+      const currentList = [...currentTasks];
 
       if (editingTask) {
         // Edit flow
@@ -1106,10 +1280,7 @@ export default function MaintenanceDetailPage() {
         currentList.push(newTask);
       }
 
-      updatedCycleTasks[activeCycle] = currentList;
-      setCycleTasks(updatedCycleTasks);
-
-      await saveTasksToDB(updatedCycleTasks);
+      await saveCurrentListTasks(currentList);
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error submitting task form:", err);
@@ -1123,8 +1294,7 @@ export default function MaintenanceDetailPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa công việc này không? Tất cả công việc con trực thuộc cũng sẽ bị xóa.")) return;
 
     try {
-      const updatedCycleTasks = { ...cycleTasks };
-      let currentList = updatedCycleTasks[activeCycle] ? [...updatedCycleTasks[activeCycle]] : [];
+      let currentList = [...currentTasks];
 
       // Collect all descendant ids
       const toDelete = new Set<string>([taskId]);
@@ -1140,11 +1310,7 @@ export default function MaintenanceDetailPage() {
       }
 
       currentList = currentList.filter(t => !toDelete.has(t.id));
-
-      updatedCycleTasks[activeCycle] = currentList;
-      setCycleTasks(updatedCycleTasks);
-
-      await saveTasksToDB(updatedCycleTasks);
+      await saveCurrentListTasks(currentList);
     } catch (err) {
       console.error("Error deleting task:", err);
     }
@@ -1376,12 +1542,7 @@ export default function MaintenanceDetailPage() {
         throw new Error("Không tìm thấy dòng công việc hợp lệ nào trong tệp.");
       }
 
-      const updatedCycleTasks = {
-        ...cycleTasks,
-        [activeCycle]: importedTasks,
-      };
-      setCycleTasks(updatedCycleTasks);
-      await saveTasksToDB(updatedCycleTasks);
+      await saveCurrentListTasks(importedTasks);
       alert(`Đã nhập thành công ${importedTasks.length} công việc từ tệp!`);
     } catch (err: any) {
       console.error("Import file error:", err);
@@ -1742,7 +1903,7 @@ export default function MaintenanceDetailPage() {
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase leading-tight">
-                  {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle}` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
+                  {activeTab === "tasks" ? `CHI TIẾT CÔNG VIỆC — LẦN ${activeCycle} (${currentTaskList?.name || "DANH SÁCH CÔNG VIỆC"})` : `KHUYẾN NGHỊ KỸ THUẬT — LẦN ${activeCycle}`}
                 </h2>
                 <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                   Theo dõi tiến độ &nbsp;·&nbsp; Quản lý hiệu quả &nbsp;·&nbsp; Hoàn thành đúng hạn
@@ -1846,24 +2007,120 @@ export default function MaintenanceDetailPage() {
           </div>
 
           {/* Tabs switcher */}
-          <div className="flex border-b border-slate-200 shrink-0 gap-6">
+          <div className="flex items-center border-b border-slate-200 shrink-0 gap-2 sm:gap-4 overflow-x-auto scrollbar-none">
+            {/* Task Lists Tabs */}
+            {currentTaskLists.map((taskList, idx) => {
+              const isSelected = activeTab === "tasks" && activeTaskListId === taskList.id;
+              const isEditing = editingListId === taskList.id;
+
+              return (
+                <div
+                  key={taskList.id}
+                  className={`group relative flex items-center gap-1.5 pb-2.5 pt-1 border-b-2 transition-all cursor-pointer select-none whitespace-nowrap ${
+                    isSelected
+                      ? "border-blue-600 text-blue-600 font-extrabold"
+                      : "border-transparent text-slate-500 hover:text-slate-800 font-semibold"
+                  }`}
+                  onClick={() => {
+                    setActiveTab("tasks");
+                    setActiveTaskListId(taskList.id);
+                  }}
+                >
+                  <ListOrdered size={15} className={isSelected ? "text-blue-600" : "text-slate-400"} />
+                  
+                  {isEditing ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        ref={renameInputRef}
+                        type="text"
+                        value={editingListName}
+                        onChange={(e) => setEditingListName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveRename();
+                          if (e.key === "Escape") handleCancelRename();
+                        }}
+                        onBlur={handleSaveRename}
+                        className="px-2 py-0.5 text-xs font-bold text-slate-900 bg-white border-2 border-blue-500 rounded-md outline-none shadow-xs min-w-[140px] max-w-[240px]"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveRename}
+                        className="p-1 text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer"
+                        title="Lưu tên"
+                      >
+                        <CheckCircle2 size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center gap-1.5"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleStartRename(taskList);
+                      }}
+                      title="Nhấp đúp hoặc bấm icon bút chì để đổi tên"
+                    >
+                      <span className="text-xs uppercase">
+                        {taskList.name || `Danh sách ${idx + 1}`} ({taskList.tasks.length})
+                      </span>
+
+                      {/* Rename Icon button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartRename(taskList);
+                        }}
+                        className={`p-1 rounded hover:bg-slate-100 transition opacity-0 group-hover:opacity-100 cursor-pointer ${
+                          isSelected ? "text-blue-500" : "text-slate-400"
+                        }`}
+                        title="Đổi tên danh sách công việc"
+                      >
+                        <Pencil size={11} />
+                      </button>
+
+                      {/* Delete Icon button (only if > 1 task list) */}
+                      {currentTaskLists.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTaskList(taskList.id, taskList.name);
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                          title="Xóa danh sách công việc này"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Button Thêm Danh sách công việc */}
             <button
-              onClick={() => setActiveTab("tasks")}
-              className={`pb-2 text-xs font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer border-b-2 ${
-                activeTab === "tasks"
-                  ? "border-blue-600 text-blue-600 font-extrabold"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
+              type="button"
+              onClick={handleCreateTaskList}
+              className="mb-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/60 hover:bg-blue-100 border border-dashed border-blue-300 rounded-lg transition cursor-pointer shadow-3xs shrink-0"
+              title="Thêm danh sách công việc mới (tạo tab mới)"
             >
-              <ListOrdered size={16} />
-              <span>DANH SÁCH CÔNG VIỆC ({currentTasks.length})</span>
+              <Plus size={13} />
+              <span>Thêm danh sách</span>
             </button>
+
+            {/* Separator */}
+            <div className="h-4 w-[1px] bg-slate-200 mb-1.5 mx-1 shrink-0" />
+
+            {/* Recommendations Tab */}
             <button
               onClick={() => setActiveTab("recommendations")}
-              className={`pb-3 text-xs font-bold uppercase flex items-center gap-2 transition-all cursor-pointer border-b-2 ${
+              className={`pb-2.5 pt-1 text-xs font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer border-b-2 shrink-0 ${
                 activeTab === "recommendations"
                   ? "border-blue-600 text-blue-600 font-extrabold"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700 font-semibold"
               }`}
             >
               <Lightbulb size={16} />
@@ -1889,10 +2146,19 @@ export default function MaintenanceDetailPage() {
                     <path d="M111 55L114 58L119 52" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG LẦN BẢO TRÌ NÀY</p>
-                <p className="text-xs text-slate-400 mt-1 mb-5">Bạn có thể tải file mẫu để nhập dữ liệu hoặc thêm công việc mới.</p>
+                <p className="text-sm font-bold text-slate-800 uppercase tracking-wide">CHƯA CÓ CÔNG VIỆC NÀO TRONG DANH SÁCH NÀY</p>
+                <p className="text-xs text-slate-400 mt-1 mb-5">Bạn có thể khởi tạo mẫu bảo trì chuẩn, tải file mẫu để nhập dữ liệu hoặc thêm công việc mới.</p>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button 
+                    type="button"
+                    onClick={handlePopulateDefaultTemplate}
+                    className="border border-blue-200 hover:bg-blue-50 text-blue-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs flex items-center gap-1.5"
+                    title="Khởi tạo 24 đầu việc mẫu bảo trì chuẩn"
+                  >
+                    <FileSpreadsheet size={14} className="text-blue-600" />
+                    <span>Khởi tạo mẫu bảo trì chuẩn (24 mục)</span>
+                  </button>
                   <button 
                     onClick={() => handleExportExcel(true)}
                     className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs flex items-center gap-1.5"
