@@ -476,6 +476,7 @@ export default function ProjectDetailPage() {
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
   const [isImportingPlan, setIsImportingPlan] = useState(false);
   const [isExportingPlan, setIsExportingPlan] = useState(false);
+  const [isTaskDropdownOpen, setIsTaskDropdownOpen] = useState(false);
 
   // Selected task row & column freeze states for project plan table
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -926,7 +927,8 @@ export default function ProjectDetailPage() {
       [field]: value
     };
 
-    const synced = syncPlanProgressHierarchy(newPlan);
+    const reindexed = field === 'title' ? autoAssignTaskIndices(newPlan) : newPlan;
+    const synced = syncPlanProgressHierarchy(reindexed);
     setProject(prev => prev ? { ...prev, plan: synced } : null);
     updateProjectPlan(project.id, synced);
   };
@@ -970,6 +972,12 @@ export default function ProjectDetailPage() {
 
     setProject(prev => prev ? { ...prev, plan: newPlan } : null);
     updateProjectPlan(project.id, newPlan);
+  };
+
+  const handleInlineTaskTitleBlur = (task: ProjectTask, idx: number, newTitle: string) => {
+    if (!project) return;
+    if ((task.title || "") === newTitle.trim()) return;
+    handleInlineTaskFieldChange(idx, "title", newTitle.trim());
   };
 
   const handleInlineTaskNotesBlur = (task: ProjectTask, idx: number, newNotes: string) => {
@@ -1028,60 +1036,99 @@ export default function ProjectDetailPage() {
     setIsEditingPlan(false);
   };
 
-  const handleAppendTempTask = (level: TaskLevel = 'main') => {
-    setTempPlan(prev => {
-      const nextPlan = [
-        ...prev,
-        {
-          id: `new-task-${Date.now()}`,
-          title: "",
-          phase: "Phase 1: Chuẩn bị",
-          assignee: "",
-          startDate: project?.startDate || "",
-          endDate: project?.endDate || "",
-          status: "Todo" as ProjectTask["status"],
-          progress: 0,
-          level,
-          isHeader: level === 'phase',
-          notes: ""
-        }
-      ];
-      return autoAssignTaskIndices(nextPlan);
-    });
-  };
+  // Quick add task right below the currently selected row (or at the end) without entering edit mode
+  const handleAddTaskAtSelection = (level: TaskLevel = 'main') => {
+    setIsTaskDropdownOpen(false);
 
-  const handleAddPhaseClick = () => {
-    if (!isEditingPlan) {
-      handleStartEditPlan();
-      setTimeout(() => {
-        handleAppendTempTask('phase');
-      }, 50);
+    const newTask: ProjectTask = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: "",
+      phase: "Phase 1: Chuẩn bị",
+      assignee: "",
+      startDate: project?.startDate || "",
+      endDate: project?.endDate || "",
+      status: "Todo" as ProjectTask["status"],
+      progress: 0,
+      level,
+      isHeader: level === 'phase',
+      notes: ""
+    };
+
+    if (isEditingPlan) {
+      setTempPlan(prev => {
+        const targetIdx = selectedTaskId 
+          ? prev.findIndex((t, i) => (t.id && t.id === selectedTaskId) || (t.id || String(i)) === selectedTaskId || String(i) === selectedTaskId)
+          : -1;
+        const insertAt = targetIdx >= 0 ? targetIdx + 1 : prev.length;
+        const nextPlan = [...prev];
+        nextPlan.splice(insertAt, 0, newTask);
+        return autoAssignTaskIndices(nextPlan);
+      });
+      setSelectedTaskId(newTask.id);
     } else {
-      handleAppendTempTask('phase');
+      if (!project) return;
+      const prevPlan = project.plan || [];
+      const targetIdx = selectedTaskId 
+        ? prevPlan.findIndex((t, i) => (t.id && t.id === selectedTaskId) || (t.id || String(i)) === selectedTaskId || String(i) === selectedTaskId)
+        : -1;
+      const insertAt = targetIdx >= 0 ? targetIdx + 1 : prevPlan.length;
+      const nextPlan = [...prevPlan];
+      nextPlan.splice(insertAt, 0, newTask);
+      const reindexed = autoAssignTaskIndices(nextPlan);
+      const synced = syncPlanProgressHierarchy(reindexed);
+
+      setProject(prev => prev ? { ...prev, plan: synced } : null);
+      updateProjectPlan(project.id, synced);
+      setSelectedTaskId(newTask.id);
     }
   };
 
-  const handleAddMainTaskClick = () => {
-    if (!isEditingPlan) {
-      handleStartEditPlan();
-      setTimeout(() => {
-        handleAppendTempTask('main');
-      }, 50);
-    } else {
-      handleAppendTempTask('main');
-    }
-  };
-
-  const handleAddSubTaskClick = () => {
-    if (!isEditingPlan) {
-      handleStartEditPlan();
-      setTimeout(() => {
-        handleAppendTempTask('sub');
-      }, 50);
-    } else {
-      handleAppendTempTask('sub');
-    }
-  };
+  const renderTaskDropdownMenu = () => (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={() => setIsTaskDropdownOpen(false)}
+      />
+      <div className="absolute left-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+        <div className="px-3 py-1.5 font-bold text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+          Chọn loại công việc
+        </div>
+        <button
+          type="button"
+          onClick={() => handleAddTaskAtSelection('phase')}
+          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex items-center gap-2.5 transition cursor-pointer"
+        >
+          <span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block shrink-0" />
+          <div className="flex flex-col">
+            <span className="font-bold text-xs text-blue-950">Phase</span>
+            <span className="text-[10px] text-slate-500">Giai đoạn lớn (Cấp 1)</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAddTaskAtSelection('main')}
+          className="w-full text-left px-3 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-800 flex items-center gap-2.5 transition cursor-pointer"
+        >
+          <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block shrink-0" />
+          <div className="flex flex-col">
+            <span className="font-bold text-xs text-slate-800">Main task</span>
+            <span className="text-[10px] text-slate-500">Công việc chính (Cấp 2)</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAddTaskAtSelection('sub')}
+          className="w-full text-left px-3 py-2 hover:bg-violet-50 text-slate-700 hover:text-violet-700 flex items-center gap-2.5 transition cursor-pointer"
+        >
+          <span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block shrink-0" />
+          <div className="flex flex-col">
+            <span className="font-bold text-xs text-slate-700">Sub task</span>
+            <span className="text-[10px] text-slate-500">Công việc con (Cấp 3)</span>
+          </div>
+        </button>
+      </div>
+    </>
+  );
 
   const handleTaskLevelChange = (index: number, newLevel: TaskLevel) => {
     setTempPlan(prev => {
@@ -2575,27 +2622,19 @@ export default function ProjectDetailPage() {
               
               {isEditingPlan ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => handleAppendTempTask('phase')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Phase</span>
-                  </button>
-                  <button
-                    onClick={() => handleAppendTempTask('main')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Main task</span>
-                  </button>
-                  <button
-                    onClick={() => handleAppendTempTask('sub')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Sub task</span>
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTaskDropdownOpen(!isTaskDropdownOpen)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs"
+                      title="Thêm công việc mới vào kế hoạch (chọn Phase, Main task hoặc Sub task)"
+                    >
+                      <Plus size={13} />
+                      <span>+ Task</span>
+                      <ChevronDown size={11} className={`transition-transform duration-200 ${isTaskDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {isTaskDropdownOpen && renderTaskDropdownMenu()}
+                  </div>
                   <button
                     onClick={handleSavePlanEdits}
                     className="px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-sm shadow-green-200"
@@ -2644,27 +2683,19 @@ export default function ProjectDetailPage() {
                     <ArrowUpDown size={14} className={isMoveMode ? "text-white" : "text-slate-600"} />
                     <span>{isMoveMode ? "Xong di chuyển" : "Di chuyển"}</span>
                   </button>
-                  <button
-                    onClick={handleAddPhaseClick}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Phase</span>
-                  </button>
-                  <button
-                    onClick={handleAddMainTaskClick}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Main task</span>
-                  </button>
-                  <button
-                    onClick={handleAddSubTaskClick}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    <Plus size={13} />
-                    <span>+ Sub task</span>
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTaskDropdownOpen(!isTaskDropdownOpen)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs"
+                      title="Thêm công việc mới vào kế hoạch (chọn Phase, Main task hoặc Sub task)"
+                    >
+                      <Plus size={13} />
+                      <span>+ Task</span>
+                      <ChevronDown size={11} className={`transition-transform duration-200 ${isTaskDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {isTaskDropdownOpen && renderTaskDropdownMenu()}
+                  </div>
                   {/* Nút Nhập File (Excel / CSV / JSON) */}
                   <button
                     onClick={handleImportPlanClick}
@@ -3729,13 +3760,48 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {isPhase ? (
-                                <span className="text-slate-900 text-xs font-extrabold uppercase tracking-wide whitespace-nowrap" title={task.title}>{task.title}</span>
+                                <input
+                                  type="text"
+                                  defaultValue={task.title || ""}
+                                  key={`${task.id || idx}-title-${task.title || ''}`}
+                                  onBlur={(e) => handleInlineTaskTitleBlur(task, idx, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                  }}
+                                  placeholder="Nhập tên giai đoạn (Phase)..."
+                                  className="w-full px-1.5 py-0.5 text-slate-900 text-xs font-extrabold uppercase tracking-wide bg-transparent hover:bg-blue-100/60 focus:bg-white focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition placeholder:text-slate-400 placeholder:normal-case placeholder:font-normal truncate focus:overflow-visible"
+                                  title={task.title || "Bấm để đổi tên Phase"}
+                                />
                               ) : isMain ? (
-                                <div className="pl-3 font-bold text-slate-800 text-xs whitespace-nowrap" title={task.title}>{task.title}</div>
+                                <div className="pl-3 pr-1">
+                                  <input
+                                    type="text"
+                                    defaultValue={task.title || ""}
+                                    key={`${task.id || idx}-title-${task.title || ''}`}
+                                    onBlur={(e) => handleInlineTaskTitleBlur(task, idx, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
+                                    placeholder="Nhập tên công việc chính..."
+                                    className="w-full px-1.5 py-0.5 font-bold text-slate-800 text-xs bg-transparent hover:bg-slate-100/60 focus:bg-white focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition placeholder:text-slate-400 placeholder:font-normal truncate focus:overflow-visible"
+                                    title={task.title || "Bấm để đổi tên công việc chính"}
+                                  />
+                                </div>
                               ) : (
-                                <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap" title={task.title}>
-                                  <span className="text-slate-400 font-mono">↳</span>
-                                  <span className="whitespace-nowrap">{task.title}</span>
+                                <div className="pl-7 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap">
+                                  <span className="text-slate-400 font-mono shrink-0">↳</span>
+                                  <input
+                                    type="text"
+                                    defaultValue={task.title || ""}
+                                    key={`${task.id || idx}-title-${task.title || ''}`}
+                                    onBlur={(e) => handleInlineTaskTitleBlur(task, idx, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
+                                    placeholder="Nhập tên công việc con..."
+                                    className="w-full px-1.5 py-0.5 text-slate-700 text-xs bg-transparent hover:bg-slate-100/60 focus:bg-white focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition placeholder:text-slate-400 placeholder:font-normal truncate focus:overflow-visible"
+                                    title={task.title || "Bấm để đổi tên công việc con"}
+                                  />
                                 </div>
                               )}
                             </td>
