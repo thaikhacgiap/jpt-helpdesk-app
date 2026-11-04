@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Settings, Server } from "lucide-react";
+import { ShieldCheck, Settings, Server } from "lucide-react";
 
 export default function SystemTabNav() {
   const pathname = usePathname();
 
   const tabs = [
-    { href: "/users", label: "Người dùng", icon: User },
-    { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
-    { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
+    { href: "/users", label: "Administrator", icon: ShieldCheck },
+    { href: "/system", label: "Backup / Restore", icon: Server },
+    { href: "/settings", label: "Setting", icon: Settings }
   ];
 
   return (

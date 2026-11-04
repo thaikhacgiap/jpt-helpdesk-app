@@ -3,503 +3,704 @@
 import { useState, useEffect } from "react";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
+import { logOperation, fetchOperationLogs, OperationLog } from "@/lib/logger";
 import { 
-  fetchGroups, 
-  createGroup, 
-  updateGroup, 
-  deleteGroup, 
-  fetchUsers, 
-  UserGroup 
-} from "@/lib/auth-operations";
-import { 
-  Plus, 
-  Settings, 
-  Trash2, 
+  HardDrive, 
+  FileText, 
+  RefreshCw, 
   CheckCircle2, 
-  ShieldAlert, 
-  Users, 
-  X, 
-  Save, 
-  Info,
-  Edit2
+  AlertTriangle, 
+  Search, 
+  Calendar,
+  Activity,
+  ShieldCheck,
+  Settings,
+  FolderCheck,
+  Save,
+  Lock,
+  ExternalLink,
+  Server
 } from "lucide-react";
-import { User, Server } from "lucide-react";
+import { 
+  StorageConfig, 
+  DEFAULT_STORAGE_CONFIG, 
+  getStorageConfig, 
+  saveStorageConfig, 
+  testDriveConnection 
+} from "@/lib/storage-service";
 
 const SYSTEM_NAV_TABS = [
-  { href: "/users", label: "Người dùng", icon: User },
-  { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
-  { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
-];
-
-const SYSTEM_MENUS = [
-  { path: "/dashboard", label: "Dashboard (Bảng điều khiển)" },
-  { path: "/requests", label: "Yêu cầu (Danh sách & Phân công)" },
-  { path: "/tickets", label: "Quản lý Ticket (Xử lý vé hỗ trợ)" },
-  { path: "/maintenance", label: "Dịch vụ Bảo trì (Kế hoạch định kỳ)" },
-  { path: "/projects", label: "Triển khai Dự án (Plan & Gantt)" },
-  { path: "/customers", label: "Khách hàng (Danh sách đối tác)" },
-  { path: "/contacts", label: "Liên hệ (Danh bạ khách hàng)" },
-  { path: "/nhan-su", label: "Nhân sự (Quản lý nội bộ)" },
-  { path: "/contracts", label: "Hợp đồng (Hồ sơ pháp lý)" },
-  { path: "/sla", label: "Quản lý SLA (Mức độ cam kết dịch vụ)" },
-  { path: "/users", label: "Người dùng (Quản trị tài khoản & Khóa)" },
-  { path: "/settings", label: "Phân quyền nhóm (Cấu hình phân quyền)" },
-  { path: "/system", label: "Quản lý hệ thống (Backup/Restore & Logs)" },
-  { path: "/portal", label: "Cổng dịch vụ Khách hàng (Portal)" }
-];
-
-const ROLES = [
-  { value: "Admin", label: "Quản trị viên" },
-  { value: "PM", label: "Quản lý Dự án (PM)" },
-  { value: "Technical", label: "Kỹ sư Kỹ thuật" },
-  { value: "Customer", label: "Đại diện Khách hàng" }
+  { href: "/users", label: "Administrator", icon: ShieldCheck },
+  { href: "/system", label: "Backup / Restore", icon: Server },
+  { href: "/settings", label: "Setting", icon: Settings }
 ];
 
 export default function SettingsPage() {
-  const [groups, setGroups] = useState<UserGroup[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [activeGroup, setActiveGroup] = useState<UserGroup | null>(null);
+  const [activeTab, setActiveTab] = useState<"storage" | "logs">("storage");
+  const [logs, setLogs] = useState<OperationLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [searchLogQuery, setSearchLogQuery] = useState("");
   
-  // Selected Group Permissions
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // Storage Config states
+  const [storageConfig, setStorageConfig] = useState<StorageConfig>(DEFAULT_STORAGE_CONFIG);
+  const [loadingStorage, setLoadingStorage] = useState(false);
+  const [savingStorage, setSavingStorage] = useState(false);
+  const [testingDrive, setTestingDrive] = useState(false);
+  const [storageSaveSuccess, setStorageSaveSuccess] = useState(false);
+  const [driveTestResult, setDriveTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Group Create/Edit Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
-  const [modalForm, setModalForm] = useState({
-    id: "",
-    name: "",
-    description: "",
-    role: "Technical" as UserGroup["role"]
-  });
-  const [modalError, setModalError] = useState("");
-
-  // Load Data
-  const loadData = async () => {
-    try {
-      const [loadedGroups, loadedUsers] = await Promise.all([
-        fetchGroups(),
-        fetchUsers()
-      ]);
-      setGroups(loadedGroups);
-      setUsers(loadedUsers);
-      
-      // Maintain active group selection or default to first
-      if (loadedGroups.length > 0) {
-        if (activeGroup) {
-          const found = loadedGroups.find(g => g.id === activeGroup.id);
-          if (found) {
-            setActiveGroup(found);
-            setSelectedPermissions(found.permissions);
-            return;
-          }
-        }
-        setActiveGroup(loadedGroups[0]);
-        setSelectedPermissions(loadedGroups[0].permissions);
-      }
-    } catch (err) {
-      console.error("Error loading settings data:", err);
+  // Initial load
+  useEffect(() => {
+    if (activeTab === "logs") {
+      loadLogs();
+    } else if (activeTab === "storage") {
+      loadStorageData();
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
-    loadData();
+    loadStorageData();
   }, []);
 
-  const handleSelectGroup = (group: UserGroup) => {
-    setActiveGroup(group);
-    setSelectedPermissions(group.permissions);
-    setSaveSuccess(false);
-  };
-
-  const handlePermissionToggle = (path: string) => {
-    setSaveSuccess(false);
-    setSelectedPermissions(prev => {
-      if (prev.includes(path)) {
-        return prev.filter(p => p !== path);
-      } else {
-        return [...prev, path];
-      }
-    });
-  };
-
-  const handleSavePermissions = async () => {
-    if (!activeGroup) return;
-    
+  const loadStorageData = async () => {
+    setLoadingStorage(true);
     try {
-      const result = await updateGroup(activeGroup.id, {
-        permissions: selectedPermissions
+      const cfg = await getStorageConfig();
+      setStorageConfig(cfg);
+    } catch (err) {
+      console.error("Error loading storage config:", err);
+    } finally {
+      setLoadingStorage(false);
+    }
+  };
+
+  const handleSaveStorage = async () => {
+    setSavingStorage(true);
+    setDriveTestResult(null);
+    try {
+      const res = await saveStorageConfig(storageConfig);
+      if (res.success) {
+        setStorageSaveSuccess(true);
+        await logOperation(
+          "Cấu hình Lưu trữ",
+          `Cập nhật thành công nhà cung cấp lưu trữ tệp đính kèm: [${storageConfig.provider === "google_drive" ? "Google Drive" : "Supabase Storage"}] với thư mục "${storageConfig.drive_folder_name}".`
+        );
+        setTimeout(() => setStorageSaveSuccess(false), 3000);
+      } else {
+        alert(res.error || "Không thể lưu cấu hình lưu trữ.");
+      }
+    } catch (err: any) {
+      alert(`Lỗi hệ thống: ${err.message}`);
+    } finally {
+      setSavingStorage(false);
+    }
+  };
+
+  const handleTestDrive = async () => {
+    setTestingDrive(true);
+    setDriveTestResult(null);
+    try {
+      const res = await testDriveConnection(storageConfig);
+      setDriveTestResult(res);
+    } catch (err: any) {
+      setDriveTestResult({
+        success: false,
+        message: `Lỗi kiểm tra kết nối Google Drive: ${err.message}`
       });
-
-      if (result.success) {
-        setSaveSuccess(true);
-        await loadData();
-        setTimeout(() => setSaveSuccess(false), 3000);
-      } else {
-        alert(result.error);
-      }
-    } catch (err) {
-      alert("Lỗi hệ thống khi lưu cấu hình quyền.");
+    } finally {
+      setTestingDrive(false);
     }
   };
 
-  const handleOpenCreate = () => {
-    setModalMode("create");
-    setModalForm({
-      id: "",
-      name: "",
-      description: "",
-      role: "Technical"
-    });
-    setModalError("");
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = (group: UserGroup, e: React.MouseEvent) => {
-    e.stopPropagation(); // Avoid selecting group in background
-    setModalMode("edit");
-    setModalForm({
-      id: group.id,
-      name: group.name,
-      description: group.description,
-      role: group.role
-    });
-    setModalError("");
-    setIsModalOpen(true);
-  };
-
-  const handleModalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError("");
-
-    if (!modalForm.name.trim()) {
-      setModalError("Vui lòng nhập tên nhóm phân quyền.");
-      return;
-    }
-
+  const loadLogs = async () => {
+    setLoadingLogs(true);
     try {
-      if (modalMode === "create") {
-        // Default permissions preset based on role
-        let defaultPerms: string[] = ["/dashboard", "/requests", "/tickets"];
-        if (modalForm.role === "Admin") defaultPerms = SYSTEM_MENUS.map(m => m.path);
-        if (modalForm.role === "PM") defaultPerms = ["/dashboard", "/requests", "/tickets", "/projects", "/customers", "/contracts"];
-        if (modalForm.role === "Technical") defaultPerms = ["/dashboard", "/requests", "/tickets", "/maintenance"];
-        if (modalForm.role === "Customer") defaultPerms = ["/portal"];
-
-        const result = await createGroup({
-          name: modalForm.name.trim(),
-          description: modalForm.description.trim(),
-          role: modalForm.role,
-          permissions: defaultPerms
-        });
-
-        if (result.success && result.group) {
-          setIsModalOpen(false);
-          await loadData();
-          handleSelectGroup(result.group);
-        } else {
-          setModalError(result.error || "Có lỗi xảy ra.");
-        }
-      } else {
-        const result = await updateGroup(modalForm.id, {
-          name: modalForm.name.trim(),
-          description: modalForm.description.trim()
-        });
-
-        if (result.success) {
-          setIsModalOpen(false);
-          await loadData();
-        } else {
-          setModalError(result.error || "Có lỗi xảy ra.");
-        }
-      }
+      const fetchedLogs = await fetchOperationLogs();
+      setLogs(fetchedLogs);
     } catch (err) {
-      setModalError("Lỗi hệ thống khi thao tác với nhóm phân quyền.");
+      console.error("Error loading logs:", err);
+    } finally {
+      setLoadingLogs(false);
     }
   };
 
-  const handleDeleteGroup = async (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm(`Xóa nhóm phân quyền "${name}"? Thao tác này không thể hoàn tác.`)) {
-      try {
-        const result = await deleteGroup(id);
-        if (result.success) {
-          await loadData();
-        } else {
-          alert(result.error);
-        }
-      } catch (err) {
-        alert("Lỗi hệ thống khi xóa nhóm phân quyền.");
-      }
-    }
-  };
+  // FILTERED LOGS
+  const filteredLogs = logs.filter(log => {
+    const term = searchLogQuery.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      log.user_email.toLowerCase().includes(term) ||
+      log.user_name.toLowerCase().includes(term) ||
+      log.action.toLowerCase().includes(term) ||
+      (log.details || "").toLowerCase().includes(term)
+    );
+  });
 
-  const getMemberCount = (groupId: string) => {
-    return users.filter(u => u.groupId === groupId).length;
-  };
-
-  const getRoleLabel = (role: string) => {
-    return ROLES.find(r => r.value === role)?.label || role;
+  const getLogActionBadgeColor = (action: string) => {
+    if (action.includes("Đăng nhập")) return "bg-blue-50 text-blue-700 border-blue-200/50";
+    if (action.includes("Khóa")) return "bg-red-50 text-red-700 border-red-200/50";
+    if (action.includes("Xóa")) return "bg-rose-50 text-rose-700 border-rose-200/50";
+    if (action.includes("Khôi phục")) return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
+    if (action.includes("Backup") || action.includes("Sao lưu")) return "bg-purple-50 text-purple-700 border-purple-200/50";
+    return "bg-slate-50 text-slate-700 border-slate-200";
   };
 
   return (
     <MainLayout>
       <Header 
         title="Quản Lý Hệ Thống" 
-        description="Quản lý các nhóm người dùng, thiết lập danh mục menu được phép truy cập của từng nhóm." 
+        description="Cấu hình nơi lưu trữ tệp đính kèm (Google Drive), Google Sheets Master và theo dõi nhật ký hoạt động của phần mềm." 
         navTabs={SYSTEM_NAV_TABS}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT COLUMN: GROUPS LIST */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Danh sách nhóm người dùng</h2>
-              <button
-                onClick={handleOpenCreate}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>Thêm nhóm</span>
-              </button>
-            </div>
-
-            <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
-              {groups.map((group) => {
-                const isActive = activeGroup?.id === group.id;
-                const members = getMemberCount(group.id);
-                const isSystemDefault = ["g-1", "g-2", "g-3", "g-4"].includes(group.id);
-                
-                return (
-                  <div
-                    key={group.id}
-                    onClick={() => handleSelectGroup(group)}
-                    className={`p-4 border rounded-xl transition cursor-pointer flex justify-between items-start group ${
-                      isActive 
-                        ? "bg-blue-50/40 border-blue-500 shadow-sm" 
-                        : "bg-white border-slate-200 hover:bg-slate-50/50"
-                    }`}
-                  >
-                    <div className="space-y-1 min-w-0 pr-4">
-                      <div className="flex items-center gap-2">
-                        <h3 className={`text-sm font-bold truncate ${isActive ? "text-blue-700" : "text-slate-800"}`}>
-                          {group.name}
-                        </h3>
-                        {isSystemDefault && (
-                          <span className="text-[8px] font-bold bg-slate-100 text-slate-500 border border-slate-200/50 px-1 rounded uppercase select-none">Hệ thống</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 font-medium">{getRoleLabel(group.role)}</p>
-                      <p className="text-xs text-slate-500 line-clamp-1 mt-1 font-normal">{group.description || "Không có mô tả."}</p>
-                      
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-2 font-medium">
-                        <Users size={12} className="text-slate-500" />
-                        <span>{members} thành viên</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => handleOpenEdit(group, e)}
-                        className="p-1 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
-                        title="Sửa tên/mô tả"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      {!isSystemDefault && (
-                        <button
-                          onClick={(e) => handleDeleteGroup(group.id, group.name, e)}
-                          className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-500 rounded transition cursor-pointer"
-                          title="Xóa nhóm"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: PERMISSIONS EDITOR */}
-        <div className="lg:col-span-7">
-          {activeGroup ? (
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs p-6 space-y-6">
-              {/* Header Info */}
-              <div className="pb-4 border-b border-slate-100 flex justify-between items-start gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-slate-800">{activeGroup.name}</h2>
-                    <span className="px-2 py-0.5 rounded text-[9px] font-bold border bg-blue-50 text-blue-700 border-blue-200/50">
-                      Vai trò liên kết: {getRoleLabel(activeGroup.role)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {activeGroup.description || "Không có mô tả chi tiết."}
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleSavePermissions}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-                >
-                  <Save size={13} />
-                  <span>Lưu cấu hình quyền</span>
-                </button>
-              </div>
-
-              {saveSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs flex items-center gap-2 animate-fade-in">
-                  <CheckCircle2 size={15} />
-                  <span>Cấu hình quyền hạn đã được áp dụng và đồng bộ thành công!</span>
-                </div>
-              )}
-
-              {/* Checkbox Grid */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">
-                  <Settings size={14} className="text-slate-500" />
-                  <span>Danh mục menu được phép xem</span>
-                </div>
-
-                {activeGroup.role === "Admin" ? (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-xs flex items-center gap-2">
-                    <Info size={16} />
-                    <span>Nhóm có vai trò Admin mặc định được quyền xem tất cả các danh mục để tránh lỗi cấu trị viên.</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {SYSTEM_MENUS.filter(menu => menu.path !== "/portal").map((menu) => {
-                      const isChecked = selectedPermissions.includes(menu.path);
-                      return (
-                        <label 
-                          key={menu.path} 
-                          className={`flex items-center gap-3 p-3 border rounded-xl text-xs font-medium cursor-pointer transition select-none ${
-                            isChecked 
-                              ? "bg-blue-50/20 border-blue-200 text-slate-800" 
-                              : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50/40"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handlePermissionToggle(menu.path)}
-                            className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 focus:ring-1 cursor-pointer"
-                          />
-                          <div className="flex flex-col gap-0.5">
-                            <span>{menu.label}</span>
-                            <span className="text-[9px] font-mono text-slate-400 font-normal">{menu.path}</span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs p-12 text-center text-slate-400">
-              <ShieldAlert size={36} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm font-semibold">Chưa chọn nhóm phân quyền</p>
-              <p className="text-xs text-slate-500 mt-1">Vui lòng nhấp chọn nhóm người dùng ở cột bên trái để thiết lập quyền.</p>
-            </div>
-          )}
-        </div>
-
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 mb-6 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("storage")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === "storage" 
+              ? "border-emerald-600 text-emerald-600 font-extrabold" 
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <HardDrive size={15} />
+          <span>Cấu hình Lưu trữ (Google Drive Email Riêng)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("logs")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === "logs" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <FileText size={15} />
+          <span>Nhật ký hoạt động (Logs)</span>
+        </button>
       </div>
 
-      {/* CREATE / EDIT GROUP MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
-              <h2 className="text-base font-bold text-slate-900">
-                {modalMode === "create" ? "Thêm Nhóm Phân Quyền" : "Chỉnh Sửa Nhóm"}
-              </h2>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer"
+      {/* Contents */}
+      <div className="mt-4">
+        
+        {/* TAB: STORAGE CONFIGURATION (GOOGLE DRIVE DEDICATED EMAIL ACCOUNT) */}
+        {activeTab === "storage" && (
+          <div className="space-y-6">
+            {/* Storage Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+              <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-10 pointer-events-none">
+                <HardDrive size={220} />
+              </div>
+              <div className="relative z-10 max-w-3xl space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-300 text-xs font-bold">
+                  <ShieldCheck size={14} />
+                  <span>Google Drive OAuth 2.0 - Dedicated App Account</span>
+                </div>
+                <h2 className="text-xl font-black tracking-tight text-white">
+                  Cấu Hình Nơi Lưu Trữ Google Drive Bằng Email Google Riêng
+                </h2>
+                <p className="text-slate-300 text-xs leading-relaxed font-normal">
+                  Sử dụng <strong>Tài khoản Email Google riêng của ứng dụng</strong> (ví dụ: <code>helpdesk.upload@gmail.com</code>). 
+                  Tệp đính kèm sẽ được lưu trữ trực tiếp lên Google Drive của Email này, tận dụng dung lượng 15GB miễn phí hoặc Google Workspace của công ty mà người dùng cuối không phải thao tác gì!
+                </p>
+              </div>
+            </div>
+
+            {/* Provider Selection Card & Drive Config */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Left Column: Select Provider & Setup Guide */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <HardDrive size={16} className="text-emerald-600" />
+                      <span>Chọn Nơi Lưu Trữ Mặc Định</span>
+                    </h3>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Active: {storageConfig.provider === "google_drive" ? "Google Drive (Email Riêng)" : "Supabase Storage"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Radio Google Drive */}
+                    <label 
+                      onClick={() => setStorageConfig({ ...storageConfig, provider: "google_drive" })}
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+                        storageConfig.provider === "google_drive"
+                          ? "border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="storage_provider" 
+                        checked={storageConfig.provider === "google_drive"} 
+                        onChange={() => {}} 
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900">Google Drive Email Riêng</span>
+                          <span className="bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            Khuyên dùng (Đơn giản nhất)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Tải ngầm tệp lên Google Drive của Email đại diện ứng dụng qua Refresh Token.
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Radio Supabase Storage */}
+                    <label 
+                      onClick={() => setStorageConfig({ ...storageConfig, provider: "supabase" })}
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+                        storageConfig.provider === "supabase"
+                          ? "border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <input 
+                        type="radio" 
+                        name="storage_provider" 
+                        checked={storageConfig.provider === "supabase"} 
+                        onChange={() => {}} 
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900">Supabase Storage</span>
+                          <span className="bg-slate-200 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            Dự phòng
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Lưu trữ trực tiếp trong Supabase Bucket storage.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Max File Size */}
+                  <div className="pt-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Dung lượng tối đa mỗi tệp (MB)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="500" 
+                      value={storageConfig.max_file_size_mb}
+                      onChange={(e) => setStorageConfig({ ...storageConfig, max_file_size_mb: parseInt(e.target.value) || 50 })}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Tệp vượt quá giới hạn này sẽ bị từ chối đính kèm.</p>
+                  </div>
+                </div>
+
+                {/* Setup Guide Step-by-Step */}
+                <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 shadow-xs space-y-3 text-xs">
+                  <h4 className="font-bold text-white flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-emerald-400" />
+                    <span>Các bước lấy Refresh Token cho Email riêng</span>
+                  </h4>
+                  <ol className="list-decimal pl-4 space-y-2 text-slate-300 text-[11px] leading-relaxed">
+                    <li>Vào <strong>Google Cloud Console</strong> &rarr; Bật <strong>Google Drive API</strong>.</li>
+                    <li>Tạo <strong>OAuth 2.0 Client ID</strong> (Web application) &rarr; Lấy <strong>Client ID</strong> & <strong>Client Secret</strong>.</li>
+                    <li>Đăng nhập bằng <strong>Email riêng của App</strong> để lấy chuỗi <strong>Refresh Token</strong> duy nhất.</li>
+                    <li>Điền 3 thông số vào bảng bên phải &rarr; Bấm <strong>Kiểm Tra Kết Nối & Lưu Cấu Hình</strong>.</li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Right Column: Google Drive Settings Form */}
+              <div className="lg:col-span-7">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-5">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <FolderCheck size={16} className="text-emerald-600" />
+                        <span>Thông Tin Tài Khoản Email Google Upload & Folder ID</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Nhập OAuth credentials của Email riêng để ứng dụng tự động upload file ngầm.
+                      </p>
+                    </div>
+
+                    {storageConfig.drive_folder_id && (
+                      <a 
+                        href={`https://drive.google.com/drive/folders/${storageConfig.drive_folder_id}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 hover:underline"
+                      >
+                        <ExternalLink size={13} />
+                        <span>Mở Google Drive</span>
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Folder ID */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">
+                        Google Drive Folder ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={storageConfig.drive_folder_id || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_folder_id: e.target.value.trim() })}
+                        placeholder="1A2b3C4d5E6f7G8h9I0j-sample_folder_id"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        Đường dẫn drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong> thì <code>1A2b3C4d5E6f...</code> là Folder ID.
+                      </p>
+                    </div>
+
+                    {/* Folder Display Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Tên Thư Mục Hiển Thị</label>
+                      <input
+                        type="text"
+                        value={storageConfig.drive_folder_name || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_folder_name: e.target.value })}
+                        placeholder="JPT Helpdesk Attachments"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                      />
+                    </div>
+
+                    {/* Google Sheets Master Section */}
+                    <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+                          <span>GOOGLE SHEETS MASTER (DÙNG CHUNG CHO KHÁCH HÀNG, CƠ HỘI, HỢP ĐỒNG)</span>
+                        </label>
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                          Dùng chung toàn hệ thống
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-bold text-slate-700">Link Google Sheet Tổng (Master Spreadsheet URL)</p>
+                        <input
+                          type="text"
+                          value={storageConfig.master_sheet_url || ""}
+                          onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_url: e.target.value.trim() })}
+                          placeholder="https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284cWLTkca4zYadxk1NvMGhSh5HFCwWG8/edit"
+                          className="w-full px-3 py-2 text-xs border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-hidden font-mono bg-white"
+                        />
+                        <p className="text-[10px] text-slate-500">
+                          Các module Khách hàng, Cơ hội, Liên hệ, Nhân sự, Hợp đồng sẽ tự động đọc từ đường link này nếu không có cấu hình riêng.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600">Tab Khách Hàng</label>
+                          <input
+                            type="text"
+                            value={storageConfig.master_sheet_tab_customer || "Customer"}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_tab_customer: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600">Tab Cơ Hội</label>
+                          <input
+                            type="text"
+                            value={storageConfig.master_sheet_tab_opportunity || "Opportunity"}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_tab_opportunity: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600">Tab Liên Hệ</label>
+                          <input
+                            type="text"
+                            value={storageConfig.master_sheet_tab_contact || "Contact"}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_tab_contact: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600">Tab Nhân Sự</label>
+                          <input
+                            type="text"
+                            value={storageConfig.master_sheet_tab_nhansu || "NhanSu"}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_tab_nhansu: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600">Tab Hợp Đồng</label>
+                          <input
+                            type="text"
+                            value={storageConfig.master_sheet_tab_contract || "Contract"}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, master_sheet_tab_contract: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Google OAuth Client ID */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Lock size={13} className="text-slate-500" />
+                        <span>Google Client ID (Dùng chung cho Drive & Sheets Sync)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={storageConfig.drive_client_id || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_id: e.target.value.trim() })}
+                        placeholder="xxxx.apps.googleusercontent.com"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                      />
+                    </div>
+
+                    {/* Google OAuth Client Secret */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Lock size={13} className="text-slate-500" />
+                        <span>Google Client Secret (Dùng chung)</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={storageConfig.drive_client_secret || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_secret: e.target.value })}
+                        placeholder="GOCSPX-xxxx..."
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                      />
+                    </div>
+
+                    {/* Google OAuth Refresh Token */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <ShieldCheck size={13} className="text-emerald-600" />
+                        <span>Google OAuth Refresh Token (Dùng chung 24/7 cho Drive & Sheets)</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={storageConfig.drive_refresh_token || ""}
+                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_refresh_token: e.target.value })}
+                        placeholder="1//04xxxx... (Refresh token giúp ứng dụng tự tạo access token 24/7)"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono leading-relaxed bg-slate-50/30"
+                      />
+                    </div>
+
+                    {/* Service Account Alternative (Optional) */}
+                    <details className="pt-2 border-t border-slate-100 group">
+                      <summary className="text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-800 transition py-1">
+                        ⚙️ Cấu hình Service Account tùy chọn (Nâng cao)
+                      </summary>
+                      <div className="space-y-3 pt-3 pl-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">Service Account Email</label>
+                          <input
+                            type="email"
+                            value={storageConfig.drive_client_email || ""}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, drive_client_email: e.target.value })}
+                            placeholder="service-account@project.iam.gserviceaccount.com"
+                            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-hidden font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">Service Account Private Key</label>
+                          <textarea
+                            rows={2}
+                            value={storageConfig.drive_private_key || ""}
+                            onChange={(e) => setStorageConfig({ ...storageConfig, drive_private_key: e.target.value })}
+                            placeholder="-----BEGIN PRIVATE KEY-----..."
+                            className="w-full px-2.5 py-1.5 text-[10px] border border-slate-200 rounded-lg outline-hidden font-mono"
+                          />
+                        </div>
+                      </div>
+                    </details>
+
+                    {/* Auto subfolders toggle */}
+                    <div className="pt-2">
+                      <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/60 transition">
+                        <input
+                          type="checkbox"
+                          checked={storageConfig.auto_subfolders}
+                          onChange={(e) => setStorageConfig({ ...storageConfig, auto_subfolders: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Tự động phân loại thư mục con theo Module</p>
+                          <p className="text-[10px] text-slate-500">Tự động lưu vào <code>/Tickets/</code>, <code>/Contracts/</code>, <code>/Requests/</code> tương ứng.</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Test Connection Result Notice */}
+                    {driveTestResult && (
+                      <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
+                        driveTestResult.success 
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                          : "bg-rose-50 border-rose-200 text-rose-800"
+                      }`}>
+                        {driveTestResult.success ? (
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <p className="font-bold">{driveTestResult.success ? "Kiểm tra thành công!" : "Kiểm tra kết nối thất bại"}</p>
+                          <p className="text-[11px] mt-0.5 leading-relaxed">{driveTestResult.message}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleTestDrive}
+                        disabled={testingDrive}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 hover:border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {testingDrive ? (
+                          <RefreshCw size={14} className="animate-spin text-emerald-600" />
+                        ) : (
+                          <FolderCheck size={14} className="text-emerald-600" />
+                        )}
+                        <span>{testingDrive ? "Đang kiểm tra kết nối..." : "Kiểm Tra Kết Nối Google Drive"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveStorage}
+                        disabled={savingStorage}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition shadow-xs hover:shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {savingStorage ? (
+                          <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>{savingStorage ? "Đang lưu..." : "Lưu Cấu Hình Storage"}</span>
+                      </button>
+                    </div>
+
+                    {storageSaveSuccess && (
+                      <p className="text-right text-xs font-bold text-emerald-600 flex items-center justify-end gap-1">
+                        <CheckCircle2 size={14} />
+                        <span>Đã lưu cấu hình Google Drive thành công!</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* TAB: OPERATION LOGS */}
+        {activeTab === "logs" && (
+          <div className="space-y-4">
+            {/* Filter toolbar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/60 shadow-xs">
+              <div className="relative w-full sm:max-w-xs">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo email, tên, hành động..."
+                  value={searchLogQuery}
+                  onChange={(e) => setSearchLogQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={loadLogs}
+                disabled={loadingLogs}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer disabled:opacity-50"
               >
-                <X size={20} />
+                <RefreshCw size={13} className={loadingLogs ? "animate-spin" : ""} />
+                <span>Làm mới nhật ký</span>
               </button>
             </div>
 
-            <form onSubmit={handleModalSubmit} className="p-6 space-y-4">
-              {modalError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                  <ShieldAlert size={15} />
-                  <span>{modalError}</span>
-                </div>
-              )}
+            {/* Logs Table */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr className="text-xs text-slate-500 font-semibold text-left">
+                      <th className="px-6 py-3.5 w-44">Thời gian</th>
+                      <th className="px-4 py-3.5 w-60">Người thực hiện</th>
+                      <th className="px-4 py-3.5 w-48">Hành động</th>
+                      <th className="px-6 py-3.5">Nội dung chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingLogs ? (
+                      <tr>
+                        <td colSpan={4} className="py-16 text-center text-slate-400">
+                          <RefreshCw size={24} className="mx-auto mb-2 animate-spin text-slate-350" />
+                          <p className="text-xs">Đang tải nhật ký từ máy chủ...</p>
+                        </td>
+                      </tr>
+                    ) : filteredLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-slate-400">
+                          <Activity size={32} className="mx-auto mb-2 opacity-30 text-slate-450" />
+                          <p className="text-xs">Không tìm thấy nhật ký hoạt động nào.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredLogs.map((log, index) => (
+                        <tr key={log.id || index} className="hover:bg-slate-50/50 transition">
+                          {/* Time */}
+                          <td className="px-6 py-4 text-xs font-medium text-slate-500 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar size={12} className="text-slate-450" />
+                              <span>{log.created_at ? new Date(log.created_at).toLocaleString('vi-VN') : "—"}</span>
+                            </div>
+                          </td>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Tên nhóm người dùng <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={modalForm.name}
-                  onChange={e => setModalForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="VD: Đội Hỗ Trợ Đêm"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+                          {/* Executor User */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase select-none">
+                                {log.user_name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-800 text-xs truncate">{log.user_name}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{log.user_email}</p>
+                              </div>
+                            </div>
+                          </td>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Mô tả nhóm</label>
-                <textarea
-                  value={modalForm.description}
-                  onChange={e => setModalForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Mô tả tóm tắt nhiệm vụ/quyền hạn nhóm..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
+                          {/* Action Badge */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getLogActionBadgeColor(log.action)}`}>
+                              {log.action}
+                            </span>
+                          </td>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Vai trò hệ thống liên kết</label>
-                <select
-                  value={modalForm.role}
-                  onChange={e => setModalForm(f => ({ ...f, role: e.target.value as UserGroup["role"] }))}
-                  disabled={modalMode === "edit"}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400 cursor-pointer"
-                >
-                  {ROLES.map(r => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-                {modalMode === "edit" && (
-                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                    <Info size={12} /> Không thể thay đổi vai trò hệ thống liên kết của nhóm sau khi tạo.
-                  </p>
-                )}
+                          {/* Details */}
+                          <td className="px-6 py-4 text-slate-600 text-xs font-normal">
+                            {log.details || "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  {modalMode === "create" ? "Thêm nhóm" : "Lưu thay đổi"}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+        
+      </div>
     </MainLayout>
   );
 }

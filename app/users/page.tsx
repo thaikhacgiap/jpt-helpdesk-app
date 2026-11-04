@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
+import GroupPermissions from "@/components/system/group-permissions";
 import { 
   fetchUsers, 
   createUser, 
@@ -41,13 +43,14 @@ import {
   Mail,
   User,
   Settings,
-  Server
+  Server,
+  ShieldCheck
 } from "lucide-react";
 
 const SYSTEM_NAV_TABS = [
-  { href: "/users", label: "Người dùng", icon: User },
-  { href: "/settings", label: "Phân quyền nhóm", icon: Settings },
-  { href: "/system", label: "Cấu hình & Sao lưu", icon: Server }
+  { href: "/users", label: "Administrator", icon: ShieldCheck },
+  { href: "/system", label: "Backup / Restore", icon: Server },
+  { href: "/settings", label: "Setting", icon: Settings }
 ];
 
 const DEPARTMENTS = [
@@ -76,7 +79,19 @@ const PERMISSION_LABELS: Record<string, string> = {
   "/notifications": "Thông báo"
 };
 
-export default function UsersPage() {
+function UsersPageContent() {
+  const searchParams = useSearchParams();
+  const [activeSubTab, setActiveSubTab] = useState<"users" | "groups">(() => {
+    return searchParams.get("tab") === "groups" ? "groups" : "users";
+  });
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "groups" || tabParam === "users") {
+      setActiveSubTab(tabParam);
+    }
+  }, [searchParams]);
+
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [dbCustomers, setDbCustomers] = useState<Customer[]>([]);
@@ -489,11 +504,43 @@ export default function UsersPage() {
     <MainLayout>
       <Header 
         title="Quản Lý Hệ Thống" 
-        description="Quản lý tài khoản đăng nhập hệ thống, gán nhóm người dùng, thay đổi quyền hạn và khóa/mở khóa tài khoản." 
+        description="Quản trị tài khoản người dùng, phân quyền vai trò và thiết lập quyền truy cập chức năng của từng nhóm." 
         navTabs={SYSTEM_NAV_TABS}
       />
 
-      {/* KPI Stats */}
+      {/* Sub Tabs: Người dùng & Phân quyền nhóm */}
+      <div className="flex border-b border-slate-200 mb-6 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab("users")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeSubTab === "users" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <User size={15} />
+          <span>Người dùng</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab("groups")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activeSubTab === "groups" 
+              ? "border-blue-600 text-blue-600 font-extrabold" 
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <Shield size={15} />
+          <span>Phân quyền nhóm</span>
+        </button>
+      </div>
+
+      {activeSubTab === "groups" ? (
+        <GroupPermissions />
+      ) : (
+        <>
+          {/* KPI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs flex items-center justify-between">
           <div>
@@ -1257,7 +1304,21 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+        </>
+      )}
     </MainLayout>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={
+      <MainLayout>
+        <div className="py-20 text-center text-slate-400 font-medium">Đang tải Administrator...</div>
+      </MainLayout>
+    }>
+      <UsersPageContent />
+    </Suspense>
   );
 }
 
