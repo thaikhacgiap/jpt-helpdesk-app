@@ -38,13 +38,15 @@ function formatDisplayDate(dateStr?: string): string {
   return dateStr;
 }
 
-function resolveTaskLevel(task: TaskItem): "Phase" | "Main task" | "Sub task" {
+function resolveTaskLevel(task: TaskItem): "Phase" | "Main task" | "Sub task" | "Child task" {
   if (task.level === "phase" || task.isHeader) return "Phase";
+  if (task.level === "child") return "Child task";
   if (task.level === "sub") return "Sub task";
   if (task.level === "main") return "Main task";
   if (task.taskIndex) {
     const dots = (task.taskIndex.match(/\./g) || []).length;
-    if (dots >= 2) return "Sub task";
+    if (dots >= 3) return "Child task";
+    if (dots === 2) return "Sub task";
     if (dots === 1) return "Main task";
     if (dots === 0) return "Phase";
   }
@@ -371,6 +373,7 @@ export async function POST(req: NextRequest) {
       const isPhase = levelLabel === "Phase";
       const isMain = levelLabel === "Main task";
       const isSub = levelLabel === "Sub task";
+      const isChild = levelLabel === "Child task";
 
       const row = sheet.getRow(currentRowIdx);
       const viStatus = statusMapToVi[task.status || "Todo"] || task.status || "Chưa thực hiện";
@@ -378,7 +381,9 @@ export async function POST(req: NextRequest) {
 
       // Prefix indentation for title in Excel
       let displayTitle = task.title || "";
-      if (isSub) {
+      if (isChild) {
+        displayTitle = `      ↳↳ ${displayTitle}`;
+      } else if (isSub) {
         displayTitle = `    ↳ ${displayTitle}`;
       } else if (isMain) {
         displayTitle = `  ${displayTitle}`;

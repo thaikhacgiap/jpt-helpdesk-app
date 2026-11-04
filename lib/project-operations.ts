@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export type TaskLevel = 'phase' | 'main' | 'sub';
+export type TaskLevel = 'phase' | 'main' | 'sub' | 'child';
 
 export interface ProjectTask {
   id: string;

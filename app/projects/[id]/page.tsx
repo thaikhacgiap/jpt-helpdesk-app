@@ -514,6 +514,11 @@ export default function ProjectDetailPage() {
   const [selectedColKey, setSelectedColKey] = useState<ColumnKey>("name");
   const [lockedColKey, setLockedColKey] = useState<ColumnKey | null>("name");
 
+  // Task Detail Modal State (double click on task row)
+  const [isTaskDetailModalOpen, setIsTaskDetailModalOpen] = useState(false);
+  const [taskDetailModalTarget, setTaskDetailModalTarget] = useState<{ task: ProjectTask; index: number } | null>(null);
+  const [taskDetailForm, setTaskDetailForm] = useState<ProjectTask | null>(null);
+
   // Dynamic Column Widths & Resizing
   const [colWidths, setColWidths] = useState<Record<ColumnKey, number>>(() => {
     if (typeof window !== "undefined") {
@@ -976,10 +981,11 @@ export default function ProjectDetailPage() {
   };
 
 
-  // Helper to determine 3-level hierarchy: 1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task
-  const resolveTaskLevel = (task: ProjectTask): 'Phase' | 'Main task' | 'Sub task' => {
+  // Helper to determine 4-level hierarchy: 1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task, 1.1.1.1 -> Child task
+  const resolveTaskLevel = (task: ProjectTask): 'Phase' | 'Main task' | 'Sub task' | 'Child task' => {
     // 1. Primary rule: Explicit level property on task
     if (task.level === 'phase' || task.isHeader) return 'Phase';
+    if (task.level === 'child') return 'Child task';
     if (task.level === 'sub') return 'Sub task';
     if (task.level === 'main') return 'Main task';
 
@@ -987,18 +993,20 @@ export default function ProjectDetailPage() {
     if (task.taskIndex) {
       const clean = String(task.taskIndex).trim();
       const dots = (clean.match(/\./g) || []).length;
-      if (dots >= 2) return 'Sub task';
+      if (dots >= 3) return 'Child task';
+      if (dots === 2) return 'Sub task';
       if (dots === 1) return 'Main task';
       if (dots === 0 && (/^\d+$/.test(clean) || clean.toLowerCase().includes('phase'))) return 'Phase';
     }
     return 'Main task';
   };
 
-  // Re-indexing logic for 3 levels: Level 1 (1, 2), Level 2 (1.1, 1.2), Level 3 (1.1.1, 1.1.2)
+  // Re-indexing logic for 4 levels: Level 1 (1, 2), Level 2 (1.1, 1.2), Level 3 (1.1.1, 1.1.2), Level 4 (1.1.1.1, 1.1.1.2)
   const autoAssignTaskIndices = (tasks: ProjectTask[]): ProjectTask[] => {
     let phaseCount = 0;
     let mainCount = 0;
     let subCount = 0;
+    let childCount = 0;
 
     return tasks.map(task => {
       const lvl = resolveTaskLevel(task);
@@ -1006,6 +1014,7 @@ export default function ProjectDetailPage() {
         phaseCount++;
         mainCount = 0;
         subCount = 0;
+        childCount = 0;
         return { 
           ...task, 
           level: 'phase' as TaskLevel,
@@ -1016,6 +1025,7 @@ export default function ProjectDetailPage() {
       } else if (lvl === 'Main task') {
         mainCount++;
         subCount = 0;
+        childCount = 0;
         const curPhase = phaseCount > 0 ? phaseCount : 1;
         return { 
           ...task, 
@@ -1024,9 +1034,9 @@ export default function ProjectDetailPage() {
           taskIndex: `${curPhase}.${mainCount}`,
           phase: `Phase ${curPhase}` 
         };
-      } else {
-        // Sub task
+      } else if (lvl === 'Sub task') {
         subCount++;
+        childCount = 0;
         const curPhase = phaseCount > 0 ? phaseCount : 1;
         const curMain = mainCount > 0 ? mainCount : 1;
         return { 
@@ -1034,6 +1044,19 @@ export default function ProjectDetailPage() {
           level: 'sub' as TaskLevel,
           isHeader: false,
           taskIndex: `${curPhase}.${curMain}.${subCount}`,
+          phase: `Phase ${curPhase}` 
+        };
+      } else {
+        // Child task (Cấp 4)
+        childCount++;
+        const curPhase = phaseCount > 0 ? phaseCount : 1;
+        const curMain = mainCount > 0 ? mainCount : 1;
+        const curSub = subCount > 0 ? subCount : 1;
+        return { 
+          ...task, 
+          level: 'child' as TaskLevel,
+          isHeader: false,
+          taskIndex: `${curPhase}.${curMain}.${curSub}.${childCount}`,
           phase: `Phase ${curPhase}` 
         };
       }
@@ -1120,16 +1143,40 @@ export default function ProjectDetailPage() {
 
   const handleDeletePlanTask = (task: ProjectTask, idx: number) => {
     if (!project) return;
-    if (window.confirm(`Bạn có chắc chắn muốn xóa công việc "${task.title}"?`)) {
-      const newPlan = project.plan.filter((_, i) => i !== idx);
-      const reindexed = autoAssignTaskIndices(newPlan);
-      setProject(prev => prev ? { ...prev, plan: reindexed } : null);
-      updateProjectPlan(project.id, reindexed);
-      addDiaryEntry(project.id, {
-        author: "John D.",
-        content: `Đã xóa công việc: "${task.title}"`,
-        category: "Update"
-      });
+    const isPhase = resolveTaskLevel(task) === 'Phase' || task.isHeader;
+    if (isPhase) {
+      const childTasks = getSubTasksForHeader(project.plan, idx);
+      let confirmMsg = `Bạn có chắc chắn muốn xóa Giai đoạn (Phase) "${task.title || 'Phase'}"?`;
+      if (childTasks.length > 0) {
+        confirmMsg += `\nLưu ý: Giai đoạn này đang có ${childTasks.length} công việc trực thuộc. Toàn bộ các công việc này cũng sẽ bị xóa cùng với giai đoạn.`;
+      }
+      if (window.confirm(confirmMsg)) {
+        const deleteCount = 1 + childTasks.length;
+        const newPlan = [...project.plan];
+        newPlan.splice(idx, deleteCount);
+        const reindexed = autoAssignTaskIndices(newPlan);
+        const synced = syncPlanProgressHierarchy(reindexed);
+        setProject(prev => prev ? { ...prev, plan: synced } : null);
+        updateProjectPlan(project.id, synced);
+        addDiaryEntry(project.id, {
+          author: "John D.",
+          content: `Đã xóa giai đoạn: "${task.title || 'Phase'}"${childTasks.length > 0 ? ` kèm ${childTasks.length} công việc trực thuộc` : ''}`,
+          category: "Update"
+        });
+      }
+    } else {
+      if (window.confirm(`Bạn có chắc chắn muốn xóa công việc "${task.title || 'Công việc'}"?`)) {
+        const newPlan = project.plan.filter((_, i) => i !== idx);
+        const reindexed = autoAssignTaskIndices(newPlan);
+        const synced = syncPlanProgressHierarchy(reindexed);
+        setProject(prev => prev ? { ...prev, plan: synced } : null);
+        updateProjectPlan(project.id, synced);
+        addDiaryEntry(project.id, {
+          author: "John D.",
+          content: `Đã xóa công việc: "${task.title}"`,
+          category: "Update"
+        });
+      }
     }
   };
 
@@ -1209,13 +1256,71 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Task Detail Modal Handlers (double click on task row)
+  const handleOpenTaskDetailModal = (task: ProjectTask, index: number) => {
+    const lvl = task.level || (resolveTaskLevel(task) === 'Phase' ? 'phase' : resolveTaskLevel(task) === 'Sub task' ? 'sub' : resolveTaskLevel(task) === 'Child task' ? 'child' : 'main');
+    setTaskDetailModalTarget({ task, index });
+    setTaskDetailForm({ ...task, level: lvl });
+    setIsTaskDetailModalOpen(true);
+  };
+
+  const handleCloseTaskDetailModal = () => {
+    setIsTaskDetailModalOpen(false);
+    setTaskDetailModalTarget(null);
+    setTaskDetailForm(null);
+  };
+
+  const handleSaveTaskDetail = async () => {
+    if (!taskDetailModalTarget || !taskDetailForm) return;
+    const { index } = taskDetailModalTarget;
+
+    const updatedTask: ProjectTask = {
+      ...taskDetailForm,
+      isHeader: taskDetailForm.level === 'phase',
+    };
+
+    if (isEditingPlan) {
+      setTempPlan(prev => {
+        const next = [...prev];
+        next[index] = updatedTask;
+        return autoAssignTaskIndices(next);
+      });
+      handleCloseTaskDetailModal();
+    } else {
+      if (!project) return;
+      const nextPlan = [...project.plan];
+      nextPlan[index] = updatedTask;
+      const reindexed = autoAssignTaskIndices(nextPlan);
+      const synced = syncPlanProgressHierarchy(reindexed);
+      setProject(prev => prev ? { ...prev, plan: synced } : null);
+      await updateProjectPlanAsync(project.id, synced);
+      addDiaryEntry(project.id, {
+        author: "John D.",
+        content: `Cập nhật chi tiết công việc: "${updatedTask.title || updatedTask.taskIndex}"`,
+        category: "Update"
+      });
+      handleCloseTaskDetailModal();
+    }
+  };
+
+  const handleDeleteFromDetailModal = () => {
+    if (!taskDetailModalTarget || !project) return;
+    const { task, index } = taskDetailModalTarget;
+    handleCloseTaskDetailModal();
+    if (isEditingPlan) {
+      handleRemoveTempTask(index);
+    } else {
+      handleDeletePlanTask(task, index);
+    }
+  };
+
   const renderTaskDropdownMenu = () => (
     <>
       <div
         className="fixed inset-0 z-40"
         onClick={() => setIsTaskDropdownOpen(false)}
       />
-      <div className="absolute left-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+      <div className="absolute left-0 mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
         <div className="px-3 py-1.5 font-bold text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
           Chọn loại công việc
         </div>
@@ -1252,6 +1357,17 @@ export default function ProjectDetailPage() {
             <span className="text-[10px] text-slate-500">Công việc con (Cấp 3)</span>
           </div>
         </button>
+        <button
+          type="button"
+          onClick={() => handleAddTaskAtSelection('child')}
+          className="w-full text-left px-3 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 flex items-center gap-2.5 transition cursor-pointer border-t border-slate-100"
+        >
+          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block shrink-0" />
+          <div className="flex flex-col">
+            <span className="font-bold text-xs text-emerald-900">Task cấp 4 (Mục con)</span>
+            <span className="text-[10px] text-slate-500">Chi tiết dưới Sub task (Cấp 4)</span>
+          </div>
+        </button>
       </div>
     </>
   );
@@ -1274,6 +1390,15 @@ export default function ProjectDetailPage() {
 
   const handleRemoveTempTask = (index: number) => {
     setTempPlan(prev => {
+      const task = prev[index];
+      const isPhase = task && (resolveTaskLevel(task) === 'Phase' || task.isHeader);
+      if (isPhase) {
+        const childTasks = getSubTasksForHeader(prev, index);
+        const count = 1 + childTasks.length;
+        const next = [...prev];
+        next.splice(index, count);
+        return autoAssignTaskIndices(next);
+      }
       const nextPlan = prev.filter((_, idx) => idx !== index);
       return autoAssignTaskIndices(nextPlan);
     });
@@ -1625,7 +1750,8 @@ export default function ProjectDetailPage() {
         const isPhase = levelLabel === "Phase";
         const viStatus = statusMapVi[t.status] || t.status || "Chưa thực hiện";
         let displayTitle = t.title || "";
-        if (levelLabel === "Sub task") displayTitle = `    ↳ ${displayTitle}`;
+        if (levelLabel === "Child task") displayTitle = `      ↳↳ ${displayTitle}`;
+        else if (levelLabel === "Sub task") displayTitle = `    ↳ ${displayTitle}`;
         else if (levelLabel === "Main task") displayTitle = `  ${displayTitle}`;
 
         return [
@@ -1804,19 +1930,23 @@ export default function ProjectDetailPage() {
         const rawStatus = getCellVal(row, ["trạng thái", "status", "tình trạng", "trang thai"]);
         const notes = getCellVal(row, ["ghi chú", "notes", "note", "comment", "mô tả", "ghi chu"]);
 
-        // Determine 3 levels primarily from STT (1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task)
+        // Determine 4 levels primarily from STT (1 -> Phase, 1.1 -> Main task, 1.1.1 -> Sub task, 1.1.1.1 -> Child task)
         let taskLevel: TaskLevel = 'main';
 
         if (rawIndex) {
           const cleanIdx = rawIndex.trim();
           const dots = (cleanIdx.match(/\./g) || []).length;
-          if (dots >= 2) {
+          if (dots >= 3) {
+            taskLevel = 'child';
+          } else if (dots === 2) {
             taskLevel = 'sub';
           } else if (dots === 1) {
             taskLevel = 'main';
           } else if (dots === 0) {
             taskLevel = 'phase';
           }
+        } else if (title.includes("↳↳")) {
+          taskLevel = 'child';
         } else if (title.includes("↳")) {
           taskLevel = 'sub';
         } else if (cleanTitle.toLowerCase().startsWith("phase ") || cleanTitle.toLowerCase().startsWith("giai đoạn ")) {
@@ -1825,6 +1955,8 @@ export default function ProjectDetailPage() {
           const normType = rawType.toLowerCase().trim();
           if (normType.includes("phase") || normType.includes("giai đoạn") || normType === "header") {
             taskLevel = 'phase';
+          } else if (normType.includes("cấp 4") || normType.includes("mục con") || normType.includes("child")) {
+            taskLevel = 'child';
           } else if (normType.includes("sub") || normType.includes("con") || normType.includes("phụ")) {
             taskLevel = 'sub';
           } else if (normType.includes("main") || normType.includes("chính")) {
@@ -1967,11 +2099,41 @@ export default function ProjectDetailPage() {
       if (mainIndexStr && t.taskIndex) {
         const cleanSub = String(t.taskIndex).trim();
         if (cleanSub.startsWith(mainIndexStr + '.')) {
-          result.push(t);
-          continue;
+          if (lvl === 'Sub task') {
+            result.push(t);
+            continue;
+          }
         }
       }
       if (lvl === 'Sub task') {
+        result.push(t);
+      }
+    }
+    return result;
+  };
+
+  // 2b. Get child tasks (Level 4) belonging to a specific Sub task (Level 3)
+  const getChildrenForSubTask = (plan: ProjectTask[], subIdx: number): ProjectTask[] => {
+    const subTask = plan[subIdx];
+    if (!subTask) return [];
+    const result: ProjectTask[] = [];
+    const subIndexStr = String(subTask.taskIndex || '').trim();
+
+    for (let i = subIdx + 1; i < plan.length; i++) {
+      const t = plan[i];
+      const lvl = resolveTaskLevel(t);
+      if (lvl === 'Phase' || lvl === 'Main task' || lvl === 'Sub task' || t.isHeader) break;
+
+      if (subIndexStr && t.taskIndex) {
+        const cleanChild = String(t.taskIndex).trim();
+        if (cleanChild.startsWith(subIndexStr + '.')) {
+          if (lvl === 'Child task') {
+            result.push(t);
+            continue;
+          }
+        }
+      }
+      if (lvl === 'Child task') {
         result.push(t);
       }
     }
@@ -1988,10 +2150,30 @@ export default function ProjectDetailPage() {
     return Math.max(0, Math.min(100, p));
   };
 
+  // 2c. Compute stats for a Sub task: % của sub task = tỷ lệ % của child tasks (nếu có child tasks)
+  const getSubTaskStats = (plan: ProjectTask[], subIdx: number) => {
+    const task = plan[subIdx];
+    if (!task) return { hasChildren: false, progress: 0, children: [] as ProjectTask[] };
+    const children = getChildrenForSubTask(plan, subIdx);
+    if (children.length === 0) {
+      return {
+        hasChildren: false,
+        progress: normalizeTaskProgress(task),
+        children: []
+      };
+    }
+    const progress = Math.round(children.reduce((s, t) => s + normalizeTaskProgress(t), 0) / children.length);
+    return {
+      hasChildren: true,
+      progress,
+      children
+    };
+  };
+
   // 3. Compute stats for a Main task: % của main task = tỷ lệ % của sub task
   const getMainTaskStats = (plan: ProjectTask[], mainIdx: number) => {
     const task = plan[mainIdx];
-    if (!task) return { hasSubs: false, progress: 0, subs: [] };
+    if (!task) return { hasSubs: false, progress: 0, subs: [] as ProjectTask[] };
     const subs = getSubTasksForMainTask(plan, mainIdx);
     if (subs.length === 0) {
       return {
@@ -2000,7 +2182,12 @@ export default function ProjectDetailPage() {
         subs: []
       };
     }
-    const progress = Math.round(subs.reduce((s, t) => s + normalizeTaskProgress(t), 0) / subs.length);
+    const progress = Math.round(subs.reduce((s, t) => {
+      const tIdx = plan.indexOf(t);
+      const subStat = tIdx >= 0 ? getSubTaskStats(plan, tIdx) : { progress: normalizeTaskProgress(t) };
+      return s + subStat.progress;
+    }, 0) / subs.length);
+
     return {
       hasSubs: true,
       progress,
@@ -2071,15 +2258,41 @@ export default function ProjectDetailPage() {
         return { progress: stats.progress, isAuto: true };
       }
     }
+    if (lvl === 'Sub task') {
+      const stats = getSubTaskStats(plan, idx);
+      if (stats.hasChildren) {
+        return { progress: stats.progress, isAuto: true };
+      }
+    }
     return { progress: normalizeTaskProgress(task), isAuto: false };
   };
 
-  // 7. Synchronize progress and status across the 3-level hierarchy:
-  // Sub task -> Main task -> Phase
+  // 7. Synchronize progress and status across the 4-level hierarchy:
+  // Child task -> Sub task -> Main task -> Phase
   const syncPlanProgressHierarchy = (plan: ProjectTask[]): ProjectTask[] => {
     const updated = plan.map(t => ({ ...t }));
 
-    // Step A: Update Main tasks from Sub tasks
+    // Step A: Update Sub tasks from Child tasks (Level 4 -> Level 3)
+    for (let i = 0; i < updated.length; i++) {
+      const t = updated[i];
+      if (resolveTaskLevel(t) === 'Sub task' && !t.isHeader) {
+        const children = getChildrenForSubTask(updated, i);
+        if (children.length > 0) {
+          const avg = Math.round(children.reduce((s, c) => s + (c.progress || 0), 0) / children.length);
+          t.progress = avg;
+          if (avg === 100) {
+            t.status = 'Completed';
+            if (!t.actualEndDate) t.actualEndDate = new Date().toISOString().split('T')[0];
+          } else if (avg > 0) {
+            t.status = 'In Progress';
+          } else {
+            t.status = 'Todo';
+          }
+        }
+      }
+    }
+
+    // Step B: Update Main tasks from Sub tasks (Level 3 -> Level 2)
     for (let i = 0; i < updated.length; i++) {
       const t = updated[i];
       if (resolveTaskLevel(t) === 'Main task' && !t.isHeader) {
@@ -2099,7 +2312,7 @@ export default function ProjectDetailPage() {
       }
     }
 
-    // Step B: Update Phases from Main tasks
+    // Step C: Update Phases from Main tasks
     for (let i = 0; i < updated.length; i++) {
       const t = updated[i];
       if (resolveTaskLevel(t) === 'Phase' || t.isHeader) {
@@ -3371,6 +3584,7 @@ export default function ProjectDetailPage() {
                         const isPhase = level === 'Phase';
                         const isMain = level === 'Main task';
                         const isSub = level === 'Sub task';
+                        const isChild = level === 'Child task';
                         const rowKey = task.id || String(idx);
                         const isSelected = selectedTaskId === rowKey;
 
@@ -3403,9 +3617,11 @@ export default function ProjectDetailPage() {
                           <tr 
                             key={task.id || idx} 
                             onClick={() => setSelectedTaskId(rowKey)}
+                            onDoubleClick={() => handleOpenTaskDetailModal(task, idx)}
                             onDragOver={(e) => handleDragOver(e, idx)}
                             onDrop={() => handleDrop(idx)}
                             className={`border-b transition group cursor-pointer ${rowBg}`}
+                            title="Nhấp để chọn hàng - Nhấp đúp để mở form chi tiết công việc"
                           >
                             {/* Cột Hàng */}
                             <td 
@@ -3481,15 +3697,16 @@ export default function ProjectDetailPage() {
                                 isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                               }`}
                             >
-                              <div className={`space-y-1 ${isSub ? 'pl-4' : isMain ? 'pl-2' : ''}`}>
+                              <div className={`space-y-1 ${isChild ? 'pl-8' : isSub ? 'pl-4' : isMain ? 'pl-2' : ''}`}>
                                 <div className="flex items-center gap-1.5">
+                                  {isChild && <span className="text-emerald-500 font-mono text-xs font-bold select-none">↳↳</span>}
                                   {isSub && <span className="text-slate-400 font-mono text-xs select-none">↳</span>}
                                   <input
                                     type="text"
                                     value={task.title}
                                     onChange={(e) => handleTempTaskChange(idx, "title", e.target.value)}
-                                    className={`w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${isPhase ? "font-bold text-slate-900" : isMain ? "font-semibold text-slate-800" : "text-slate-700"}`}
-                                    placeholder={isPhase ? "Tên Phase (Giai đoạn)..." : isMain ? "Tên Main task (Công việc chính)..." : "Tên Sub task (Công việc con)..."}
+                                    className={`w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${isPhase ? "font-bold text-slate-900" : isMain ? "font-semibold text-slate-800" : isChild ? "text-slate-650 text-[11px]" : "text-slate-700"}`}
+                                    placeholder={isPhase ? "Tên Phase (Giai đoạn)..." : isMain ? "Tên Main task (Công việc chính)..." : isSub ? "Tên Sub task (Công việc con)..." : "Tên Task cấp 4 (Mục con)..."}
                                   />
                                 </div>
                               </div>
@@ -3766,6 +3983,7 @@ export default function ProjectDetailPage() {
                         const isPhase = level === 'Phase';
                         const isMain = level === 'Main task';
                         const isSub = level === 'Sub task';
+                        const isChild = level === 'Child task';
                         const rowKey = task.id || String(idx);
                         const isSelected = selectedTaskId === rowKey;
 
@@ -3798,9 +4016,11 @@ export default function ProjectDetailPage() {
                           <tr 
                             key={task.id || idx} 
                             onClick={() => setSelectedTaskId(rowKey)}
+                            onDoubleClick={() => handleOpenTaskDetailModal(task, idx)}
                             onDragOver={(e) => isMoveMode && handleMoveModeDragOver(e, idx)}
                             onDrop={(e) => isMoveMode && handleMoveModeDrop(idx)}
                             className={`border-b border-slate-200 transition group cursor-pointer ${rowBg}`}
+                            title="Nhấp để chọn hàng - Nhấp đúp để mở form chi tiết công việc"
                           >
                             {/* Cột Hàng (1, 2, 3...) */}
                             {isMoveMode ? (
@@ -3945,6 +4165,22 @@ export default function ProjectDetailPage() {
                                     placeholder="Nhập tên công việc chính..."
                                     className="w-full px-1.5 py-0.5 font-bold text-slate-800 text-xs bg-transparent hover:bg-slate-100/60 focus:bg-white focus:ring-1 focus:ring-blue-400 border border-transparent focus:border-blue-400 rounded outline-none transition placeholder:text-slate-400 placeholder:font-normal truncate focus:overflow-visible"
                                     title={task.title || "Bấm để đổi tên công việc chính"}
+                                  />
+                                </div>
+                              ) : isChild ? (
+                                <div className="pl-11 flex items-center gap-1.5 text-slate-650 font-medium text-xs whitespace-nowrap">
+                                  <span className="text-emerald-500 font-mono shrink-0 font-bold">↳↳</span>
+                                  <input
+                                    type="text"
+                                    defaultValue={task.title || ""}
+                                    key={`${task.id || idx}-title-${task.title || ''}`}
+                                    onBlur={(e) => handleInlineTaskTitleBlur(task, idx, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
+                                    placeholder="Nhập tên mục con (cấp 4)..."
+                                    className="w-full px-1.5 py-0.5 text-slate-650 text-xs bg-transparent hover:bg-slate-100/60 focus:bg-white focus:ring-1 focus:ring-emerald-400 border border-transparent focus:border-emerald-400 rounded outline-none transition placeholder:text-slate-400 placeholder:font-normal truncate focus:overflow-visible"
+                                    title={task.title || "Bấm để đổi tên mục con"}
                                   />
                                 </div>
                               ) : (
@@ -4242,19 +4478,17 @@ export default function ProjectDetailPage() {
                                 isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)] border-r-2 border-slate-300" : ""
                               }`}
                             >
-                              {!isPhase && (
-                                <div className="flex items-center justify-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeletePlanTask(task, idx)}
-                                    className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition cursor-pointer"
-                                    title="Xóa công việc này"
-                                  >
-                                    <Trash2 size={12} />
-                                    <span>Xóa</span>
-                                  </button>
-                                </div>
-                              )}
+                              <div className="flex items-center justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlanTask(task, idx)}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition cursor-pointer"
+                                  title={isPhase ? "Xóa giai đoạn (Phase) này" : "Xóa công việc này"}
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Xóa</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -4410,6 +4644,7 @@ export default function ProjectDetailPage() {
                       const isPhase = task.level === 'Phase' || isHeader;
                       const isMain = task.level === 'Main task';
                       const isSub = task.level === 'Sub task';
+                      const isChild = task.level === 'Child task';
                       const rowH = isPhase ? 42 : 36;
                       const displayProgress = task.displayProgress ?? 0;
 
@@ -4420,7 +4655,7 @@ export default function ProjectDetailPage() {
                           }`}
                           style={{ height: rowH }}
                         >
-                          {/* Task Name Column with 3-Level Indentation */}
+                          {/* Task Name Column with 4-Level Indentation */}
                           <div className="shrink-0 border-r border-slate-200 flex items-center px-3 overflow-hidden" style={{ width: 280 }}>
                             {isPhase ? (
                               <div className="flex items-center gap-1.5 min-w-0 font-bold text-blue-950 text-xs">
@@ -4430,6 +4665,11 @@ export default function ProjectDetailPage() {
                             ) : isMain ? (
                               <div className="flex items-center gap-1.5 min-w-0 pl-3 font-semibold text-slate-800 text-[11px]">
                                 <span className="text-slate-400 shrink-0 text-[10px]">&#x25AA;</span>
+                                <span className="truncate" title={task.title}>{task.title}</span>
+                              </div>
+                            ) : isChild ? (
+                              <div className="flex items-center gap-1.5 min-w-0 pl-9 text-slate-650 text-[11px]">
+                                <span className="text-emerald-500 font-bold shrink-0 text-xs">&#x21B3;&#x21B3;</span>
                                 <span className="truncate" title={task.title}>{task.title}</span>
                               </div>
                             ) : (
@@ -5144,6 +5384,289 @@ export default function ProjectDetailPage() {
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs transition cursor-pointer"
                 >
                   Lưu thay đổi SOW
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TASK DETAIL MODAL (Nhấp đúp chuột vào hàng để mở form chi tiết) */}
+      {isTaskDetailModalOpen && taskDetailForm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="relative bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                  <CheckSquare size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-800">Chi tiết công việc</h3>
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                      STT: {taskDetailForm.taskIndex || (taskDetailModalTarget?.index !== undefined ? `${taskDetailModalTarget.index + 1}` : '—')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">Xem và chỉnh sửa toàn diện thông tin công việc trong kế hoạch</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseTaskDetailModal}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-4 py-4 max-h-[75vh] overflow-y-auto px-0.5">
+              {/* Level & Phase */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Phân cấp công việc <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={taskDetailForm.level || 'main'}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, level: e.target.value as TaskLevel, isHeader: e.target.value === 'phase' } : null)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                  >
+                    <option value="phase">Phase (Giai đoạn - Cấp 1)</option>
+                    <option value="main">Main task (Công việc chính - Cấp 2)</option>
+                    <option value="sub">Sub task (Công việc con - Cấp 3)</option>
+                    <option value="child">Task cấp 4 (Mục con - Cấp 4)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Giai đoạn (Phase)
+                  </label>
+                  <input
+                    type="text"
+                    value={taskDetailForm.phase || ''}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, phase: e.target.value } : null)}
+                    placeholder="VD: Phase 1, Giai đoạn chuẩn bị..."
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Tên công việc <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={taskDetailForm.title || ''}
+                  onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, title: e.target.value } : null)}
+                  placeholder="Nhập tiêu đề / nội dung công việc..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Assignee (StaffSearchSelect) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Người thực hiện
+                </label>
+                <StaffSearchSelect
+                  mode="multiple"
+                  size="md"
+                  staffList={staffList}
+                  value={taskDetailForm.assignee || ''}
+                  outputFormat="string"
+                  placeholder="Chọn nhân sự thực hiện..."
+                  onChange={(val) => setTaskDetailForm(prev => prev ? { ...prev, assignee: (val as string) || '' } : null)}
+                />
+              </div>
+
+              {/* Planned Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Ngày bắt đầu (Kế hoạch)
+                  </label>
+                  <input
+                    type="date"
+                    value={taskDetailForm.startDate || ''}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, startDate: e.target.value } : null)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Ngày kết thúc (Kế hoạch)
+                  </label>
+                  <input
+                    type="date"
+                    value={taskDetailForm.endDate || ''}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, endDate: e.target.value } : null)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Actual Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Ngày bắt đầu thực tế
+                  </label>
+                  <input
+                    type="date"
+                    value={taskDetailForm.actualStartDate || ''}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, actualStartDate: e.target.value } : null)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Ngày kết thúc thực tế
+                  </label>
+                  <input
+                    type="date"
+                    value={taskDetailForm.actualEndDate || ''}
+                    onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, actualEndDate: e.target.value } : null)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Progress & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Tiến độ hoàn thành
+                    </label>
+                    <span className="text-xs font-mono font-bold text-blue-600">
+                      {taskDetailForm.progress ?? 0}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={taskDetailForm.progress ?? 0}
+                      onChange={(e) => {
+                        const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                        setTaskDetailForm(prev => {
+                          if (!prev) return null;
+                          const next = { ...prev, progress: val };
+                          if (val === 100) {
+                            next.status = 'Completed';
+                            if (!next.actualEndDate) next.actualEndDate = new Date().toISOString().split('T')[0];
+                          } else if (val > 0 && prev.status === 'Todo') {
+                            next.status = 'In Progress';
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-24 px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={taskDetailForm.progress ?? 0}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setTaskDetailForm(prev => {
+                          if (!prev) return null;
+                          const next = { ...prev, progress: val };
+                          if (val === 100) {
+                            next.status = 'Completed';
+                            if (!next.actualEndDate) next.actualEndDate = new Date().toISOString().split('T')[0];
+                          } else if (val > 0 && prev.status === 'Todo') {
+                            next.status = 'In Progress';
+                          }
+                          return next;
+                        });
+                      }}
+                      className="flex-1 accent-blue-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Trạng thái công việc
+                  </label>
+                  <select
+                    value={taskDetailForm.status || 'Todo'}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as ProjectTask["status"];
+                      setTaskDetailForm(prev => {
+                        if (!prev) return null;
+                        const next = { ...prev, status: newStatus };
+                        if (newStatus === 'Completed') {
+                          next.progress = 100;
+                          if (!next.actualEndDate) next.actualEndDate = new Date().toISOString().split('T')[0];
+                        }
+                        return next;
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <option value="Todo">Chưa thực hiện (Todo)</option>
+                    <option value="In Progress">Đang thực hiện (In Progress)</option>
+                    <option value="On Hold">Tạm hoãn (On Hold)</option>
+                    <option value="Completed">Hoàn thành (Completed)</option>
+                    <option value="Delayed">Chậm tiến độ (Delayed)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Ghi chú / Chi tiết mô tả
+                </label>
+                <textarea
+                  rows={3}
+                  value={taskDetailForm.notes || ''}
+                  onChange={(e) => setTaskDetailForm(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                  placeholder="Ghi chú chi tiết thêm về công việc này..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 gap-3">
+              <button
+                type="button"
+                onClick={handleDeleteFromDetailModal}
+                className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-semibold text-xs transition cursor-pointer flex items-center gap-1.5"
+                title="Xóa công việc này"
+              >
+                <Trash2 size={14} />
+                <span>Xóa công việc</span>
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCloseTaskDetailModal}
+                  className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTaskDetail}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs transition cursor-pointer shadow-sm hover:shadow"
+                >
+                  Lưu thay đổi
                 </button>
               </div>
             </div>
