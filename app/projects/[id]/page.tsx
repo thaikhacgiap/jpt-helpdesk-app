@@ -68,7 +68,8 @@ import {
   ArrowDown,
   GripVertical,
   Lock,
-  Unlock
+  Unlock,
+  RotateCcw
 } from "lucide-react";
 
 const TABLE_COLUMNS = [
@@ -87,6 +88,36 @@ const TABLE_COLUMNS = [
 ] as const;
 
 type ColumnKey = typeof TABLE_COLUMNS[number]["key"];
+
+const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
+  row: 64,
+  no: 56,
+  name: 280,
+  startDate: 112,
+  endDate: 112,
+  actualStartDate: 128,
+  actualEndDate: 128,
+  assignees: 140,
+  progress: 96,
+  status: 128,
+  notes: 160,
+  actions: 80,
+};
+
+const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
+  row: 48,
+  no: 44,
+  name: 140,
+  startDate: 80,
+  endDate: 80,
+  actualStartDate: 90,
+  actualEndDate: 90,
+  assignees: 90,
+  progress: 75,
+  status: 90,
+  notes: 90,
+  actions: 60,
+};
 
 // Helper functions for mock SOW data
 const getSowData = (project: Project) => {
@@ -483,16 +514,111 @@ export default function ProjectDetailPage() {
   const [selectedColKey, setSelectedColKey] = useState<ColumnKey>("name");
   const [lockedColKey, setLockedColKey] = useState<ColumnKey | null>("name");
 
+  // Dynamic Column Widths & Resizing
+  const [colWidths, setColWidths] = useState<Record<ColumnKey, number>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("jpt_project_plan_col_widths");
+        if (saved) {
+          return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(saved) };
+        }
+      } catch {}
+    }
+    return DEFAULT_COLUMN_WIDTHS;
+  });
+
+  const getColWidth = (key: ColumnKey): number => {
+    return colWidths[key] ?? DEFAULT_COLUMN_WIDTHS[key] ?? 100;
+  };
+
   const getColIndex = (key: ColumnKey) => TABLE_COLUMNS.findIndex(c => c.key === key);
 
   const getColLeftOffset = (key: ColumnKey): number => {
     let left = 0;
     for (const c of TABLE_COLUMNS) {
       if (c.key === key) break;
-      left += c.width;
+      left += getColWidth(c.key);
     }
     return left;
   };
+
+  const totalTableWidth = TABLE_COLUMNS.reduce((sum, c) => sum + getColWidth(c.key), 0);
+
+  const resizingRef = useRef<{
+    colKey: ColumnKey;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  const handleResizeMouseDown = (e: React.MouseEvent, key: ColumnKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    resizingRef.current = {
+      colKey: key,
+      startX: e.clientX,
+      startWidth: getColWidth(key),
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { colKey, startX, startWidth } = resizingRef.current;
+      const delta = moveEvent.clientX - startX;
+      const minW = MIN_COLUMN_WIDTHS[colKey] || 50;
+      const newWidth = Math.max(minW, Math.round(startWidth + delta));
+      setColWidths(prev => ({
+        ...prev,
+        [colKey]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizingRef.current) {
+        setColWidths(current => {
+          try {
+            localStorage.setItem("jpt_project_plan_col_widths", JSON.stringify(current));
+          } catch {}
+          return current;
+        });
+        resizingRef.current = null;
+      }
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const handleResetColumnWidths = () => {
+    setColWidths(DEFAULT_COLUMN_WIDTHS);
+    try {
+      localStorage.removeItem("jpt_project_plan_col_widths");
+    } catch {}
+  };
+
+  const renderColResizeHandle = (key: ColumnKey) => (
+    <div
+      onMouseDown={(e) => handleResizeMouseDown(e, key)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setColWidths(prev => {
+          const next = { ...prev, [key]: DEFAULT_COLUMN_WIDTHS[key] };
+          try { localStorage.setItem("jpt_project_plan_col_widths", JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-amber-400 active:bg-amber-500 z-40 transition-colors flex items-center justify-center select-none group/resizer"
+      title="Kéo chuột để chỉnh độ rộng cột (Nhấp đúp để đặt lại mặc định)"
+    >
+      <div className="w-[1.5px] h-3.5 bg-white/40 group-hover/resizer:bg-white rounded-full pointer-events-none" />
+    </div>
+  );
 
   const isColFrozen = (key: ColumnKey): boolean => {
     if (!lockedColKey) return false;
@@ -2853,6 +2979,18 @@ export default function ProjectDetailPage() {
                     </button>
                   )}
 
+                  {Object.keys(DEFAULT_COLUMN_WIDTHS).some(k => colWidths[k as ColumnKey] !== DEFAULT_COLUMN_WIDTHS[k as ColumnKey]) && (
+                    <button
+                      type="button"
+                      onClick={handleResetColumnWidths}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 hover:border-slate-400 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                      title="Đặt lại tất cả các cột về độ rộng mặc định ban đầu"
+                    >
+                      <RotateCcw size={12} className="text-slate-500" />
+                      <span>Đặt lại cột</span>
+                    </button>
+                  )}
+
                   <input
                     id="plan-import-file"
                     type="file"
@@ -2888,19 +3026,22 @@ export default function ProjectDetailPage() {
 
             {/* Plan Spreadsheet Table Container with Sticky Header & Scrollable Body */}
             <div className={`overflow-x-auto overflow-y-auto ${isHeaderHidden ? "h-[calc(100vh-125px)] min-h-[500px]" : "h-[calc(100vh-275px)] min-h-[420px]"} relative bg-white scrollbar-thin`}>
-              <table className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200">
+              <table 
+                style={{ minWidth: `${totalTableWidth}px`, width: "max-content", tableLayout: "fixed" }} 
+                className="w-full text-left border-separate border-spacing-0 text-xs border-l border-slate-200"
+              >
                 <thead className="select-none">
                   <tr className="bg-[#1E40AF] text-white">
                     {/* Cột Hàng */}
                     <th 
                       onClick={() => setSelectedColKey("row")}
                       style={{ 
-                        width: "64px", 
-                        minWidth: "64px", 
-                        maxWidth: "64px",
+                        width: `${getColWidth("row")}px`, 
+                        minWidth: `${getColWidth("row")}px`, 
+                        maxWidth: `${getColWidth("row")}px`,
                         left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("row") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "row" 
@@ -2909,24 +3050,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("row") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Hàng${isColFrozen("row") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Hàng${isColFrozen("row") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("row") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Hàng</span>
                       </div>
+                      {renderColResizeHandle("row")}
                     </th>
 
                     {/* Cột No */}
                     <th 
                       onClick={() => setSelectedColKey("no")}
                       style={{ 
-                        width: "56px", 
-                        minWidth: "56px", 
-                        maxWidth: "56px",
+                        width: `${getColWidth("no")}px`, 
+                        minWidth: `${getColWidth("no")}px`, 
+                        maxWidth: `${getColWidth("no")}px`,
                         left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("no") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "no" 
@@ -2935,23 +3077,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("no") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột No${isColFrozen("no") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột No${isColFrozen("no") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("no") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>No</span>
                       </div>
+                      {renderColResizeHandle("no")}
                     </th>
 
                     {/* Cột Công việc */}
                     <th 
                       onClick={() => setSelectedColKey("name")}
                       style={{ 
-                        width: "280px", 
-                        minWidth: "280px",
+                        width: `${getColWidth("name")}px`, 
+                        minWidth: `${getColWidth("name")}px`,
+                        maxWidth: `${getColWidth("name")}px`,
                         left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
                       }}
-                      className={`py-2 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-4 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("name") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "name" 
@@ -2960,24 +3104,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("name") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Công việc${isColFrozen("name") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Công việc${isColFrozen("name") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1.5">
                         {isColFrozen("name") && <Lock size={12} className="text-amber-300 shrink-0" />}
                         <span>Công việc</span>
                       </div>
+                      {renderColResizeHandle("name")}
                     </th>
 
                     {/* Cột Thời gian bắt đầu */}
                     <th 
                       onClick={() => setSelectedColKey("startDate")}
                       style={{ 
-                        width: "112px", 
-                        minWidth: "112px",
-                        maxWidth: "112px",
+                        width: `${getColWidth("startDate")}px`, 
+                        minWidth: `${getColWidth("startDate")}px`,
+                        maxWidth: `${getColWidth("startDate")}px`,
                         left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("startDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "startDate" 
@@ -2986,24 +3131,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("startDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Bắt đầu${isColFrozen("startDate") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Bắt đầu${isColFrozen("startDate") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("startDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Thời gian bắt đầu</span>
                       </div>
+                      {renderColResizeHandle("startDate")}
                     </th>
 
                     {/* Cột Thời gian kết thúc */}
                     <th 
                       onClick={() => setSelectedColKey("endDate")}
                       style={{ 
-                        width: "112px", 
-                        minWidth: "112px",
-                        maxWidth: "112px",
+                        width: `${getColWidth("endDate")}px`, 
+                        minWidth: `${getColWidth("endDate")}px`,
+                        maxWidth: `${getColWidth("endDate")}px`,
                         left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("endDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "endDate" 
@@ -3012,24 +3158,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("endDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Kết thúc${isColFrozen("endDate") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Kết thúc${isColFrozen("endDate") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("endDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Thời gian kết thúc</span>
                       </div>
+                      {renderColResizeHandle("endDate")}
                     </th>
 
                     {/* Cột Bắt đầu thực tế */}
                     <th 
                       onClick={() => setSelectedColKey("actualStartDate")}
                       style={{ 
-                        width: "128px", 
-                        minWidth: "128px",
-                        maxWidth: "128px",
+                        width: `${getColWidth("actualStartDate")}px`, 
+                        minWidth: `${getColWidth("actualStartDate")}px`,
+                        maxWidth: `${getColWidth("actualStartDate")}px`,
                         left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("actualStartDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "actualStartDate" 
@@ -3038,24 +3185,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("actualStartDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Bắt đầu TT${isColFrozen("actualStartDate") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Bắt đầu TT${isColFrozen("actualStartDate") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("actualStartDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Thời gian bắt đầu TT</span>
                       </div>
+                      {renderColResizeHandle("actualStartDate")}
                     </th>
 
                     {/* Cột Kết thúc thực tế */}
                     <th 
                       onClick={() => setSelectedColKey("actualEndDate")}
                       style={{ 
-                        width: "128px", 
-                        minWidth: "128px",
-                        maxWidth: "128px",
+                        width: `${getColWidth("actualEndDate")}px`, 
+                        minWidth: `${getColWidth("actualEndDate")}px`,
+                        maxWidth: `${getColWidth("actualEndDate")}px`,
                         left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("actualEndDate") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "actualEndDate" 
@@ -3064,23 +3212,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("actualEndDate") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Kết thúc TT${isColFrozen("actualEndDate") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Kết thúc TT${isColFrozen("actualEndDate") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("actualEndDate") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Thời gian kết thúc TT</span>
                       </div>
+                      {renderColResizeHandle("actualEndDate")}
                     </th>
 
                     {/* Cột Người thực hiện */}
                     <th 
                       onClick={() => setSelectedColKey("assignees")}
                       style={{ 
-                        width: "140px", 
-                        minWidth: "140px",
+                        width: `${getColWidth("assignees")}px`, 
+                        minWidth: `${getColWidth("assignees")}px`,
+                        maxWidth: `${getColWidth("assignees")}px`,
                         left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("assignees") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "assignees" 
@@ -3089,24 +3239,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("assignees") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Người thực hiện${isColFrozen("assignees") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Người thực hiện${isColFrozen("assignees") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("assignees") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Người thực hiện</span>
                       </div>
+                      {renderColResizeHandle("assignees")}
                     </th>
 
                     {/* Cột % Hoàn thành */}
                     <th 
                       onClick={() => setSelectedColKey("progress")}
                       style={{ 
-                        width: "96px", 
-                        minWidth: "96px",
-                        maxWidth: "96px",
+                        width: `${getColWidth("progress")}px`, 
+                        minWidth: `${getColWidth("progress")}px`,
+                        maxWidth: `${getColWidth("progress")}px`,
                         left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("progress") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "progress" 
@@ -3115,24 +3266,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("progress") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột % Hoàn thành${isColFrozen("progress") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột % Hoàn thành${isColFrozen("progress") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("progress") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>% Hoàn thành</span>
                       </div>
+                      {renderColResizeHandle("progress")}
                     </th>
 
                     {/* Cột Trạng thái */}
                     <th 
                       onClick={() => setSelectedColKey("status")}
                       style={{ 
-                        width: "128px", 
-                        minWidth: "128px",
-                        maxWidth: "128px",
+                        width: `${getColWidth("status")}px`, 
+                        minWidth: `${getColWidth("status")}px`,
+                        maxWidth: `${getColWidth("status")}px`,
                         left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("status") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "status" 
@@ -3141,23 +3293,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("status") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Trạng thái${isColFrozen("status") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Trạng thái${isColFrozen("status") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("status") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Trạng thái</span>
                       </div>
+                      {renderColResizeHandle("status")}
                     </th>
 
                     {/* Cột Ghi chú */}
                     <th 
                       onClick={() => setSelectedColKey("notes")}
                       style={{ 
-                        width: "160px", 
-                        minWidth: "160px",
+                        width: `${getColWidth("notes")}px`, 
+                        minWidth: `${getColWidth("notes")}px`,
+                        maxWidth: `${getColWidth("notes")}px`,
                         left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
                       }}
-                      className={`py-2 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-3 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("notes") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "notes" 
@@ -3166,24 +3320,25 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("notes") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Ghi chú${isColFrozen("notes") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Ghi chú${isColFrozen("notes") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("notes") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Ghi chú</span>
                       </div>
+                      {renderColResizeHandle("notes")}
                     </th>
 
                     {/* Cột Thao tác */}
                     <th 
                       onClick={() => setSelectedColKey("actions")}
                       style={{ 
-                        width: "80px", 
-                        minWidth: "80px",
-                        maxWidth: "80px",
+                        width: `${getColWidth("actions")}px`, 
+                        minWidth: `${getColWidth("actions")}px`,
+                        maxWidth: `${getColWidth("actions")}px`,
                         left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
                       }}
-                      className={`py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
+                      className={`relative group/col py-2 px-2 text-center font-bold border-b-2 border-blue-950 border-r border-blue-800/80 text-[13px] sm:text-sm whitespace-nowrap cursor-pointer transition select-none ${
                         isColFrozen("actions") ? "sticky top-0 z-30" : "sticky top-0 z-20"
                       } ${
                         selectedColKey === "actions" 
@@ -3192,12 +3347,13 @@ export default function ProjectDetailPage() {
                       } ${
                         isLastFrozenCol("actions") ? "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.25)] border-r-2 border-blue-950" : ""
                       }`}
-                      title={`Nhấp để chọn cột Thao tác${isColFrozen("actions") ? " (Đang khóa)" : ""}`}
+                      title={`Nhấp để chọn cột Thao tác${isColFrozen("actions") ? " (Đang khóa)" : ""} - Kéo cạnh phải để đổi độ rộng`}
                     >
                       <div className="flex items-center justify-center gap-1">
                         {isColFrozen("actions") && <Lock size={11} className="text-amber-300 shrink-0" />}
                         <span>Thao tác</span>
                       </div>
+                      {renderColResizeHandle("actions")}
                     </th>
                   </tr>
                 </thead>
@@ -3254,9 +3410,9 @@ export default function ProjectDetailPage() {
                             {/* Cột Hàng */}
                             <td 
                               style={{ 
-                                width: "64px", 
-                                minWidth: "64px", 
-                                maxWidth: "64px",
+                                width: `${getColWidth("row")}px`, 
+                                minWidth: `${getColWidth("row")}px`, 
+                                maxWidth: `${getColWidth("row")}px`,
                                 left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
                               }}
                               className={`p-1 text-center border-b border-r border-slate-200 select-none whitespace-nowrap ${
@@ -3275,9 +3431,9 @@ export default function ProjectDetailPage() {
                             {/* Cột No */}
                             <td 
                               style={{ 
-                                width: "56px", 
-                                minWidth: "56px", 
-                                maxWidth: "56px",
+                                width: `${getColWidth("no")}px`, 
+                                minWidth: `${getColWidth("no")}px`, 
+                                maxWidth: `${getColWidth("no")}px`,
                                 left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
                               }}
                               className={`p-1 text-center border-b border-r border-slate-200 select-none whitespace-nowrap ${
@@ -3314,8 +3470,9 @@ export default function ProjectDetailPage() {
                             {/* Công việc Input */}
                             <td 
                               style={{ 
-                                width: "280px", 
-                                minWidth: "280px", 
+                                width: `${getColWidth("name")}px`, 
+                                minWidth: `${getColWidth("name")}px`, 
+                                maxWidth: `${getColWidth("name")}px`,
                                 left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
                               }}
                               className={`p-1.5 border-b border-r border-slate-200 whitespace-nowrap ${
@@ -3341,9 +3498,9 @@ export default function ProjectDetailPage() {
                             {/* Start Date */}
                             <td 
                               style={{ 
-                                width: "112px", 
-                                minWidth: "112px", 
-                                maxWidth: "112px",
+                                width: `${getColWidth("startDate")}px`, 
+                                minWidth: `${getColWidth("startDate")}px`, 
+                                maxWidth: `${getColWidth("startDate")}px`,
                                 left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3367,9 +3524,9 @@ export default function ProjectDetailPage() {
                             {/* End Date */}
                             <td 
                               style={{ 
-                                width: "112px", 
-                                minWidth: "112px", 
-                                maxWidth: "112px",
+                                width: `${getColWidth("endDate")}px`, 
+                                minWidth: `${getColWidth("endDate")}px`, 
+                                maxWidth: `${getColWidth("endDate")}px`,
                                 left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3393,9 +3550,9 @@ export default function ProjectDetailPage() {
                             {/* Actual Start Date */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("actualStartDate")}px`, 
+                                minWidth: `${getColWidth("actualStartDate")}px`, 
+                                maxWidth: `${getColWidth("actualStartDate")}px`,
                                 left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3417,9 +3574,9 @@ export default function ProjectDetailPage() {
                             {/* Actual End Date */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("actualEndDate")}px`, 
+                                minWidth: `${getColWidth("actualEndDate")}px`, 
+                                maxWidth: `${getColWidth("actualEndDate")}px`, 
                                 left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3443,8 +3600,9 @@ export default function ProjectDetailPage() {
                             {/* Assignee - multi select from staff */}
                             <td 
                               style={{ 
-                                width: "140px", 
-                                minWidth: "140px", 
+                                width: `${getColWidth("assignees")}px`, 
+                                minWidth: `${getColWidth("assignees")}px`, 
+                                maxWidth: `${getColWidth("assignees")}px`, 
                                 left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3480,9 +3638,9 @@ export default function ProjectDetailPage() {
                             {/* Progress % */}
                             <td 
                               style={{ 
-                                width: "96px", 
-                                minWidth: "96px", 
-                                maxWidth: "96px",
+                                width: `${getColWidth("progress")}px`, 
+                                minWidth: `${getColWidth("progress")}px`, 
+                                maxWidth: `${getColWidth("progress")}px`, 
                                 left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3522,9 +3680,9 @@ export default function ProjectDetailPage() {
                             {/* Status */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("status")}px`, 
+                                minWidth: `${getColWidth("status")}px`, 
+                                maxWidth: `${getColWidth("status")}px`, 
                                 left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap text-center ${
@@ -3547,8 +3705,9 @@ export default function ProjectDetailPage() {
                             {/* Notes */}
                             <td 
                               style={{ 
-                                width: "160px", 
-                                minWidth: "160px", 
+                                width: `${getColWidth("notes")}px`, 
+                                minWidth: `${getColWidth("notes")}px`, 
+                                maxWidth: `${getColWidth("notes")}px`, 
                                 left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 whitespace-nowrap ${
@@ -3569,9 +3728,9 @@ export default function ProjectDetailPage() {
                             {/* Delete Button */}
                             <td 
                               style={{ 
-                                width: "80px", 
-                                minWidth: "80px", 
-                                maxWidth: "80px",
+                                width: `${getColWidth("actions")}px`, 
+                                minWidth: `${getColWidth("actions")}px`, 
+                                maxWidth: `${getColWidth("actions")}px`, 
                                 left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
                               }}
                               className={`p-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
@@ -3647,9 +3806,9 @@ export default function ProjectDetailPage() {
                             {isMoveMode ? (
                               <td 
                                 style={{ 
-                                  width: "64px", 
-                                  minWidth: "64px", 
-                                  maxWidth: "64px",
+                                  width: `${getColWidth("row")}px`, 
+                                  minWidth: `${getColWidth("row")}px`, 
+                                  maxWidth: `${getColWidth("row")}px`, 
                                   left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
                                 }}
                                 className={`py-0.5 px-1 text-center border-b border-r border-slate-200 whitespace-nowrap select-none ${
@@ -3697,9 +3856,9 @@ export default function ProjectDetailPage() {
                             ) : (
                               <td 
                                 style={{ 
-                                  width: "64px", 
-                                  minWidth: "64px", 
-                                  maxWidth: "64px",
+                                  width: `${getColWidth("row")}px`, 
+                                  minWidth: `${getColWidth("row")}px`, 
+                                  maxWidth: `${getColWidth("row")}px`, 
                                   left: isColFrozen("row") ? `${getColLeftOffset("row")}px` : undefined 
                                 }}
                                 className={`py-1 px-2 text-center font-mono font-bold text-slate-500 border-b border-r border-slate-200 whitespace-nowrap text-xs ${
@@ -3715,9 +3874,9 @@ export default function ProjectDetailPage() {
                             {/* Cột No (1, 1.1, 1.1.1...) */}
                             <td 
                               style={{ 
-                                width: "56px", 
-                                minWidth: "56px", 
-                                maxWidth: "56px",
+                                width: `${getColWidth("no")}px`, 
+                                minWidth: `${getColWidth("no")}px`, 
+                                maxWidth: `${getColWidth("no")}px`, 
                                 left: isColFrozen("no") ? `${getColLeftOffset("no")}px` : undefined 
                               }}
                               className={`py-1 px-2 text-center font-mono font-bold text-slate-700 border-b border-r border-slate-200 whitespace-nowrap ${
@@ -3749,8 +3908,9 @@ export default function ProjectDetailPage() {
                             {/* Công việc */}
                             <td 
                               style={{ 
-                                width: "280px", 
-                                minWidth: "280px", 
+                                width: `${getColWidth("name")}px`, 
+                                minWidth: `${getColWidth("name")}px`, 
+                                maxWidth: `${getColWidth("name")}px`, 
                                 left: isColFrozen("name") ? `${getColLeftOffset("name")}px` : undefined 
                               }}
                               className={`py-1 px-3 border-b border-r border-slate-200 whitespace-nowrap ${
@@ -3809,9 +3969,9 @@ export default function ProjectDetailPage() {
                             {/* Start Date */}
                             <td 
                               style={{ 
-                                width: "112px", 
-                                minWidth: "112px", 
-                                maxWidth: "112px",
+                                width: `${getColWidth("startDate")}px`, 
+                                minWidth: `${getColWidth("startDate")}px`, 
+                                maxWidth: `${getColWidth("startDate")}px`, 
                                 left: isColFrozen("startDate") ? `${getColLeftOffset("startDate")}px` : undefined 
                               }}
                               className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
@@ -3835,9 +3995,9 @@ export default function ProjectDetailPage() {
                             {/* End Date */}
                             <td 
                               style={{ 
-                                width: "112px", 
-                                minWidth: "112px", 
-                                maxWidth: "112px",
+                                width: `${getColWidth("endDate")}px`, 
+                                minWidth: `${getColWidth("endDate")}px`, 
+                                maxWidth: `${getColWidth("endDate")}px`, 
                                 left: isColFrozen("endDate") ? `${getColLeftOffset("endDate")}px` : undefined 
                               }}
                               className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
@@ -3861,9 +4021,9 @@ export default function ProjectDetailPage() {
                             {/* Actual Start Date */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("actualStartDate")}px`, 
+                                minWidth: `${getColWidth("actualStartDate")}px`, 
+                                maxWidth: `${getColWidth("actualStartDate")}px`, 
                                 left: isColFrozen("actualStartDate") ? `${getColLeftOffset("actualStartDate")}px` : undefined 
                               }}
                               className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
@@ -3885,9 +4045,9 @@ export default function ProjectDetailPage() {
                             {/* Actual End Date - phase: latest when ALL tasks done */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("actualEndDate")}px`, 
+                                minWidth: `${getColWidth("actualEndDate")}px`, 
+                                maxWidth: `${getColWidth("actualEndDate")}px`, 
                                 left: isColFrozen("actualEndDate") ? `${getColLeftOffset("actualEndDate")}px` : undefined 
                               }}
                               className={`py-1 px-1.5 border-b border-r border-slate-200 text-slate-650 font-medium text-center whitespace-nowrap ${
@@ -3909,8 +4069,9 @@ export default function ProjectDetailPage() {
                             {/* Assignee - inline click-to-edit via StaffSearchSelect */}
                             <td 
                               style={{ 
-                                width: "140px", 
-                                minWidth: "140px", 
+                                width: `${getColWidth("assignees")}px`, 
+                                minWidth: `${getColWidth("assignees")}px`, 
+                                maxWidth: `${getColWidth("assignees")}px`, 
                                 left: isColFrozen("assignees") ? `${getColLeftOffset("assignees")}px` : undefined 
                               }}
                               className={`py-0.5 px-1.5 border-b border-r border-slate-200 text-center whitespace-nowrap ${
@@ -3945,9 +4106,9 @@ export default function ProjectDetailPage() {
                             {/* Progress */}
                             <td 
                               style={{ 
-                                width: "96px", 
-                                minWidth: "96px", 
-                                maxWidth: "96px",
+                                width: `${getColWidth("progress")}px`, 
+                                minWidth: `${getColWidth("progress")}px`, 
+                                maxWidth: `${getColWidth("progress")}px`, 
                                 left: isColFrozen("progress") ? `${getColLeftOffset("progress")}px` : undefined 
                               }}
                               className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
@@ -3991,9 +4152,9 @@ export default function ProjectDetailPage() {
                             {/* Status */}
                             <td 
                               style={{ 
-                                width: "128px", 
-                                minWidth: "128px", 
-                                maxWidth: "128px",
+                                width: `${getColWidth("status")}px`, 
+                                minWidth: `${getColWidth("status")}px`, 
+                                maxWidth: `${getColWidth("status")}px`, 
                                 left: isColFrozen("status") ? `${getColLeftOffset("status")}px` : undefined 
                               }}
                               className={`py-0.5 px-1 border-b border-r border-slate-200 text-center whitespace-nowrap ${
@@ -4040,8 +4201,9 @@ export default function ProjectDetailPage() {
                             {/* Notes - Bấm để viết trực tiếp */}
                             <td 
                               style={{ 
-                                width: "160px", 
-                                minWidth: "160px", 
+                                width: `${getColWidth("notes")}px`, 
+                                minWidth: `${getColWidth("notes")}px`, 
+                                maxWidth: `${getColWidth("notes")}px`, 
                                 left: isColFrozen("notes") ? `${getColLeftOffset("notes")}px` : undefined 
                               }}
                               className={`py-0.5 px-2 border-b border-r border-slate-200 whitespace-nowrap min-w-[140px] max-w-[200px] ${
@@ -4066,12 +4228,12 @@ export default function ProjectDetailPage() {
                               />
                             </td>
 
-                            {/* Action column (Sửa & Xóa buttons) */}
+                            {/* Action column (Xóa button) */}
                             <td 
                               style={{ 
-                                width: "80px", 
-                                minWidth: "80px", 
-                                maxWidth: "80px", 
+                                width: `${getColWidth("actions")}px`, 
+                                minWidth: `${getColWidth("actions")}px`, 
+                                maxWidth: `${getColWidth("actions")}px`, 
                                 left: isColFrozen("actions") ? `${getColLeftOffset("actions")}px` : undefined 
                               }}
                               className={`py-1 px-2 border-b border-r border-slate-200 text-center whitespace-nowrap ${
@@ -4081,21 +4243,11 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {!isPhase && (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={handleStartEditPlan}
-                                    className="flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
-                                    title="Chỉnh sửa toàn bộ kế hoạch"
-                                  >
-                                    <Edit size={12} />
-                                    <span>Sửa</span>
-                                  </button>
-                                  <span className="text-slate-300 select-none">|</span>
+                                <div className="flex items-center justify-center">
                                   <button
                                     type="button"
                                     onClick={() => handleDeletePlanTask(task, idx)}
-                                    className="flex items-center gap-0.5 text-[11px] font-semibold text-red-500 hover:text-red-700 transition cursor-pointer"
+                                    className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition cursor-pointer"
                                     title="Xóa công việc này"
                                   >
                                     <Trash2 size={12} />
