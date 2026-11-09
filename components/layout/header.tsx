@@ -21,6 +21,7 @@ interface HeaderProps {
   activeTab?: string;
   setActiveTab?: (id: string) => void;
   navTabs?: NavTabItem[];
+  className?: string;
 }
 
 const getIconForTitle = (title: string) => {
@@ -50,7 +51,7 @@ export default function Header({
   const pathname = usePathname();
 
   return (
-    <div className="flex items-center justify-between gap-3 mb-6 bg-gradient-to-r from-teal-800/90 via-teal-900/95 to-slate-900/95 backdrop-blur-md border border-teal-700/30 text-white py-3 px-5 rounded-2xl shadow-[0_4px_20px_rgba(13,148,136,0.15)] relative overflow-hidden">
+    <div className={`flex items-center justify-between gap-3 ${className || "mb-6"} bg-gradient-to-r from-teal-800/90 via-teal-900/95 to-slate-900/95 backdrop-blur-md border border-teal-700/30 text-white py-2.5 px-4 rounded-xl shadow-[0_4px_20px_rgba(13,148,136,0.15)] relative overflow-hidden shrink-0`}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_-20%,rgba(20,184,166,0.15),transparent_60%)] pointer-events-none" />
       
       {/* LEFT TITLE BLOCK */}

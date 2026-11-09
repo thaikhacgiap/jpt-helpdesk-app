@@ -1412,61 +1412,63 @@ export default function MaintenancePage() {
 
   return (
     <MainLayout>
-      <Header 
-        title="Kế Hoạch Bảo Trì" 
-        description="Quản lý kế hoạch bảo trì định kỳ và hợp đồng dịch vụ" 
-        tabs={[
-          { id: "list", label: "Danh sách", icon: ClipboardList },
-          { id: "timeline", label: "Timeline", icon: Clock },
-        ]}
-        activeTab={activeTab}
-        setActiveTab={(id: any) => setActiveTab(id)}
-      />
+      <div className="h-[calc(100vh-28px)] flex flex-col overflow-hidden">
+        <Header 
+          title="Kế Hoạch Bảo Trì" 
+          description="Quản lý kế hoạch bảo trì định kỳ và hợp đồng dịch vụ" 
+          tabs={[
+            { id: "list", label: "Danh sách", icon: ClipboardList },
+            { id: "timeline", label: "Timeline", icon: Clock },
+          ]}
+          activeTab={activeTab}
+          setActiveTab={(id: any) => setActiveTab(id)}
+          className="mb-2 shrink-0"
+        />
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleCreateOpen}
-            className="h-10 flex items-center gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition shadow-sm cursor-pointer shrink-0"
-          >
-            <Plus size={16} />
-            Thêm kế hoạch
-          </button>
-          <div className="relative">
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Tìm kiếm..."
-              className="h-10 w-80 rounded-xl border border-slate-200 bg-white pl-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-            />
-            <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between mb-2 shrink-0 gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={handleCreateOpen}
+              className="h-9 flex items-center gap-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition shadow-xs cursor-pointer shrink-0"
+            >
+              <Plus size={15} />
+              Thêm kế hoạch
+            </button>
+            <div className="relative">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Tìm kiếm..."
+                className="h-9 w-56 sm:w-64 rounded-lg border border-slate-200 bg-white pl-3.5 pr-8 text-xs outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+              />
+              <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
 
           {/* Status Multi-Select Filter */}
           <div className="relative" ref={statusDropdownRef}>
             <button
               type="button"
               onClick={() => setIsStatusDropdownOpen(prev => !prev)}
-              className={`h-10 px-3.5 border rounded-xl text-sm bg-white flex items-center gap-2 shadow-sm transition cursor-pointer select-none ${
+              className={`h-9 px-3 border rounded-lg text-xs bg-white flex items-center gap-1.5 shadow-2xs transition cursor-pointer select-none ${
                 statusFilter.length > 0
                   ? "border-blue-400 ring-2 ring-blue-500/10 font-medium text-blue-900"
                   : "border-slate-200 text-slate-700 hover:border-slate-300"
               }`}
             >
-              <Filter size={14} className={statusFilter.length > 0 ? "text-blue-600" : "text-slate-400"} />
+              <Filter size={13} className={statusFilter.length > 0 ? "text-blue-600" : "text-slate-400"} />
               {statusFilter.length === 0 ? (
                 <span>Tất cả tình trạng</span>
               ) : statusFilter.length === 1 ? (
-                <div className="flex items-center gap-1.5">
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATUS_OPTIONS.find(o => o.key === statusFilter[0])?.badgeClass}`}>
+                <div className="flex items-center gap-1">
+                  <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold ${STATUS_OPTIONS.find(o => o.key === statusFilter[0])?.badgeClass}`}>
                     {STATUS_OPTIONS.find(o => o.key === statusFilter[0])?.label}
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <span>Tình trạng</span>
-                  <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white leading-none">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-600 text-white leading-none">
                     {statusFilter.length}
                   </span>
                 </div>
@@ -1477,13 +1479,13 @@ export default function MaintenancePage() {
                     e.stopPropagation();
                     setStatusFilter([]);
                   }}
-                  className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                  className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 cursor-pointer ml-0.5"
                   title="Xóa chọn tình trạng"
                 >
-                  <X size={13} />
+                  <X size={12} />
                 </span>
               ) : (
-                <ChevronDown size={14} className={`text-slate-400 transition-transform ${isStatusDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={13} className={`text-slate-400 transition-transform ${isStatusDropdownOpen ? "rotate-180" : ""}`} />
               )}
             </button>
 
@@ -1543,7 +1545,7 @@ export default function MaintenancePage() {
           </div>
 
           {/* Customer Filter */}
-          <div className="w-56 sm:w-64">
+          <div className="w-52 sm:w-60">
             <CustomerSearchSelect
               value={customerFilter}
               onChange={(val) => setCustomerFilter(val || "All")}
@@ -1552,6 +1554,7 @@ export default function MaintenancePage() {
               allValue="All"
               allLabel="Tất cả khách hàng"
               placeholder="Tất cả khách hàng"
+              isSmall={true}
             />
           </div>
 
@@ -1563,29 +1566,29 @@ export default function MaintenancePage() {
                 setCustomerFilter("All");
                 setSearch("");
               }}
-              className="h-10 px-3 flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl border border-red-200 transition cursor-pointer"
+              className="h-9 px-2.5 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition cursor-pointer"
               title="Xóa tất cả bộ lọc"
             >
-              <X size={14} />
-              <span>Xóa bộ lọc</span>
+              <X size={13} />
+              <span>Xóa lọc</span>
             </button>
           )}
         </div>
 
         {/* Right toolbar controls */}
         {activeTab === "list" && (
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
             {/* Template Selector Dropdown */}
             <div className="relative" ref={templateDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
-                className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+                className="h-9 px-2.5 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
                 title="Chọn mẫu hiển thị (Template)"
               >
                 <Layout size={13} className="text-blue-600" />
                 <span className="font-semibold text-slate-800">Mẫu:</span>
-                <span className="max-w-[120px] truncate text-blue-700">{activeTemplate?.name || "Mặc định"}</span>
+                <span className="max-w-[100px] truncate text-blue-700">{activeTemplate?.name || "Mặc định"}</span>
                 <ChevronDown size={13} className="text-slate-400" />
               </button>
 
@@ -1638,7 +1641,7 @@ export default function MaintenancePage() {
               <button
                 type="button"
                 onClick={() => setIsQuickVisDropdownOpen(!isQuickVisDropdownOpen)}
-                className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+                className="h-9 px-2.5 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
                 title="Ẩn / Hiện nhanh các cột"
               >
                 <Eye size={13} className="text-slate-500" />
@@ -1728,7 +1731,7 @@ export default function MaintenancePage() {
             <button
               type="button"
               onClick={() => setIsConfigModalOpen(true)}
-              className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+              className="h-9 px-2.5 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
               title="Tùy chỉnh thứ tự, ẩn hiện cột và quản lý template"
             >
               <SlidersHorizontal size={13} className="text-slate-500" />
@@ -1738,7 +1741,7 @@ export default function MaintenancePage() {
             {/* Reset Column Widths */}
             <button
               onClick={handleResetDefault}
-              className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 bg-white shadow-xs transition cursor-pointer"
+              className="h-9 px-2.5 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 bg-white shadow-xs transition cursor-pointer"
               title="Khôi phục thứ tự và độ rộng cột mặc định"
             >
               <RotateCcw size={13} />
@@ -1748,17 +1751,19 @@ export default function MaintenancePage() {
         )}
       </div>
 
-      {/* Table */}
-      {activeTab === "list" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div 
-            ref={scrollContainerRef}
-            className="table-scroll overflow-x-auto overflow-y-auto max-h-[calc(100vh-235px)] min-h-[350px] relative custom-scrollbar"
-          >
-            <table 
-              style={{ width: `${totalTableWidth}px`, minWidth: `${totalTableWidth}px`, tableLayout: "fixed" }}
-              className="text-sm table-fixed border-collapse"
+      {/* Views Content Container */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Table */}
+        {activeTab === "list" && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+            <div 
+              ref={scrollContainerRef}
+              className="table-scroll overflow-x-auto overflow-y-auto flex-1 min-h-0 relative custom-scrollbar"
             >
+              <table 
+                style={{ minWidth: `${totalTableWidth}px` }}
+                className="w-full min-w-full text-sm table-fixed border-collapse"
+              >
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <tr className="text-xs text-slate-500 font-medium text-left">
                   {/* Dynamic Draggable & Resizable Column Headers */}
@@ -2052,72 +2057,13 @@ export default function MaintenancePage() {
 
       {/* Timeline View */}
       {activeTab === "timeline" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden flex flex-col gap-4">
-          {/* 3-card Statistics Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Card 1: Kỳ đang chạy hiện tại */}
-            <div className="bg-gradient-to-br from-orange-50/80 to-amber-50/50 border border-orange-200/90 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                <Clock size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold text-orange-800 uppercase tracking-wide truncate">
-                  Kỳ đang chạy hiện tại
-                </div>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-2xl font-black text-orange-950">{timelineStats.ongoingCount}</span>
-                  <span className="text-xs font-semibold text-orange-700">kỳ</span>
-                </div>
-                <div className="text-[11px] text-orange-700/80 truncate">
-                  Đang trong tiến độ thực hiện bảo trì
-                </div>
-              </div>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 overflow-hidden flex flex-col flex-1 min-h-0 gap-2">
+          {/* Compact Top Bar: Title + Scale switch + Columns dropdown + Stats badges + Legend */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 shrink-0">
+            {/* Left: Title + Scale switch + Columns dropdown */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm whitespace-nowrap">Timeline Kế Hoạch</span>
 
-            {/* Card 2: Chưa thực hiện tại ngày hiện tại */}
-            <div className="bg-gradient-to-br from-slate-50 to-sky-50/50 border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
-              <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-                <Calendar size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide truncate">
-                  Chưa thực hiện (Kế hoạch)
-                </div>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-2xl font-black text-slate-800">{timelineStats.upcomingPlannedCount}</span>
-                  <span className="text-xs font-semibold text-slate-500">kỳ</span>
-                </div>
-                <div className="text-[11px] text-slate-500 truncate">
-                  Kỳ kế hoạch dự kiến tới ngày hiện tại
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: Quá hạn chưa hoàn thành */}
-            <div className="bg-gradient-to-br from-rose-50/80 to-red-50/50 border border-rose-200/90 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
-              <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <AlertTriangle size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wide truncate">
-                  Quá hạn chưa hoàn thành
-                </div>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-2xl font-black text-rose-950">{timelineStats.overdueCount}</span>
-                  <span className="text-xs font-semibold text-rose-700">kỳ</span>
-                </div>
-                <div className="text-[11px] text-rose-700/80 truncate">
-                  Đã quá hạn kết thúc kỳ nhưng chưa hoàn tất
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Legend and header toolbar */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <h3 className="font-bold text-slate-800 text-base">Timeline Kế Hoạch Bảo Trì</h3>
-              
               {/* Scale switch */}
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 gap-0.5">
                 {[
@@ -2128,9 +2074,9 @@ export default function MaintenancePage() {
                   <button
                     key={scale.id}
                     onClick={() => setTimeScale(scale.id as any)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                    className={`px-2 py-0.5 rounded text-xs font-semibold transition cursor-pointer ${
                       timeScale === scale.id
-                        ? "bg-white text-slate-800 shadow-sm"
+                        ? "bg-white text-slate-800 shadow-xs"
                         : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
                     }`}
                   >
@@ -2144,12 +2090,12 @@ export default function MaintenancePage() {
                 <button
                   type="button"
                   onClick={() => setIsTimelineColDropdownOpen(!isTimelineColDropdownOpen)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition cursor-pointer"
                   title="Ẩn / Hiện cột thông tin"
                 >
-                  <SlidersHorizontal size={13} className="text-slate-500" />
+                  <SlidersHorizontal size={12} className="text-slate-500" />
                   <span>Cột thông tin</span>
-                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${isTimelineColDropdownOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown size={12} className={`text-slate-400 transition-transform ${isTimelineColDropdownOpen ? "rotate-180" : ""}`} />
                 </button>
 
                 {isTimelineColDropdownOpen && (
@@ -2197,31 +2143,70 @@ export default function MaintenancePage() {
               </div>
             </div>
 
-            {/* Chú thích */}
-            <div className="flex flex-wrap items-center gap-4 text-xs">
-              <span className="font-semibold text-slate-500">Chú thích:</span>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-emerald-100 border border-emerald-300" />
-                <span className="text-slate-600">Done (Hoàn thành)</span>
+            {/* Center: 3 Compact Stats Badges */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Badge 1: Đang chạy */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-900 text-xs font-medium shadow-2xs" 
+                title="Kỳ bảo trì đang trong tiến độ thực hiện"
+              >
+                <Clock size={13} className="text-orange-600 shrink-0" />
+                <span>Đang chạy:</span>
+                <span className="px-1.5 py-0.2 rounded bg-orange-500 text-white text-[11px] font-bold leading-none">
+                  {timelineStats.ongoingCount}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-orange-100 border border-orange-300" />
-                <span className="text-slate-600">On-going (Đang thực hiện)</span>
+
+              {/* Badge 2: Kế hoạch */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-900 text-xs font-medium shadow-2xs" 
+                title="Kỳ bảo trì kế hoạch dự kiến tới ngày hiện tại"
+              >
+                <Calendar size={13} className="text-sky-600 shrink-0" />
+                <span>Kế hoạch:</span>
+                <span className="px-1.5 py-0.2 rounded bg-sky-600 text-white text-[11px] font-bold leading-none">
+                  {timelineStats.upcomingPlannedCount}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300" />
-                <span className="text-slate-600">Planing (Chưa thực hiện)</span>
+
+              {/* Badge 3: Quá hạn */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium shadow-2xs" 
+                title="Đã quá hạn kết thúc kỳ nhưng chưa hoàn thành"
+              >
+                <AlertTriangle size={13} className="text-rose-600 shrink-0" />
+                <span>Quá hạn:</span>
+                <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[11px] font-bold leading-none">
+                  {timelineStats.overdueCount}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-purple-100 border border-purple-300" />
-                <span className="text-slate-600">Hold (Tạm ngưng)</span>
+            </div>
+
+            {/* Right: Legend */}
+            <div className="flex items-center gap-2.5 text-[11px]">
+              <span className="font-semibold text-slate-400 hidden xl:inline">Chú thích:</span>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-400" />
+                <span className="text-slate-600">Done</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-orange-100 border border-orange-400" />
+                <span className="text-slate-600">On-going</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-400" />
+                <span className="text-slate-600">Planing</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-purple-100 border border-purple-400" />
+                <span className="text-slate-600">Hold</span>
               </div>
             </div>
           </div>
 
           <div 
             ref={timelineScrollRef} 
-            className="relative table-scroll overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[350px] custom-scrollbar border border-slate-200 rounded-xl shadow-xs"
+            className="table-scroll flex-1 min-h-0 overflow-x-auto overflow-y-auto relative custom-scrollbar border border-slate-200 rounded-lg shadow-2xs"
           >
             <div className={`relative ${
               timeScale === "month" ? "min-w-[1800px]" : 
@@ -2353,6 +2338,8 @@ export default function MaintenancePage() {
           </div>
         </div>
       )}
+        </div>
+      </div>
 
       {/* Modal */}
       {isModalOpen && (
