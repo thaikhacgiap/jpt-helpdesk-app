@@ -5,12 +5,24 @@ import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2, ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User, ChevronDown, Check } from "lucide-react";
+import {
+  Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2,
+  ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User, ChevronDown, Check,
+  GripVertical, SlidersHorizontal, Layout, Eye, EyeOff, Sparkles, Settings
+} from "lucide-react";
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import StaffSearchSelect from "@/components/common/staff-search-select";
+import MaintenanceColumnConfigModal, {
+  MAINTENANCE_COLUMN_ORDER,
+  MAINTENANCE_COLUMN_LABELS,
+  DEFAULT_MAINTENANCE_COL_WIDTHS,
+  MIN_MAINTENANCE_COL_WIDTHS,
+  MAINTENANCE_SYSTEM_TEMPLATES,
+  MaintenanceColumnTemplate,
+} from "./column-config-modal";
 
 interface Task {
   id: string;
@@ -207,35 +219,8 @@ const getPlanStatus = (t: any, progressPercent: number): { label: string; status
   };
 };
 
-const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  id: 145,
-  customer: 230,
-  customer_short: 130,
-  contract: 200,
-  notes: 180,
-  creator: 150,
-  created_at: 150,
-  hold_time: 85,
-  status: 120,
-  progress: 150,
-  actions: 85,
-};
-
-const MIN_COL_WIDTHS: Record<string, number> = {
-  id: 95,
-  customer: 140,
-  customer_short: 80,
-  contract: 120,
-  notes: 100,
-  creator: 110,
-  created_at: 120,
-  hold_time: 65,
-  status: 95,
-  progress: 110,
-  actions: 75,
-};
-
-const STORAGE_COL_WIDTHS_KEY = "jpt_maintenance_col_widths";
+const STORAGE_MAINTENANCE_CONFIG_KEY = "jpt_maintenance_col_config";
+const STORAGE_MAINTENANCE_TEMPLATES_KEY = "jpt_maintenance_templates";
 
 // Helper lấy Tên KH Viết tắt từ ticket
 export const getCustomerShortName = (t: any): string => {
@@ -295,19 +280,169 @@ export default function MaintenancePage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Column Resizing state
-  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(STORAGE_COL_WIDTHS_KEY);
-        if (saved) {
-          return { ...DEFAULT_COL_WIDTHS, ...JSON.parse(saved) };
-        }
-      } catch (e) {}
-    }
-    return DEFAULT_COL_WIDTHS;
-  });
+  // Column Configuration & Templates state
+  const [columnOrder, setColumnOrder] = useState<string[]>(MAINTENANCE_COLUMN_ORDER);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() =>
+    MAINTENANCE_COLUMN_ORDER.reduce((acc, k) => ({ ...acc, [k]: true }), {})
+  );
+  const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_MAINTENANCE_COL_WIDTHS);
+  const [templates, setTemplates] = useState<MaintenanceColumnTemplate[]>(MAINTENANCE_SYSTEM_TEMPLATES);
+  const [activeTemplateId, setActiveTemplateId] = useState<string>("default");
 
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+  const [isQuickVisDropdownOpen, setIsQuickVisDropdownOpen] = useState(false);
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
+  const quickVisDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Drag & drop column headers state
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
+
+  // Load custom templates & column config on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      let loadedTemplates = [...MAINTENANCE_SYSTEM_TEMPLATES];
+      const savedCustomTemplates = localStorage.getItem(STORAGE_MAINTENANCE_TEMPLATES_KEY);
+      if (savedCustomTemplates) {
+        try {
+          const parsedCustom = JSON.parse(savedCustomTemplates);
+          if (Array.isArray(parsedCustom)) {
+            loadedTemplates = [...MAINTENANCE_SYSTEM_TEMPLATES, ...parsedCustom];
+          }
+        } catch {}
+      }
+      setTemplates(loadedTemplates);
+
+      const savedConfig = localStorage.getItem(STORAGE_MAINTENANCE_CONFIG_KEY);
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed.order && Array.isArray(parsed.order)) {
+          const existing = new Set(parsed.order);
+          const missing = MAINTENANCE_COLUMN_ORDER.filter(k => !existing.has(k));
+          setColumnOrder([...parsed.order, ...missing]);
+        }
+        if (parsed.visible && typeof parsed.visible === "object") {
+          setVisibleColumns(prev => ({ ...prev, ...parsed.visible }));
+        }
+        if (parsed.widths && typeof parsed.widths === "object") {
+          setColWidths(prev => ({ ...prev, ...parsed.widths }));
+        }
+        if (parsed.templateId) {
+          setActiveTemplateId(parsed.templateId);
+        }
+      }
+    } catch (e) {
+      console.error("Error loading maintenance column config:", e);
+    }
+  }, []);
+
+  const saveActiveConfig = (patch: {
+    order?: string[];
+    visible?: Record<string, boolean>;
+    widths?: Record<string, number>;
+    templateId?: string;
+  }) => {
+    if (typeof window === "undefined") return;
+    try {
+      const current = {
+        order: patch.order ?? columnOrder,
+        visible: patch.visible ?? visibleColumns,
+        widths: patch.widths ?? colWidths,
+        templateId: patch.templateId ?? activeTemplateId,
+      };
+      localStorage.setItem(STORAGE_MAINTENANCE_CONFIG_KEY, JSON.stringify(current));
+    } catch (e) {}
+  };
+
+  const handleApplyTemplate = (tpl: MaintenanceColumnTemplate) => {
+    const order = [...tpl.order];
+    const existing = new Set(order);
+    MAINTENANCE_COLUMN_ORDER.forEach(k => {
+      if (!existing.has(k)) order.push(k);
+    });
+    const visible = { ...tpl.visible };
+    const widths = { ...DEFAULT_MAINTENANCE_COL_WIDTHS, ...(tpl.widths || {}) };
+
+    setColumnOrder(order);
+    setVisibleColumns(visible);
+    setColWidths(widths);
+    setActiveTemplateId(tpl.id);
+    saveActiveConfig({ order, visible, widths, templateId: tpl.id });
+    setIsTemplateDropdownOpen(false);
+  };
+
+  const handleSaveNewTemplate = (name: string) => {
+    const newTpl: MaintenanceColumnTemplate = {
+      id: "custom_" + Date.now(),
+      name: name.trim(),
+      isSystem: false,
+      order: [...columnOrder],
+      visible: { ...visibleColumns },
+      widths: { ...colWidths },
+      createdAt: new Date().toISOString(),
+    };
+    const customOnly = templates.filter(t => !t.isSystem);
+    const updatedCustom = [...customOnly, newTpl];
+    try {
+      localStorage.setItem(STORAGE_MAINTENANCE_TEMPLATES_KEY, JSON.stringify(updatedCustom));
+    } catch {}
+    setTemplates([...MAINTENANCE_SYSTEM_TEMPLATES, ...updatedCustom]);
+    setActiveTemplateId(newTpl.id);
+    saveActiveConfig({ templateId: newTpl.id });
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    const customOnly = templates.filter(t => !t.isSystem && t.id !== templateId);
+    try {
+      localStorage.setItem(STORAGE_MAINTENANCE_TEMPLATES_KEY, JSON.stringify(customOnly));
+    } catch {}
+    setTemplates([...MAINTENANCE_SYSTEM_TEMPLATES, ...customOnly]);
+    if (activeTemplateId === templateId) {
+      handleApplyTemplate(MAINTENANCE_SYSTEM_TEMPLATES[0]);
+    }
+  };
+
+  const handleResetDefault = () => {
+    handleApplyTemplate(MAINTENANCE_SYSTEM_TEMPLATES[0]);
+  };
+
+  // Drag and drop column headers
+  const handleHeaderDragStart = (e: React.DragEvent, colKey: string) => {
+    setDraggedColKey(colKey);
+    e.dataTransfer.setData("text/plain", colKey);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleHeaderDragOver = (e: React.DragEvent, colKey: string) => {
+    e.preventDefault();
+    if (draggedColKey && draggedColKey !== colKey) {
+      setDragOverColKey(colKey);
+    }
+  };
+
+  const handleHeaderDrop = (e: React.DragEvent, targetColKey: string) => {
+    e.preventDefault();
+    if (!draggedColKey || draggedColKey === targetColKey) {
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      return;
+    }
+    const oldIdx = columnOrder.indexOf(draggedColKey);
+    const newIdx = columnOrder.indexOf(targetColKey);
+    if (oldIdx !== -1 && newIdx !== -1) {
+      const newOrder = [...columnOrder];
+      newOrder.splice(oldIdx, 1);
+      newOrder.splice(newIdx, 0, draggedColKey);
+      setColumnOrder(newOrder);
+      saveActiveConfig({ order: newOrder });
+    }
+    setDraggedColKey(null);
+    setDragOverColKey(null);
+  };
+
+  // Column Resizing state
   const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
 
   const handleMouseDown = (colKey: string, e: React.MouseEvent) => {
@@ -316,7 +451,7 @@ export default function MaintenancePage() {
     resizingRef.current = {
       colKey,
       startX: e.clientX,
-      startWidth: colWidths[colKey] || DEFAULT_COL_WIDTHS[colKey] || 120,
+      startWidth: colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120,
     };
 
     let latestWidths = { ...colWidths };
@@ -325,7 +460,7 @@ export default function MaintenancePage() {
       if (!resizingRef.current) return;
       const { colKey, startX, startWidth } = resizingRef.current;
       const delta = moveEvent.clientX - startX;
-      const minW = MIN_COL_WIDTHS[colKey] || 70;
+      const minW = MIN_MAINTENANCE_COL_WIDTHS[colKey] || 70;
       const newWidth = Math.max(minW, startWidth + delta);
       latestWidths = {
         ...latestWidths,
@@ -340,9 +475,7 @@ export default function MaintenancePage() {
       document.removeEventListener("mouseup", onMouseUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      try {
-        localStorage.setItem(STORAGE_COL_WIDTHS_KEY, JSON.stringify(latestWidths));
-      } catch (e) {}
+      saveActiveConfig({ widths: latestWidths });
     };
 
     document.body.style.cursor = "col-resize";
@@ -351,22 +484,35 @@ export default function MaintenancePage() {
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const handleResetColWidths = () => {
-    setColWidths(DEFAULT_COL_WIDTHS);
-    try {
-      localStorage.removeItem(STORAGE_COL_WIDTHS_KEY);
-    } catch (e) {}
-  };
-
   const totalTableWidth = useMemo(() => {
-    return Object.values(colWidths).reduce((sum, w) => sum + (Number(w) || 100), 0);
-  }, [colWidths]);
+    let sum = colWidths.actions || 85;
+    for (const key of columnOrder) {
+      if (visibleColumns[key]) {
+        sum += Number(colWidths[key]) || DEFAULT_MAINTENANCE_COL_WIDTHS[key] || 120;
+      }
+    }
+    return Math.max(900, sum);
+  }, [colWidths, columnOrder, visibleColumns]);
 
-  // Close status dropdown on click outside
+  const activeTemplate = useMemo(() => {
+    return templates.find(t => t.id === activeTemplateId) || templates[0];
+  }, [templates, activeTemplateId]);
+
+  const visibleCount = useMemo(() => {
+    return columnOrder.filter(k => visibleColumns[k]).length;
+  }, [columnOrder, visibleColumns]);
+
+  // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
         setIsStatusDropdownOpen(false);
+      }
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
+        setIsTemplateDropdownOpen(false);
+      }
+      if (quickVisDropdownRef.current && !quickVisDropdownRef.current.contains(e.target as Node)) {
+        setIsQuickVisDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -1205,14 +1351,175 @@ export default function MaintenancePage() {
 
         {/* Right toolbar controls */}
         {activeTab === "list" && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Template Selector Dropdown */}
+            <div className="relative" ref={templateDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+                title="Chọn mẫu hiển thị (Template)"
+              >
+                <Layout size={13} className="text-blue-600" />
+                <span className="font-semibold text-slate-800">Mẫu:</span>
+                <span className="max-w-[120px] truncate text-blue-700">{activeTemplate?.name || "Mặc định"}</span>
+                <ChevronDown size={13} className="text-slate-400" />
+              </button>
+
+              {isTemplateDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    Mẫu giao diện (Templates)
+                  </div>
+                  <div className="max-h-56 overflow-y-auto py-1">
+                    {templates.map(tpl => {
+                      const isSelected = tpl.id === activeTemplateId;
+                      return (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => handleApplyTemplate(tpl)}
+                          className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs transition cursor-pointer ${
+                            isSelected ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            {isSelected ? <Check size={13} className="text-blue-600 shrink-0" /> : <div className="w-3.5 shrink-0" />}
+                            <span className="truncate">{tpl.name}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                            {tpl.isSystem ? "Hệ thống" : "Tùy chỉnh"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-slate-100 p-1.5 bg-slate-50/60 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTemplateDropdownOpen(false);
+                        setIsConfigModalOpen(true);
+                      }}
+                      className="flex-1 py-1.5 text-center text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded-lg transition cursor-pointer"
+                    >
+                      + Quản lý & Lưu mẫu mới...
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Column Visibility Dropdown */}
+            <div className="relative" ref={quickVisDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsQuickVisDropdownOpen(!isQuickVisDropdownOpen)}
+                className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+                title="Ẩn / Hiện nhanh các cột"
+              >
+                <Eye size={13} className="text-slate-500" />
+                <span className="hidden sm:inline">Ẩn/Hiện cột</span>
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-blue-200">
+                  {visibleCount}/{MAINTENANCE_COLUMN_ORDER.length}
+                </span>
+                <ChevronDown size={13} className="text-slate-400" />
+              </button>
+
+              {isQuickVisDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 px-1">
+                    <span className="text-[11px] font-bold text-slate-600">Hiển thị cột</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allVis = columnOrder.reduce((acc, k) => ({ ...acc, [k]: true }), {});
+                          setVisibleColumns(allVis);
+                          saveActiveConfig({ visible: allVis });
+                        }}
+                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Tất cả
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const minVis = columnOrder.reduce((acc, k) => ({
+                            ...acc,
+                            [k]: k === "id" || k === "customer_short" || k === "customer",
+                          }), {});
+                          setVisibleColumns(minVis);
+                          saveActiveConfig({ visible: minVis });
+                        }}
+                        className="text-[11px] text-slate-500 hover:underline cursor-pointer"
+                      >
+                        Thu gọn
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto space-y-1 py-0.5">
+                    {columnOrder.map(colKey => {
+                      const isVis = !!visibleColumns[colKey];
+                      const label = MAINTENANCE_COLUMN_LABELS[colKey] || colKey;
+                      return (
+                        <label
+                          key={colKey}
+                          className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded-lg cursor-pointer text-xs select-none"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isVis}
+                            onChange={() => {
+                              const updatedVis = { ...visibleColumns, [colKey]: !isVis };
+                              setVisibleColumns(updatedVis);
+                              saveActiveConfig({ visible: updatedVis });
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                          <span className={isVis ? "text-slate-800 font-medium" : "text-slate-400"}>
+                            {label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsQuickVisDropdownOpen(false);
+                        setIsConfigModalOpen(true);
+                      }}
+                      className="w-full py-1 text-center text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition cursor-pointer"
+                    >
+                      Tùy chỉnh chi tiết & đổi vị trí →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Column Settings Button (Opens Full Modal) */}
             <button
-              onClick={handleResetColWidths}
+              type="button"
+              onClick={() => setIsConfigModalOpen(true)}
+              className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer font-medium"
+              title="Tùy chỉnh thứ tự, ẩn hiện cột và quản lý template"
+            >
+              <SlidersHorizontal size={13} className="text-slate-500" />
+              <span className="hidden md:inline">Cột & Template</span>
+            </button>
+
+            {/* Reset Column Widths */}
+            <button
+              onClick={handleResetDefault}
               className="h-10 px-3 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 bg-white shadow-xs transition cursor-pointer"
-              title="Khôi phục độ rộng cột mặc định"
+              title="Khôi phục thứ tự và độ rộng cột mặc định"
             >
               <RotateCcw size={13} />
-              <span className="hidden sm:inline">Đặt lại cột</span>
+              <span className="hidden lg:inline">Đặt lại</span>
             </button>
           </div>
         )}
@@ -1231,199 +1538,95 @@ export default function MaintenancePage() {
             >
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <tr className="text-xs text-slate-500 font-medium text-left">
-                  {/* ID */}
-                  <th 
-                    style={{ width: `${colWidths.id}px`, minWidth: `${colWidths.id}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">ID</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("id", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
+                  {/* Dynamic Draggable & Resizable Column Headers */}
+                  {columnOrder.map((colKey) => {
+                    if (!visibleColumns[colKey]) return null;
+                    const label = MAINTENANCE_COLUMN_LABELS[colKey] || colKey;
+                    const isDragging = draggedColKey === colKey;
+                    const isDragOver = dragOverColKey === colKey;
+                    const isSortable = colKey === "customer" || colKey === "customer_short" || colKey === "created_at";
 
-                  {/* Customer */}
+                    return (
+                      <th 
+                        key={colKey}
+                        draggable
+                        onDragStart={(e) => handleHeaderDragStart(e, colKey)}
+                        onDragOver={(e) => handleHeaderDragOver(e, colKey)}
+                        onDrop={(e) => handleHeaderDrop(e, colKey)}
+                        onDragEnd={() => { setDraggedColKey(null); setDragOverColKey(null); }}
+                        onClick={() => {
+                          if (isSortable) handleSort(colKey as any);
+                        }}
+                        style={{ width: `${colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120}px`, minWidth: `${colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120}px` }}
+                        className={`relative px-4 py-3 border-r border-slate-200 select-none group transition-colors cursor-move ${
+                          isSortable ? "hover:bg-slate-100/80" : ""
+                        } ${isDragging ? "opacity-30 bg-blue-50" : ""} ${
+                          isDragOver ? "bg-blue-100 border-l-2 border-l-blue-600 shadow-inner" : ""
+                        }`}
+                        title="Kéo thả để thay đổi vị trí cột • Kéo viền phải để chỉnh kích thước"
+                      >
+                        <div className="flex items-center justify-between gap-1 pr-2">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <GripVertical size={12} className="text-slate-300 group-hover:text-slate-500 shrink-0 cursor-grab" />
+                            <span className={`truncate ${sortField === colKey ? "font-semibold text-blue-700" : ""}`}>
+                              {label}
+                            </span>
+                            {isSortable && (
+                              <span className="text-slate-400 group-hover:text-slate-600 shrink-0">
+                                {sortField === colKey ? (
+                                  sortOrder === "asc" ? <ArrowUp size={13} className="text-blue-600" /> : <ArrowDown size={13} className="text-blue-600" />
+                                ) : (
+                                  <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100" />
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {/* Resizer Handle */}
+                        <div
+                          draggable={false}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            handleMouseDown(colKey, e);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                          title="Kéo để điều chỉnh độ rộng cột"
+                        />
+                      </th>
+                    );
+                  })}
+
+                  {/* Actions Header */}
                   <th 
-                    style={{ width: `${colWidths.customer}px`, minWidth: `${colWidths.customer}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
-                    onClick={() => handleSort("customer")}
-                    title="Bấm để sắp xếp theo tên khách hàng • Kéo viền phải để chỉnh kích thước"
+                    style={{ width: `${colWidths.actions || 85}px`, minWidth: `${colWidths.actions || 85}px` }}
+                    className="relative px-4 py-3 text-center select-none group bg-slate-50"
                   >
-                    <div className="flex items-center gap-1.5 truncate pr-2">
-                      <span className={sortField === "customer" ? "font-semibold text-blue-700" : ""}>Tên khách hàng</span>
-                      <span className="text-slate-400 group-hover:text-slate-600">
-                        {sortField === "customer" ? (
-                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
-                        ) : (
-                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
-                        )}
-                      </span>
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="truncate">Thao tác</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsConfigModalOpen(true)}
+                        className="p-1 hover:bg-slate-200/70 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                        title="Tùy biến cột & Template"
+                      >
+                        <SlidersHorizontal size={12} />
+                      </button>
                     </div>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("customer", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Customer Short Name */}
-                  <th 
-                    style={{ width: `${colWidths.customer_short}px`, minWidth: `${colWidths.customer_short}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
-                    onClick={() => handleSort("customer_short")}
-                    title="Bấm để sắp xếp theo tên KH viết tắt • Kéo viền phải để chỉnh kích thước"
-                  >
-                    <div className="flex items-center gap-1.5 truncate pr-2">
-                      <span className={sortField === "customer_short" ? "font-semibold text-blue-700" : ""}>Tên KH Viết tắt</span>
-                      <span className="text-slate-400 group-hover:text-slate-600">
-                        {sortField === "customer_short" ? (
-                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
-                        ) : (
-                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
-                        )}
-                      </span>
-                    </div>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("customer_short", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Contract */}
-                  <th 
-                    style={{ width: `${colWidths.contract}px`, minWidth: `${colWidths.contract}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">Tên hợp đồng</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("contract", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Notes */}
-                  <th 
-                    style={{ width: `${colWidths.notes}px`, minWidth: `${colWidths.notes}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">Ghi chú</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("notes", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Creator */}
-                  <th 
-                    style={{ width: `${colWidths.creator}px`, minWidth: `${colWidths.creator}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">Người tạo</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("creator", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Created At */}
-                  <th 
-                    style={{ width: `${colWidths.created_at}px`, minWidth: `${colWidths.created_at}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
-                    onClick={() => handleSort("created_at")}
-                    title="Bấm để sắp xếp theo thời gian tạo • Kéo viền phải để chỉnh kích thước"
-                  >
-                    <div className="flex items-center gap-1.5 truncate pr-2">
-                      <span className={sortField === "created_at" ? "font-semibold text-blue-700" : ""}>Thời gian tạo</span>
-                      <span className="text-slate-400 group-hover:text-slate-600">
-                        {sortField === "created_at" ? (
-                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
-                        ) : (
-                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
-                        )}
-                      </span>
-                    </div>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("created_at", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Hold Time */}
-                  <th 
-                    style={{ width: `${colWidths.hold_time}px`, minWidth: `${colWidths.hold_time}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 text-center select-none group"
-                  >
-                    <span className="truncate">Tổng kỳ</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("hold_time", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Status */}
-                  <th 
-                    style={{ width: `${colWidths.status}px`, minWidth: `${colWidths.status}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">Tình trạng</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("status", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Progress */}
-                  <th 
-                    style={{ width: `${colWidths.progress}px`, minWidth: `${colWidths.progress}px` }}
-                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
-                  >
-                    <span className="truncate">Tiến độ</span>
-                    <div
-                      onMouseDown={(e) => handleMouseDown("progress", e)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
-                      title="Kéo để điều chỉnh độ rộng cột"
-                    />
-                  </th>
-
-                  {/* Actions */}
-                  <th 
-                    style={{ width: `${colWidths.actions}px`, minWidth: `${colWidths.actions}px` }}
-                    className="relative px-4 py-3 text-center select-none group"
-                  >
-                    <span className="truncate">Thao tác</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-400">
+                    <td colSpan={visibleCount + 1} className="py-12 text-center text-slate-400">
                       <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                       Đang tải...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-14 text-center text-slate-400">
+                    <td colSpan={visibleCount + 1} className="py-14 text-center text-slate-400">
                       <Wrench size={36} className="mx-auto mb-2 opacity-20" />
                       <p className="text-sm">{search || statusFilter.length > 0 || customerFilter !== "All" ? "Không tìm thấy kết quả phù hợp bộ lọc" : "Chưa có kế hoạch bảo trì nào"}</p>
                       <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
@@ -1439,58 +1642,96 @@ export default function MaintenancePage() {
                     const notesText = getPlanNotes(t);
                     return (
                       <tr key={t.id || i} className="border-t border-slate-100 hover:bg-slate-50 transition">
-                        <td style={{ width: `${colWidths.id}px` }} className="px-4 py-3.5 font-medium text-blue-600 border-r border-b border-slate-200 truncate">
-                          <Link href={`/maintenance/${t.id}`} className="hover:underline">
-                            {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
-                          </Link>
-                        </td>
-                        <td style={{ width: `${colWidths.customer}px` }} className="px-4 py-3.5 text-slate-700 font-medium border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
-                          {t.customer?.name || t.customer_name || "—"}
-                        </td>
-                        <td style={{ width: `${colWidths.customer_short}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={shortName}>
-                          {shortName ? (
-                            <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
-                              {shortName}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </td>
-                        <td style={{ width: `${colWidths.contract}px` }} className="px-4 py-3.5 text-slate-500 border-r border-b border-slate-200 truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
-                          {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
-                        </td>
-                        <td style={{ width: `${colWidths.notes}px` }} className="px-4 py-3.5 text-slate-500 text-xs border-r border-b border-slate-200 truncate" title={notesText}>
-                          {notesText || "—"}
-                        </td>
-                        <td style={{ width: `${colWidths.creator}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
-                          <div className="flex items-center gap-1.5 truncate">
-                            <User size={13} className="text-slate-400 shrink-0" />
-                            <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
-                          </div>
-                        </td>
-                        <td style={{ width: `${colWidths.created_at}px` }} className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs border-r border-b border-slate-200 truncate" title={t.created_at || ""}>
-                          {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
-                        </td>
-                        <td style={{ width: `${colWidths.hold_time}px` }} className="px-4 py-3.5 text-center font-medium text-slate-500 border-r border-b border-slate-200 truncate">
-                          {t.hold_time || 0}
-                        </td>
-                        <td style={{ width: `${colWidths.status}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
-                          <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
-                            {statusInfo.label}
-                          </span>
-                        </td>
-                        <td style={{ width: `${colWidths.progress}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
-                                style={{ width: `${progressVal}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-slate-600 min-w-[32px]">{progressVal}%</span>
-                          </div>
-                        </td>
-                        <td style={{ width: `${colWidths.actions}px` }} className="px-4 py-3.5 text-center border-b border-slate-200">
+                        {columnOrder.map((colKey) => {
+                          if (!visibleColumns[colKey]) return null;
+                          const w = colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120;
+                          switch (colKey) {
+                            case "id":
+                              return (
+                                <td key="id" style={{ width: `${w}px` }} className="px-4 py-3.5 font-medium text-blue-600 border-r border-b border-slate-200 truncate">
+                                  <Link href={`/maintenance/${t.id}`} className="hover:underline">
+                                    {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
+                                  </Link>
+                                </td>
+                              );
+                            case "customer":
+                              return (
+                                <td key="customer" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 font-medium border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
+                                  {t.customer?.name || t.customer_name || "—"}
+                                </td>
+                              );
+                            case "customer_short":
+                              return (
+                                <td key="customer_short" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={shortName}>
+                                  {shortName ? (
+                                    <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
+                                      {shortName}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            case "contract":
+                              return (
+                                <td key="contract" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 border-r border-b border-slate-200 truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
+                                  {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
+                                </td>
+                              );
+                            case "notes":
+                              return (
+                                <td key="notes" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 text-xs border-r border-b border-slate-200 truncate" title={notesText}>
+                                  {notesText || "—"}
+                                </td>
+                              );
+                            case "creator":
+                              return (
+                                <td key="creator" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <User size={13} className="text-slate-400 shrink-0" />
+                                    <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
+                                  </div>
+                                </td>
+                              );
+                            case "created_at":
+                              return (
+                                <td key="created_at" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs border-r border-b border-slate-200 truncate" title={t.created_at || ""}>
+                                  {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
+                                </td>
+                              );
+                            case "hold_time":
+                              return (
+                                <td key="hold_time" style={{ width: `${w}px` }} className="px-4 py-3.5 text-center font-medium text-slate-500 border-r border-b border-slate-200 truncate">
+                                  {t.hold_time || 0}
+                                </td>
+                              );
+                            case "status":
+                              return (
+                                <td key="status" style={{ width: `${w}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
+                                  <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
+                                    {statusInfo.label}
+                                  </span>
+                                </td>
+                              );
+                            case "progress":
+                              return (
+                                <td key="progress" style={{ width: `${w}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                                      <div 
+                                        className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
+                                        style={{ width: `${progressVal}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-600 min-w-[32px]">{progressVal}%</span>
+                                  </div>
+                                </td>
+                              );
+                            default:
+                              return null;
+                          }
+                        })}
+                        <td style={{ width: `${colWidths.actions || 85}px` }} className="px-4 py-3.5 text-center border-b border-slate-200">
                           <div className="flex items-center justify-center gap-1.5">
                             <button 
                               onClick={() => handleEdit(t)}
@@ -1831,6 +2072,48 @@ export default function MaintenancePage() {
           </div>
         </div>
       )}
+      {/* Column Customization & Templates Modal */}
+      <MaintenanceColumnConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        columnOrder={columnOrder}
+        setColumnOrder={(order) => {
+          setColumnOrder(order);
+          saveActiveConfig({ order });
+        }}
+        visibleColumns={visibleColumns}
+        setVisibleColumns={(vis) => {
+          if (typeof vis === "function") {
+            setVisibleColumns(prev => {
+              const next = vis(prev);
+              saveActiveConfig({ visible: next });
+              return next;
+            });
+          } else {
+            setVisibleColumns(vis);
+            saveActiveConfig({ visible: vis });
+          }
+        }}
+        colWidths={colWidths}
+        setColWidths={(widths) => {
+          if (typeof widths === "function") {
+            setColWidths(prev => {
+              const next = widths(prev);
+              saveActiveConfig({ widths: next });
+              return next;
+            });
+          } else {
+            setColWidths(widths);
+            saveActiveConfig({ widths });
+          }
+        }}
+        templates={templates}
+        activeTemplateId={activeTemplateId}
+        onApplyTemplate={handleApplyTemplate}
+        onSaveNewTemplate={handleSaveNewTemplate}
+        onDeleteTemplate={handleDeleteTemplate}
+        onResetDefault={handleResetDefault}
+      />
     </MainLayout>
   );
 }
