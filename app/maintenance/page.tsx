@@ -8,7 +8,8 @@ import Link from "next/link";
 import {
   Plus, Search, Wrench, X, CheckCircle2, Clock, RotateCcw, Pencil, Trash2,
   ClipboardList, Filter, ArrowUpDown, ArrowUp, ArrowDown, User, ChevronDown, Check,
-  GripVertical, SlidersHorizontal, Layout, Eye, EyeOff, Sparkles, Settings
+  GripVertical, SlidersHorizontal, Layout, Eye, EyeOff, Sparkles, Settings,
+  AlertTriangle, Calendar, Activity
 } from "lucide-react";
 
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
@@ -23,6 +24,17 @@ import MaintenanceColumnConfigModal, {
   MAINTENANCE_SYSTEM_TEMPLATES,
   MaintenanceColumnTemplate,
 } from "./column-config-modal";
+
+export const TIMELINE_COL_DEFS = [
+  { key: "no", label: "No", defaultWidth: 44 },
+  { key: "customer", label: "Khách hàng", defaultWidth: 150 },
+  { key: "customer_short", label: "Tên KH Viết tắt", defaultWidth: 100 },
+  { key: "contract", label: "Dự án / Hợp đồng", defaultWidth: 160 },
+  { key: "notes", label: "Ghi chú", defaultWidth: 140 },
+] as const;
+
+export type TimelineColKey = typeof TIMELINE_COL_DEFS[number]["key"];
+const STORAGE_TIMELINE_COLS_KEY = "jpt_maintenance_timeline_cols";
 
 interface Task {
   id: string;
@@ -279,6 +291,18 @@ export default function MaintenancePage() {
   const [sortField, setSortField] = useState<"customer" | "customer_short" | "created_at" | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+
+  // Timeline columns visibility state
+  const [timelineVisibleCols, setTimelineVisibleCols] = useState<Record<string, boolean>>(() => ({
+    no: true,
+    customer: true,
+    customer_short: true,
+    contract: true,
+    notes: true,
+  }));
+  const [isTimelineColDropdownOpen, setIsTimelineColDropdownOpen] = useState(false);
+  const timelineColDropdownRef = useRef<HTMLDivElement>(null);
 
   // Column Configuration & Templates state
   const [columnOrder, setColumnOrder] = useState<string[]>(MAINTENANCE_COLUMN_ORDER);
@@ -333,10 +357,58 @@ export default function MaintenancePage() {
           setActiveTemplateId(parsed.templateId);
         }
       }
+
+      const savedTimelineCols = localStorage.getItem(STORAGE_TIMELINE_COLS_KEY);
+      if (savedTimelineCols) {
+        try {
+          const parsedTimeline = JSON.parse(savedTimelineCols);
+          if (parsedTimeline && typeof parsedTimeline === "object") {
+            setTimelineVisibleCols(prev => ({ ...prev, ...parsedTimeline }));
+          }
+        } catch {}
+      }
     } catch (e) {
       console.error("Error loading maintenance column config:", e);
     }
   }, []);
+
+  const toggleTimelineCol = (key: string) => {
+    setTimelineVisibleCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      const anyVisible = Object.values(next).some(Boolean);
+      if (!anyVisible) return prev; // keep at least one column visible
+      try {
+        localStorage.setItem(STORAGE_TIMELINE_COLS_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const timelineOffsets = useMemo(() => {
+    let currentLeft = 0;
+    const offsets: Record<string, number> = {};
+    const widths: Record<string, number> = {};
+    let visibleCount = 0;
+    let lastColKey = "";
+
+    for (const col of TIMELINE_COL_DEFS) {
+      if (timelineVisibleCols[col.key] !== false) {
+        offsets[col.key] = currentLeft;
+        widths[col.key] = col.defaultWidth;
+        currentLeft += col.defaultWidth;
+        visibleCount += 1;
+        lastColKey = col.key;
+      }
+    }
+
+    return {
+      offsets,
+      widths,
+      totalStickyWidth: currentLeft,
+      visibleCount,
+      lastColKey,
+    };
+  }, [timelineVisibleCols]);
 
   const saveActiveConfig = (patch: {
     order?: string[];
@@ -513,6 +585,9 @@ export default function MaintenancePage() {
       }
       if (quickVisDropdownRef.current && !quickVisDropdownRef.current.contains(e.target as Node)) {
         setIsQuickVisDropdownOpen(false);
+      }
+      if (timelineColDropdownRef.current && !timelineColDropdownRef.current.contains(e.target as Node)) {
+        setIsTimelineColDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -908,10 +983,10 @@ export default function MaintenancePage() {
   const todayLineFraction = getTodayLinePercent();
 
   useEffect(() => {
-    if (activeTab === "timeline" && scrollContainerRef.current) {
+    if (activeTab === "timeline" && timelineScrollRef.current) {
       let attempts = 0;
       const scroll = () => {
-        const container = scrollContainerRef.current;
+        const container = timelineScrollRef.current;
         if (!container) return;
         
         const scrollWidth = container.scrollWidth;
@@ -930,7 +1005,8 @@ export default function MaintenancePage() {
         }
 
         if (todayLineFraction >= 0) {
-          const lineLeft = 378 + (scrollWidth - 378) * todayLineFraction;
+          const stickyW = timelineOffsets.totalStickyWidth;
+          const lineLeft = stickyW + (scrollWidth - stickyW) * todayLineFraction;
           const targetScrollLeft = lineLeft - containerWidth / 2;
           container.scrollTo({
             left: Math.max(0, targetScrollLeft),
@@ -942,7 +1018,91 @@ export default function MaintenancePage() {
       const timer = setTimeout(scroll, 150);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, timeScale, tickets, todayLineFraction]);
+  }, [activeTab, timeScale, tickets, todayLineFraction, timelineOffsets.totalStickyWidth]);
+
+  // Thống kê các kỳ bảo trì cho Timeline view: Đang chạy hiện tại, Chưa thực hiện, Quá hạn
+  const timelineStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().substring(0, 10);
+
+    let ongoingCount = 0;
+    let upcomingPlannedCount = 0;
+    let overdueCount = 0;
+    let completedCount = 0;
+    let totalCyclesCount = 0;
+
+    for (const t of filtered) {
+      const totalCycles = parseInt(t.hold_time) || 1;
+      let parsedConfig = { 
+        interval: "monthly", 
+        startDate: t.start_time ? t.start_time.substring(0, 10) : todayStr 
+      };
+      let parsedMeta: any = {};
+      let parsedTasks: any = {};
+      if (t.remark) {
+        try {
+          const parsed = JSON.parse(t.remark);
+          if (parsed && (parsed.tasks !== undefined || parsed.recommendations !== undefined)) {
+            parsedConfig = parsed.config || parsedConfig;
+            parsedMeta = parsed.cycleMeta || {};
+            parsedTasks = parsed.tasks || {};
+          }
+        } catch (e) {}
+      }
+
+      const spanMonths = parsedConfig.interval === "yearly" ? 12 : parsedConfig.interval === "quarterly" ? 3 : 1;
+
+      for (let i = 1; i <= totalCycles; i++) {
+        totalCyclesCount++;
+        const cycleNum = String(i);
+        const plannedDate = getCycleStartDate(cycleNum, t.start_time, parsedConfig, parsedMeta);
+        const tasks = parsedTasks[cycleNum] || [];
+        const progress = calculateCycleProgress(tasks);
+        const isCompleted = progress === 100;
+
+        if (isCompleted) {
+          completedCount++;
+          continue;
+        }
+
+        if (!plannedDate) {
+          upcomingPlannedCount++;
+          continue;
+        }
+
+        const startDate = new Date(plannedDate);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDateStr = addMonths(plannedDate, spanMonths);
+        const endDate = new Date(endDateStr);
+        endDate.setHours(23, 59, 59, 999);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          upcomingPlannedCount++;
+          continue;
+        }
+
+        if (endDate < today) {
+          overdueCount++;
+        } else if (startDate <= today && today <= endDate) {
+          ongoingCount++;
+        } else if (progress > 0) {
+          ongoingCount++;
+        } else {
+          upcomingPlannedCount++;
+        }
+      }
+    }
+
+    return {
+      ongoingCount,
+      upcomingPlannedCount,
+      overdueCount,
+      completedCount,
+      totalCyclesCount,
+    };
+  }, [filtered]);
 
   const renderTimelineRows = () => {
     let limit = yearsList.length * 12;
@@ -1104,30 +1264,93 @@ export default function MaintenancePage() {
         }
       };
 
+      const shortName = getCustomerShortName(t);
+      const notesText = getPlanNotes(t);
+      const contractText = t.contract_no || t.contract?.contract_no || t.contract?.name || "—";
+
       return (
-        <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition group">
-          <td 
-            className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 text-center font-normal text-slate-700 text-sm" 
-            style={{ left: 0, minWidth: "48px", width: "48px" }}
-          >
-            {idx + 1}
-          </td>
-          <td 
-            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 font-normal text-slate-700 text-sm max-w-[150px] truncate" 
-            style={{ left: "48px", minWidth: "150px", width: "150px" }} 
-            title={t.customer?.name || t.customer_name}
-          >
-            {t.customer?.name || t.customer_name || "—"}
-          </td>
-          <td 
-            className="sticky z-10 bg-white group-hover:bg-slate-50 border-r-2 border-slate-300 text-slate-700 text-sm font-normal max-w-[180px] truncate" 
-            style={{ left: "198px", minWidth: "180px", width: "180px" }} 
-            title={t.contract_no || t.contract?.contract_no || t.contract?.name}
-          >
-            <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline font-medium">
-              {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
-            </Link>
-          </td>
+        <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition group h-[32px]">
+          {TIMELINE_COL_DEFS.map((col) => {
+            if (timelineVisibleCols[col.key] === false) return null;
+            const isLast = col.key === timelineOffsets.lastColKey;
+            const w = timelineOffsets.widths[col.key];
+            const left = timelineOffsets.offsets[col.key];
+            const borderCls = isLast ? "border-r-2 border-slate-300 shadow-[2px_0_4px_rgba(0,0,0,0.03)]" : "border-r border-slate-200";
+
+            switch (col.key) {
+              case "no":
+                return (
+                  <td 
+                    key="no"
+                    className={`sticky z-20 bg-white group-hover:bg-slate-50 ${borderCls} border-b border-slate-100 text-center font-normal text-slate-500 text-xs px-1 py-1 overflow-hidden`} 
+                    style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }}
+                  >
+                    {idx + 1}
+                  </td>
+                );
+              case "customer":
+                const custName = t.customer?.name || t.customer_name || "—";
+                return (
+                  <td 
+                    key="customer"
+                    className={`sticky z-20 bg-white group-hover:bg-slate-50 ${borderCls} border-b border-slate-100 font-medium text-slate-800 text-xs px-2 py-1 overflow-hidden`} 
+                    style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }} 
+                    title={custName}
+                  >
+                    <div className="line-clamp-2 [overflow-wrap:anywhere] break-words leading-tight">
+                      {custName}
+                    </div>
+                  </td>
+                );
+              case "customer_short":
+                return (
+                  <td 
+                    key="customer_short"
+                    className={`sticky z-20 bg-white group-hover:bg-slate-50 ${borderCls} border-b border-slate-100 text-xs px-2 py-1 overflow-hidden`} 
+                    style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }} 
+                    title={shortName || "—"}
+                  >
+                    {shortName ? (
+                      <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-semibold line-clamp-1 truncate max-w-full">
+                        {shortName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                );
+              case "contract":
+                return (
+                  <td 
+                    key="contract"
+                    className={`sticky z-20 bg-white group-hover:bg-slate-50 ${borderCls} border-b border-slate-100 text-slate-700 text-xs px-2 py-1 overflow-hidden`} 
+                    style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }} 
+                    title={contractText}
+                  >
+                    <div className="line-clamp-2 [overflow-wrap:anywhere] break-words leading-tight">
+                      <Link href={`/maintenance/${t.id}`} className="text-blue-600 hover:underline font-medium">
+                        {contractText}
+                      </Link>
+                    </div>
+                  </td>
+                );
+              case "notes":
+                return (
+                  <td 
+                    key="notes"
+                    className={`sticky z-20 bg-white group-hover:bg-slate-50 ${borderCls} border-b border-slate-100 text-slate-500 text-[11px] px-2 py-1 overflow-hidden`} 
+                    style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }} 
+                    title={notesText || "—"}
+                  >
+                    <div className="line-clamp-2 [overflow-wrap:anywhere] break-words leading-tight">
+                      {notesText || "—"}
+                    </div>
+                  </td>
+                );
+              default:
+                return null;
+            }
+          })}
           
           {segments.map((seg, sIdx) => {
             const atYearBoundary = isYearBoundary(seg.startMonth + seg.span);
@@ -1138,7 +1361,7 @@ export default function MaintenancePage() {
                 <td 
                   key={sIdx} 
                   colSpan={seg.span} 
-                  className={`${borderClass} last:border-r-0 bg-slate-50/30`} 
+                  className={`${borderClass} border-b border-slate-100 last:border-r-0 bg-slate-50/30`} 
                 />
               );
             }
@@ -1164,10 +1387,10 @@ export default function MaintenancePage() {
               <td 
                 key={sIdx} 
                 colSpan={seg.span} 
-                className={`p-1 ${borderClass} last:border-r-0`}
+                className={`p-0.5 ${borderClass} border-b border-slate-100 last:border-r-0`}
               >
                 <Link href={`/maintenance/${t.id}`}>
-                  <div className={`h-8 w-full rounded flex items-center justify-center text-sm font-medium shadow-xs border transition hover:brightness-95 hover:shadow-sm cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
+                  <div className={`h-6 w-full rounded flex items-center justify-center text-xs font-semibold shadow-2xs border transition hover:brightness-95 hover:shadow-xs cursor-pointer ${bgClass}`} title={`Lần ${seg.cycleNum} - Ngày dự kiến: ${formatDateVN(c.plannedDate)} - Tiến độ: ${c.progress}%`}>
                     Lần {seg.cycleNum}
                   </div>
                 </Link>
@@ -1830,6 +2053,66 @@ export default function MaintenancePage() {
       {/* Timeline View */}
       {activeTab === "timeline" && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden flex flex-col gap-4">
+          {/* 3-card Statistics Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Card 1: Kỳ đang chạy hiện tại */}
+            <div className="bg-gradient-to-br from-orange-50/80 to-amber-50/50 border border-orange-200/90 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                <Clock size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-orange-800 uppercase tracking-wide truncate">
+                  Kỳ đang chạy hiện tại
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-2xl font-black text-orange-950">{timelineStats.ongoingCount}</span>
+                  <span className="text-xs font-semibold text-orange-700">kỳ</span>
+                </div>
+                <div className="text-[11px] text-orange-700/80 truncate">
+                  Đang trong tiến độ thực hiện bảo trì
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Chưa thực hiện tại ngày hiện tại */}
+            <div className="bg-gradient-to-br from-slate-50 to-sky-50/50 border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+              <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                <Calendar size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide truncate">
+                  Chưa thực hiện (Kế hoạch)
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-2xl font-black text-slate-800">{timelineStats.upcomingPlannedCount}</span>
+                  <span className="text-xs font-semibold text-slate-500">kỳ</span>
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  Kỳ kế hoạch dự kiến tới ngày hiện tại
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Quá hạn chưa hoàn thành */}
+            <div className="bg-gradient-to-br from-rose-50/80 to-red-50/50 border border-rose-200/90 rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+              <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wide truncate">
+                  Quá hạn chưa hoàn thành
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-2xl font-black text-rose-950">{timelineStats.overdueCount}</span>
+                  <span className="text-xs font-semibold text-rose-700">kỳ</span>
+                </div>
+                <div className="text-[11px] text-rose-700/80 truncate">
+                  Đã quá hạn kết thúc kỳ nhưng chưa hoàn tất
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Legend and header toolbar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-3">
@@ -1855,6 +2138,63 @@ export default function MaintenancePage() {
                   </button>
                 ))}
               </div>
+
+              {/* Column visibility dropdown */}
+              <div className="relative" ref={timelineColDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsTimelineColDropdownOpen(!isTimelineColDropdownOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition cursor-pointer"
+                  title="Ẩn / Hiện cột thông tin"
+                >
+                  <SlidersHorizontal size={13} className="text-slate-500" />
+                  <span>Cột thông tin</span>
+                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${isTimelineColDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isTimelineColDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-lg border border-slate-200 p-2 z-50 animate-fade-in">
+                    <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-slate-100 px-1">
+                      <span className="text-xs font-bold text-slate-700">Cột thông tin cố định</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allTrue = { no: true, customer: true, customer_short: true, contract: true, notes: true };
+                          setTimelineVisibleCols(allTrue);
+                          try { localStorage.setItem(STORAGE_TIMELINE_COLS_KEY, JSON.stringify(allTrue)); } catch (e) {}
+                        }}
+                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Hiện tất cả
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {TIMELINE_COL_DEFS.map((col) => {
+                        const isChecked = timelineVisibleCols[col.key] !== false;
+                        return (
+                          <label
+                            key={col.key}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-xs text-slate-700 select-none transition"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleTimelineCol(col.key)}
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="flex-1 font-medium">{col.label}</span>
+                            {isChecked ? (
+                              <Eye size={12} className="text-blue-500" />
+                            ) : (
+                              <EyeOff size={12} className="text-slate-300" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Chú thích */}
@@ -1879,7 +2219,10 @@ export default function MaintenancePage() {
             </div>
           </div>
 
-          <div ref={scrollContainerRef} className="relative overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-xs">
+          <div 
+            ref={timelineScrollRef} 
+            className="relative table-scroll overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[350px] custom-scrollbar border border-slate-200 rounded-xl shadow-xs"
+          >
             <div className={`relative ${
               timeScale === "month" ? "min-w-[1800px]" : 
               timeScale === "week" ? "min-w-[4500px]" : 
@@ -1888,10 +2231,16 @@ export default function MaintenancePage() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   {/* Year header row with year dividers */}
-                  <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200">
-                    <th colSpan={3} className="px-4 py-2 border-r-2 border-slate-300 text-left sticky left-0 bg-slate-100 z-30" style={{ left: 0 }}>
-                      Giai đoạn
-                    </th>
+                  <tr className="text-center font-bold text-slate-700 bg-slate-100 border-b border-slate-200 sticky top-0 z-30 h-8">
+                    {timelineOffsets.visibleCount > 0 && (
+                      <th 
+                        colSpan={timelineOffsets.visibleCount} 
+                        className="px-3 py-1 border-r-2 border-slate-300 text-left sticky left-0 top-0 bg-slate-100 z-40 text-xs font-bold text-slate-700 select-none shadow-[2px_0_4px_rgba(0,0,0,0.03)]" 
+                        style={{ left: 0, width: `${timelineOffsets.totalStickyWidth}px`, minWidth: `${timelineOffsets.totalStickyWidth}px` }}
+                      >
+                        Giai đoạn
+                      </th>
+                    )}
                     {yearsList.map((year) => {
                       let span = 12;
                       if (timeScale === "week") span = 52;
@@ -1901,7 +2250,7 @@ export default function MaintenancePage() {
                         <th 
                           key={year} 
                           colSpan={span} 
-                          className="px-4 py-2 text-center text-sm font-bold border-r-2 border-slate-300 bg-slate-100 text-slate-800"
+                          className="px-2 py-1 text-center text-xs font-bold border-r-2 border-slate-300 bg-slate-100 text-slate-800 sticky top-0 z-30 select-none"
                         >
                           Năm {year}
                         </th>
@@ -1910,16 +2259,30 @@ export default function MaintenancePage() {
                   </tr>
                   
                   {/* Column sub-headers */}
-                  <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200">
-                    <th className="px-2 py-3 border-r border-slate-200 text-center sticky left-0 bg-slate-50 z-30 font-semibold" style={{ left: 0, minWidth: "48px", width: "48px" }}>No</th>
-                    <th className="px-4 py-3 border-r border-slate-200 sticky bg-slate-50 z-30 font-semibold" style={{ left: "48px", minWidth: "150px", width: "150px" }}>Khách hàng</th>
-                    <th className="px-4 py-3 border-r-2 border-slate-300 sticky bg-slate-50 z-30 font-semibold" style={{ left: "198px", minWidth: "180px", width: "180px" }}>Dự án / Hợp đồng</th>
+                  <tr className="text-xs text-slate-500 font-medium text-left bg-slate-50 border-b border-slate-200 sticky top-8 z-30 h-8">
+                    {TIMELINE_COL_DEFS.map((col) => {
+                      if (timelineVisibleCols[col.key] === false) return null;
+                      const isLast = col.key === timelineOffsets.lastColKey;
+                      const w = timelineOffsets.widths[col.key];
+                      const left = timelineOffsets.offsets[col.key];
+                      return (
+                        <th 
+                          key={col.key} 
+                          className={`px-2 py-1 sticky top-8 bg-slate-50 z-40 font-semibold text-xs text-slate-600 select-none ${
+                            isLast ? "border-r-2 border-slate-300 shadow-[2px_0_4px_rgba(0,0,0,0.03)]" : "border-r border-slate-200"
+                          } ${col.key === "no" ? "text-center" : "text-left"}`} 
+                          style={{ left: `${left}px`, minWidth: `${w}px`, width: `${w}px`, maxWidth: `${w}px` }}
+                        >
+                          <span className="truncate block" title={col.label}>{col.label}</span>
+                        </th>
+                      );
+                    })}
                     
                     {timeScale === "month" && yearsList.flatMap((year) => 
                       ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
                         <th 
                           key={`${year}-${m}`} 
-                          className={`px-2 py-3 text-center text-xs font-semibold ${idx === 11 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                          className={`px-2 py-1 text-center text-xs font-semibold sticky top-8 bg-slate-50 z-30 ${idx === 11 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
                           style={{ minWidth: "45px" }}
                         >
                           {m}
@@ -1931,7 +2294,7 @@ export default function MaintenancePage() {
                       Array.from({ length: 52 }, (_, i) => `W${i + 1}`).map((w, idx) => (
                         <th 
                           key={`${year}-${w}`} 
-                          className={`px-1 py-3 text-center text-[9px] font-medium ${idx === 51 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                          className={`px-1 py-1 text-center text-[9px] font-medium sticky top-8 bg-slate-50 z-30 ${idx === 51 ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
                           style={{ minWidth: "26px" }}
                         >
                           {w}
@@ -1951,7 +2314,7 @@ export default function MaintenancePage() {
                     ).map((d) => (
                       <th 
                         key={d.key} 
-                        className={`px-1 py-3 text-center text-[9px] ${d.isYearEnd ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
+                        className={`px-1 py-1 text-center text-[9px] sticky top-8 bg-slate-50 z-30 ${d.isYearEnd ? "border-r-2 border-slate-300 bg-slate-100/40" : "border-r border-slate-200"}`} 
                         style={{ minWidth: "26px" }}
                       >
                         {d.day}
@@ -1963,7 +2326,7 @@ export default function MaintenancePage() {
                   {filtered.length === 0 ? (
                     <tr>
                       <td 
-                        colSpan={3 + (timeScale === "month" ? yearsList.length * 12 : timeScale === "week" ? yearsList.length * 52 : yearsList.reduce((acc, y) => acc + (isLeapYear(y) ? 366 : 365), 0))} 
+                        colSpan={timelineOffsets.visibleCount + (timeScale === "month" ? yearsList.length * 12 : timeScale === "week" ? yearsList.length * 52 : yearsList.reduce((acc, y) => acc + (isLeapYear(y) ? 366 : 365), 0))} 
                         className="py-14 text-center text-slate-400"
                       >
                         Chưa có kế hoạch bảo trì nào phù hợp bộ lọc
@@ -1978,10 +2341,10 @@ export default function MaintenancePage() {
               {/* Blue line for current point in time running vertically across the table */}
               {filtered.length > 0 && todayLineFraction >= 0 && (
                 <div 
-                  className="absolute top-0 bottom-0 w-[2.5px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-20"
-                  style={{ left: `calc(378px + (100% - 378px) * ${todayLineFraction})` }}
+                  className="absolute top-0 bottom-0 w-[2.5px] bg-sky-500 pointer-events-none shadow-[0_0_8px_rgba(14,165,233,0.5)] z-25"
+                  style={{ left: `calc(${timelineOffsets.totalStickyWidth}px + (100% - ${timelineOffsets.totalStickyWidth}px) * ${todayLineFraction})` }}
                 >
-                  <div className="absolute top-1 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap shadow-xs">
+                  <div className="sticky top-2 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap shadow-xs w-fit mx-auto">
                     Hiện tại
                   </div>
                 </div>
