@@ -208,30 +208,63 @@ const getPlanStatus = (t: any, progressPercent: number): { label: string; status
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  id: 150,
-  customer: 240,
-  contract: 220,
-  creator: 160,
-  created_at: 160,
-  hold_time: 90,
-  status: 130,
-  progress: 170,
-  actions: 90,
+  id: 145,
+  customer: 230,
+  customer_short: 130,
+  contract: 200,
+  notes: 180,
+  creator: 150,
+  created_at: 150,
+  hold_time: 85,
+  status: 120,
+  progress: 150,
+  actions: 85,
 };
 
 const MIN_COL_WIDTHS: Record<string, number> = {
-  id: 100,
+  id: 95,
   customer: 140,
+  customer_short: 80,
   contract: 120,
+  notes: 100,
   creator: 110,
   created_at: 120,
-  hold_time: 70,
-  status: 100,
-  progress: 120,
-  actions: 80,
+  hold_time: 65,
+  status: 95,
+  progress: 110,
+  actions: 75,
 };
 
 const STORAGE_COL_WIDTHS_KEY = "jpt_maintenance_col_widths";
+
+// Helper lấy Tên KH Viết tắt từ ticket
+export const getCustomerShortName = (t: any): string => {
+  if (t?.customer_short_name) return String(t.customer_short_name);
+  if (t?.short_name) return String(t.short_name);
+  if (t?.customer_code) return String(t.customer_code);
+  if (t?.remark) {
+    try {
+      const parsed = typeof t.remark === "string" ? JSON.parse(t.remark) : t.remark;
+      if (parsed?.customer_short_name) return String(parsed.customer_short_name);
+      if (parsed?.short_name) return String(parsed.short_name);
+    } catch {}
+  }
+  return t?.customer?.code || "";
+};
+
+// Helper lấy Ghi chú từ ticket
+export const getPlanNotes = (t: any): string => {
+  if (t?.notes) return String(t.notes);
+  if (t?.description) return String(t.description);
+  if (t?.remark) {
+    try {
+      const parsed = typeof t.remark === "string" ? JSON.parse(t.remark) : t.remark;
+      if (parsed?.notes) return String(parsed.notes);
+      if (parsed?.description) return String(parsed.description);
+    } catch {}
+  }
+  return "";
+};
 
 const STATUS_OPTIONS = [
   { key: "New", label: "Mới tạo", badgeClass: "bg-blue-100 text-blue-700 border border-blue-200" },
@@ -258,7 +291,7 @@ export default function MaintenancePage() {
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [customerFilter, setCustomerFilter] = useState("All");
   const [timeScale, setTimeScale] = useState<"day" | "week" | "month">("month");
-  const [sortField, setSortField] = useState<"customer" | "created_at" | null>(null);
+  const [sortField, setSortField] = useState<"customer" | "customer_short" | "created_at" | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -325,6 +358,10 @@ export default function MaintenancePage() {
     } catch (e) {}
   };
 
+  const totalTableWidth = useMemo(() => {
+    return Object.values(colWidths).reduce((sum, w) => sum + (Number(w) || 100), 0);
+  }, [colWidths]);
+
   // Close status dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -363,10 +400,11 @@ export default function MaintenancePage() {
   
   const [form, setForm] = useState({
     customerId: "",
+    customerShortName: "",
     contractId: "",
     totalPeriods: 12,
     status: "New",
-    description: "",
+    notes: "",
     creatorName: "",
   });
 
@@ -412,7 +450,7 @@ export default function MaintenancePage() {
     loadReferenceData();
   }, []);
 
-  const handleSort = (field: "customer" | "created_at") => {
+  const handleSort = (field: "customer" | "customer_short" | "created_at") => {
     if (sortField === field) {
       setSortOrder(prev => (prev === "asc" ? "desc" : "asc"));
     } else {
@@ -422,7 +460,13 @@ export default function MaintenancePage() {
   };
 
   const handleCustomerChange = async (customerId: string) => {
-    setForm(f => ({ ...f, customerId, contractId: "" }));
+    const custObj = customers.find(c => c.id === customerId);
+    setForm(f => ({
+      ...f,
+      customerId,
+      contractId: "",
+      customerShortName: f.customerShortName || custObj?.code || "",
+    }));
     if (customerId) {
       try {
         const matched = await fetchContractsByCustomer(customerId);
@@ -470,10 +514,11 @@ export default function MaintenancePage() {
     setEditingPlan(null);
     setForm({
       customerId: "",
+      customerShortName: "",
       contractId: "",
       totalPeriods: 12,
       status: "New",
-      description: "",
+      notes: "",
       creatorName: staffList[0]?.ten_nhan_su || "Admin",
     });
     setFilteredContracts([]);
@@ -484,10 +529,11 @@ export default function MaintenancePage() {
     setEditingPlan(plan);
     setForm({
       customerId: plan.customer_id || "",
+      customerShortName: getCustomerShortName(plan),
       contractId: plan.contract_id || "",
       totalPeriods: parseInt(plan.hold_time) || 12,
       status: plan.tt_status || "New",
-      description: plan.description || "",
+      notes: getPlanNotes(plan),
       creatorName: plan.creator_name || plan.created_by || plan.user_name || "",
     });
     if (plan.customer_id) {
@@ -524,7 +570,7 @@ export default function MaintenancePage() {
 
       const payload: any = {
         title: `Kế hoạch bảo trì - ${custObj?.name || "Khách hàng"}`,
-        description: form.description,
+        description: form.notes,
         customer_id: form.customerId,
         customer_name: custObj?.name || null,
         contract_id: form.contractId || null,
@@ -535,6 +581,19 @@ export default function MaintenancePage() {
       };
 
       if (editingPlan) {
+        let existingRemarkObj: any = {};
+        if (editingPlan.remark) {
+          try {
+            existingRemarkObj = typeof editingPlan.remark === "string" ? JSON.parse(editingPlan.remark) : editingPlan.remark;
+          } catch {}
+        }
+        const updatedRemark = {
+          ...existingRemarkObj,
+          customer_short_name: form.customerShortName.trim(),
+          notes: form.notes.trim(),
+        };
+        payload.remark = JSON.stringify(updatedRemark);
+
         await supabase
           .from("tickets")
           .update(payload)
@@ -549,7 +608,9 @@ export default function MaintenancePage() {
           },
           cycleMeta: {},
           tasks: {},
-          recommendations: {}
+          recommendations: {},
+          customer_short_name: form.customerShortName.trim(),
+          notes: form.notes.trim(),
         };
 
         await supabase
@@ -569,10 +630,11 @@ export default function MaintenancePage() {
       setEditingPlan(null);
       setForm({
         customerId: "",
+        customerShortName: "",
         contractId: "",
         totalPeriods: 12,
         status: "New",
-        description: "",
+        notes: "",
         creatorName: "",
       });
       setFilteredContracts([]);
@@ -590,10 +652,14 @@ export default function MaintenancePage() {
       const displayId = (t.ticket_id || "").replace(/^[A-Z]+-/, 'BTR-').toLowerCase();
       const idMatch = !term || displayId.includes(term) || (t.ticket_id || "").toLowerCase().includes(term);
       const custMatch = !term || (t.customer?.name || t.customer_name || "")?.toLowerCase().includes(term);
+      const shortName = getCustomerShortName(t).toLowerCase();
+      const shortMatch = !term || shortName.includes(term);
       const contrMatch = !term || (t.contract_no || t.contract?.contract_no || t.contract?.service || t.contract?.name || "")?.toLowerCase().includes(term);
+      const notesText = getPlanNotes(t).toLowerCase();
+      const notesMatch = !term || notesText.includes(term);
       const creatorMatch = !term || (t.creator_name || t.created_by || t.user_name || "")?.toLowerCase().includes(term);
       
-      const matchesSearch = !term || idMatch || custMatch || contrMatch || creatorMatch;
+      const matchesSearch = !term || idMatch || custMatch || shortMatch || contrMatch || notesMatch || creatorMatch;
       
       const progressVal = calculatePlanProgress(t);
       const planStatus = getPlanStatus(t, progressVal);
@@ -623,6 +689,13 @@ export default function MaintenancePage() {
         const nameA = (a.customer?.name || a.customer_name || "").trim().toLowerCase();
         const nameB = (b.customer?.name || b.customer_name || "").trim().toLowerCase();
         const cmp = nameA.localeCompare(nameB, "vi");
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+    } else if (sortField === "customer_short") {
+      list.sort((a, b) => {
+        const sA = getCustomerShortName(a).trim().toLowerCase();
+        const sB = getCustomerShortName(b).trim().toLowerCase();
+        const cmp = sA.localeCompare(sB, "vi");
         return sortOrder === "asc" ? cmp : -cmp;
       });
     } else if (sortField === "created_at") {
@@ -1147,10 +1220,16 @@ export default function MaintenancePage() {
 
       {/* Table */}
       {activeTab === "list" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="min-w-full text-sm table-fixed border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div 
+            ref={scrollContainerRef}
+            className="table-scroll overflow-x-auto overflow-y-auto max-h-[calc(100vh-235px)] min-h-[350px] relative custom-scrollbar"
+          >
+            <table 
+              style={{ minWidth: `${totalTableWidth}px`, width: "max-content", tableLayout: "fixed" }}
+              className="min-w-full text-sm table-fixed border-collapse"
+            >
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <tr className="text-xs text-slate-500 font-medium text-left">
                   {/* ID */}
                   <th 
@@ -1191,6 +1270,31 @@ export default function MaintenancePage() {
                     />
                   </th>
 
+                  {/* Customer Short Name */}
+                  <th 
+                    style={{ width: `${colWidths.customer_short}px`, minWidth: `${colWidths.customer_short}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 cursor-pointer select-none hover:bg-slate-100/80 transition group"
+                    onClick={() => handleSort("customer_short")}
+                    title="Bấm để sắp xếp theo tên KH viết tắt • Kéo viền phải để chỉnh kích thước"
+                  >
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <span className={sortField === "customer_short" ? "font-semibold text-blue-700" : ""}>Tên KH Viết tắt</span>
+                      <span className="text-slate-400 group-hover:text-slate-600">
+                        {sortField === "customer_short" ? (
+                          sortOrder === "asc" ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                        ) : (
+                          <ArrowUpDown size={13} className="opacity-40 group-hover:opacity-100" />
+                        )}
+                      </span>
+                    </div>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("customer_short", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
                   {/* Contract */}
                   <th 
                     style={{ width: `${colWidths.contract}px`, minWidth: `${colWidths.contract}px` }}
@@ -1199,6 +1303,20 @@ export default function MaintenancePage() {
                     <span className="truncate">Tên hợp đồng</span>
                     <div
                       onMouseDown={(e) => handleMouseDown("contract", e)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
+                      title="Kéo để điều chỉnh độ rộng cột"
+                    />
+                  </th>
+
+                  {/* Notes */}
+                  <th 
+                    style={{ width: `${colWidths.notes}px`, minWidth: `${colWidths.notes}px` }}
+                    className="relative px-4 py-3 border-r border-slate-200 select-none group"
+                  >
+                    <span className="truncate">Ghi chú</span>
+                    <div
+                      onMouseDown={(e) => handleMouseDown("notes", e)}
                       onClick={(e) => e.stopPropagation()}
                       className="absolute top-0 right-0 h-full w-2.5 cursor-col-resize hover:bg-blue-500/50 active:bg-blue-600 transition-colors z-20"
                       title="Kéo để điều chỉnh độ rộng cột"
@@ -1298,14 +1416,14 @@ export default function MaintenancePage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={11} className="py-12 text-center text-slate-400">
                       <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                       Đang tải...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-14 text-center text-slate-400">
+                    <td colSpan={11} className="py-14 text-center text-slate-400">
                       <Wrench size={36} className="mx-auto mb-2 opacity-20" />
                       <p className="text-sm">{search || statusFilter.length > 0 || customerFilter !== "All" ? "Không tìm thấy kết quả phù hợp bộ lọc" : "Chưa có kế hoạch bảo trì nào"}</p>
                       <button onClick={handleCreateOpen} className="mt-3 text-blue-500 text-sm hover:underline cursor-pointer">
@@ -1317,18 +1435,32 @@ export default function MaintenancePage() {
                   filtered.map((t: any, i: number) => {
                     const progressVal = calculatePlanProgress(t);
                     const statusInfo = getPlanStatus(t, progressVal);
+                    const shortName = getCustomerShortName(t);
+                    const notesText = getPlanNotes(t);
                     return (
-                      <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition">
+                      <tr key={t.id || i} className="border-t border-slate-100 hover:bg-slate-50 transition">
                         <td style={{ width: `${colWidths.id}px` }} className="px-4 py-3.5 font-medium text-blue-600 border-r border-b border-slate-200 truncate">
                           <Link href={`/maintenance/${t.id}`} className="hover:underline">
                             {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
                           </Link>
                         </td>
-                        <td style={{ width: `${colWidths.customer}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
+                        <td style={{ width: `${colWidths.customer}px` }} className="px-4 py-3.5 text-slate-700 font-medium border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
                           {t.customer?.name || t.customer_name || "—"}
+                        </td>
+                        <td style={{ width: `${colWidths.customer_short}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={shortName}>
+                          {shortName ? (
+                            <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
+                              {shortName}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
                         <td style={{ width: `${colWidths.contract}px` }} className="px-4 py-3.5 text-slate-500 border-r border-b border-slate-200 truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
                           {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
+                        </td>
+                        <td style={{ width: `${colWidths.notes}px` }} className="px-4 py-3.5 text-slate-500 text-xs border-r border-b border-slate-200 truncate" title={notesText}>
+                          {notesText || "—"}
                         </td>
                         <td style={{ width: `${colWidths.creator}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
                           <div className="flex items-center gap-1.5 truncate">
@@ -1578,6 +1710,20 @@ export default function MaintenancePage() {
                 />
               </div>
 
+              {/* Customer Short Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Tên KH Viết tắt
+                </label>
+                <input
+                  type="text"
+                  value={form.customerShortName}
+                  onChange={e => setForm(f => ({ ...f, customerShortName: e.target.value }))}
+                  placeholder="Nhập tên viết tắt (vd: VIETIN, MBB, JPT...)"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {/* Contract Select */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
@@ -1653,14 +1799,14 @@ export default function MaintenancePage() {
                 </select>
               </div>
 
-              {/* Description */}
+              {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mô tả / Ghi chú</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ghi chú</label>
                 <textarea
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   rows={2}
-                  placeholder="Ghi chú chi tiết..."
+                  placeholder="Nhập ghi chú cho kế hoạch bảo trì..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>

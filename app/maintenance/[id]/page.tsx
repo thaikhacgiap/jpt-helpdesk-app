@@ -702,7 +702,13 @@ export default function MaintenanceDetailPage() {
         flattenedTasks[cKey] = all;
       });
 
+      let existingRemarkObj: any = {};
+      if (plan?.remark) {
+        try { existingRemarkObj = typeof plan.remark === "string" ? JSON.parse(plan.remark) : plan.remark; } catch {}
+      }
+
       const payload = {
+        ...existingRemarkObj,
         config: updatedConfig,
         cycleMeta: updatedMeta,
         taskLists: updatedTaskLists,
