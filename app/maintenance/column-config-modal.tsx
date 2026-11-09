@@ -57,17 +57,17 @@ export const DEFAULT_MAINTENANCE_COL_WIDTHS: Record<string, number> = {
 };
 
 export const MIN_MAINTENANCE_COL_WIDTHS: Record<string, number> = {
-  id: 95,
-  customer: 140,
-  customer_short: 80,
-  contract: 120,
-  notes: 100,
-  creator: 110,
-  created_at: 120,
-  hold_time: 65,
-  status: 95,
-  progress: 110,
-  actions: 75,
+  id: 45,
+  customer: 45,
+  customer_short: 40,
+  contract: 45,
+  notes: 45,
+  creator: 45,
+  created_at: 45,
+  hold_time: 35,
+  status: 45,
+  progress: 45,
+  actions: 55,
 };
 
 export const MAINTENANCE_SYSTEM_TEMPLATES: MaintenanceColumnTemplate[] = [
@@ -238,7 +238,7 @@ export default function MaintenanceColumnConfigModal({
 
   // Width change
   const handleWidthChange = (key: string, width: number) => {
-    const minW = MIN_MAINTENANCE_COL_WIDTHS[key] || 60;
+    const minW = MIN_MAINTENANCE_COL_WIDTHS[key] || 40;
     const safeWidth = Math.max(minW, Math.min(600, width));
     setColWidths((prev) => ({
       ...prev,
@@ -402,10 +402,10 @@ export default function MaintenanceColumnConfigModal({
                         <input
                           type="number"
                           value={width}
-                          min={MIN_MAINTENANCE_COL_WIDTHS[key] || 60}
+                          min={MIN_MAINTENANCE_COL_WIDTHS[key] || 40}
                           max={600}
                           step={5}
-                          onChange={(e) => handleWidthChange(key, parseInt(e.target.value, 10) || 60)}
+                          onChange={(e) => handleWidthChange(key, parseInt(e.target.value, 10) || 40)}
                           className="w-12 text-right bg-transparent text-[11px] font-mono font-medium text-slate-700 outline-none"
                         />
                         <span className="text-[10px] text-slate-400">px</span>
@@ -580,3 +580,4 @@ export default function MaintenanceColumnConfigModal({
     </div>
   );
 }
+

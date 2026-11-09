@@ -460,7 +460,7 @@ export default function MaintenancePage() {
       if (!resizingRef.current) return;
       const { colKey, startX, startWidth } = resizingRef.current;
       const delta = moveEvent.clientX - startX;
-      const minW = MIN_MAINTENANCE_COL_WIDTHS[colKey] || 70;
+      const minW = MIN_MAINTENANCE_COL_WIDTHS[colKey] || 40;
       const newWidth = Math.max(minW, startWidth + delta);
       latestWidths = {
         ...latestWidths,
@@ -491,7 +491,7 @@ export default function MaintenancePage() {
         sum += Number(colWidths[key]) || DEFAULT_MAINTENANCE_COL_WIDTHS[key] || 120;
       }
     }
-    return Math.max(900, sum);
+    return sum;
   }, [colWidths, columnOrder, visibleColumns]);
 
   const activeTemplate = useMemo(() => {
@@ -1533,8 +1533,8 @@ export default function MaintenancePage() {
             className="table-scroll overflow-x-auto overflow-y-auto max-h-[calc(100vh-235px)] min-h-[350px] relative custom-scrollbar"
           >
             <table 
-              style={{ minWidth: `${totalTableWidth}px`, width: "max-content", tableLayout: "fixed" }}
-              className="min-w-full text-sm table-fixed border-collapse"
+              style={{ width: `${totalTableWidth}px`, minWidth: `${totalTableWidth}px`, tableLayout: "fixed" }}
+              className="text-sm table-fixed border-collapse"
             >
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <tr className="text-xs text-slate-500 font-medium text-left">
@@ -1545,6 +1545,7 @@ export default function MaintenancePage() {
                     const isDragging = draggedColKey === colKey;
                     const isDragOver = dragOverColKey === colKey;
                     const isSortable = colKey === "customer" || colKey === "customer_short" || colKey === "created_at";
+                    const w = colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120;
 
                     return (
                       <th 
@@ -1557,26 +1558,26 @@ export default function MaintenancePage() {
                         onClick={() => {
                           if (isSortable) handleSort(colKey as any);
                         }}
-                        style={{ width: `${colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120}px`, minWidth: `${colWidths[colKey] || DEFAULT_MAINTENANCE_COL_WIDTHS[colKey] || 120}px` }}
-                        className={`relative px-4 py-3 border-r border-slate-200 select-none group transition-colors cursor-move ${
+                        style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }}
+                        className={`relative px-3 py-2.5 border-r border-slate-200 select-none group transition-colors cursor-move overflow-hidden ${
                           isSortable ? "hover:bg-slate-100/80" : ""
                         } ${isDragging ? "opacity-30 bg-blue-50" : ""} ${
                           isDragOver ? "bg-blue-100 border-l-2 border-l-blue-600 shadow-inner" : ""
                         }`}
                         title="Kéo thả để thay đổi vị trí cột • Kéo viền phải để chỉnh kích thước"
                       >
-                        <div className="flex items-center justify-between gap-1 pr-2">
-                          <div className="flex items-center gap-1.5 truncate">
+                        <div className="flex items-center justify-between gap-1 pr-1.5 min-w-0">
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
                             <GripVertical size={12} className="text-slate-300 group-hover:text-slate-500 shrink-0 cursor-grab" />
-                            <span className={`truncate ${sortField === colKey ? "font-semibold text-blue-700" : ""}`}>
+                            <span className={`line-clamp-2 break-words [overflow-wrap:anywhere] leading-tight text-xs ${sortField === colKey ? "font-semibold text-blue-700" : ""}`}>
                               {label}
                             </span>
                             {isSortable && (
                               <span className="text-slate-400 group-hover:text-slate-600 shrink-0">
                                 {sortField === colKey ? (
-                                  sortOrder === "asc" ? <ArrowUp size={13} className="text-blue-600" /> : <ArrowDown size={13} className="text-blue-600" />
+                                  sortOrder === "asc" ? <ArrowUp size={12} className="text-blue-600" /> : <ArrowDown size={12} className="text-blue-600" />
                                 ) : (
-                                  <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100" />
+                                  <ArrowUpDown size={11} className="opacity-30 group-hover:opacity-100" />
                                 )}
                               </span>
                             )}
@@ -1599,8 +1600,8 @@ export default function MaintenancePage() {
 
                   {/* Actions Header */}
                   <th 
-                    style={{ width: `${colWidths.actions || 85}px`, minWidth: `${colWidths.actions || 85}px` }}
-                    className="relative px-4 py-3 text-center select-none group bg-slate-50"
+                    style={{ width: `${colWidths.actions || 85}px`, minWidth: `${colWidths.actions || 85}px`, maxWidth: `${colWidths.actions || 85}px` }}
+                    className="relative px-3 py-2.5 text-center select-none group bg-slate-50 overflow-hidden"
                   >
                     <div className="flex items-center justify-center gap-1">
                       <span className="truncate">Thao tác</span>
@@ -1648,23 +1649,44 @@ export default function MaintenancePage() {
                           switch (colKey) {
                             case "id":
                               return (
-                                <td key="id" style={{ width: `${w}px` }} className="px-4 py-3.5 font-medium text-blue-600 border-r border-b border-slate-200 truncate">
-                                  <Link href={`/maintenance/${t.id}`} className="hover:underline">
+                                <td 
+                                  key="id" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 font-medium text-blue-600 border-r border-b border-slate-200 overflow-hidden"
+                                >
+                                  <Link 
+                                    href={`/maintenance/${t.id}`} 
+                                    className="hover:underline line-clamp-2 break-all [overflow-wrap:anywhere] leading-snug"
+                                    title={t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
+                                  >
                                     {t.ticket_id ? t.ticket_id.replace(/^[A-Z]+-/, 'BTR-') : '—'}
                                   </Link>
                                 </td>
                               );
                             case "customer":
+                              const custName = t.customer?.name || t.customer_name || "—";
                               return (
-                                <td key="customer" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 font-medium border-r border-b border-slate-200 truncate" title={t.customer?.name || t.customer_name}>
-                                  {t.customer?.name || t.customer_name || "—"}
+                                <td 
+                                  key="customer" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-700 font-medium border-r border-b border-slate-200 overflow-hidden" 
+                                  title={custName}
+                                >
+                                  <div className="line-clamp-2 break-words [overflow-wrap:anywhere] leading-snug">
+                                    {custName}
+                                  </div>
                                 </td>
                               );
                             case "customer_short":
                               return (
-                                <td key="customer_short" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={shortName}>
+                                <td 
+                                  key="customer_short" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-700 border-r border-b border-slate-200 overflow-hidden" 
+                                  title={shortName || "—"}
+                                >
                                   {shortName ? (
-                                    <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
+                                    <span className="inline-block max-w-full px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold line-clamp-2 break-all [overflow-wrap:anywhere] leading-tight">
                                       {shortName}
                                     </span>
                                   ) : (
@@ -1673,57 +1695,100 @@ export default function MaintenancePage() {
                                 </td>
                               );
                             case "contract":
+                              const contractText = t.contract_no || t.contract?.contract_no || t.contract?.name || "—";
                               return (
-                                <td key="contract" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 border-r border-b border-slate-200 truncate" title={t.contract_no || t.contract?.contract_no || t.contract?.name}>
-                                  {t.contract_no || t.contract?.contract_no || t.contract?.name || "—"}
+                                <td 
+                                  key="contract" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-500 border-r border-b border-slate-200 overflow-hidden" 
+                                  title={contractText}
+                                >
+                                  <div className="line-clamp-2 break-all [overflow-wrap:anywhere] leading-snug">
+                                    {contractText}
+                                  </div>
                                 </td>
                               );
                             case "notes":
                               return (
-                                <td key="notes" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 text-xs border-r border-b border-slate-200 truncate" title={notesText}>
-                                  {notesText || "—"}
+                                <td 
+                                  key="notes" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-500 text-xs border-r border-b border-slate-200 overflow-hidden" 
+                                  title={notesText || "—"}
+                                >
+                                  <div className="line-clamp-2 break-words [overflow-wrap:anywhere] leading-snug">
+                                    {notesText || "—"}
+                                  </div>
                                 </td>
                               );
                             case "creator":
+                              const creatorStr = t.creator_name || t.created_by || t.user_name || "—";
                               return (
-                                <td key="creator" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-700 border-r border-b border-slate-200 truncate" title={t.creator_name || t.created_by || t.user_name || ""}>
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <User size={13} className="text-slate-400 shrink-0" />
-                                    <span className="truncate">{t.creator_name || t.created_by || t.user_name || "—"}</span>
+                                <td 
+                                  key="creator" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-700 border-r border-b border-slate-200 overflow-hidden" 
+                                  title={creatorStr}
+                                >
+                                  <div className="flex items-start gap-1.5 min-w-0">
+                                    <User size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                                    <span className="line-clamp-2 break-words [overflow-wrap:anywhere] leading-snug">
+                                      {creatorStr}
+                                    </span>
                                   </div>
                                 </td>
                               );
                             case "created_at":
+                              const dateStr = formatDateTimeVN(t.created_at || t.created_time || t.start_time);
                               return (
-                                <td key="created_at" style={{ width: `${w}px` }} className="px-4 py-3.5 text-slate-500 whitespace-nowrap text-xs border-r border-b border-slate-200 truncate" title={t.created_at || ""}>
-                                  {formatDateTimeVN(t.created_at || t.created_time || t.start_time)}
+                                <td 
+                                  key="created_at" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-slate-500 text-xs border-r border-b border-slate-200 overflow-hidden" 
+                                  title={t.created_at || dateStr}
+                                >
+                                  <div className="line-clamp-2 break-words [overflow-wrap:anywhere] leading-snug">
+                                    {dateStr}
+                                  </div>
                                 </td>
                               );
                             case "hold_time":
                               return (
-                                <td key="hold_time" style={{ width: `${w}px` }} className="px-4 py-3.5 text-center font-medium text-slate-500 border-r border-b border-slate-200 truncate">
-                                  {t.hold_time || 0}
+                                <td 
+                                  key="hold_time" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 text-center font-medium text-slate-500 border-r border-b border-slate-200 overflow-hidden"
+                                >
+                                  <span className="line-clamp-2 break-all">{t.hold_time || 0}</span>
                                 </td>
                               );
                             case "status":
                               return (
-                                <td key="status" style={{ width: `${w}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
-                                  <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusInfo.badgeClass}`}>
+                                <td 
+                                  key="status" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 border-r border-b border-slate-200 overflow-hidden"
+                                >
+                                  <span className={`inline-block max-w-full px-2 py-0.5 rounded text-xs font-semibold line-clamp-2 break-all leading-tight ${statusInfo.badgeClass}`}>
                                     {statusInfo.label}
                                   </span>
                                 </td>
                               );
                             case "progress":
                               return (
-                                <td key="progress" style={{ width: `${w}px` }} className="px-4 py-3.5 border-r border-b border-slate-200 truncate">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                                <td 
+                                  key="progress" 
+                                  style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }} 
+                                  className="px-3 py-2.5 border-r border-b border-slate-200 overflow-hidden"
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <div className="flex-1 min-w-[20px] bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
                                       <div 
                                         className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${statusInfo.barClass}`}
                                         style={{ width: `${progressVal}%` }}
                                       />
                                     </div>
-                                    <span className="text-xs font-semibold text-slate-600 min-w-[32px]">{progressVal}%</span>
+                                    <span className="text-xs font-semibold text-slate-600 shrink-0">{progressVal}%</span>
                                   </div>
                                 </td>
                               );
@@ -1731,21 +1796,24 @@ export default function MaintenancePage() {
                               return null;
                           }
                         })}
-                        <td style={{ width: `${colWidths.actions || 85}px` }} className="px-4 py-3.5 text-center border-b border-slate-200">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td 
+                          style={{ width: `${colWidths.actions || 85}px`, minWidth: `${colWidths.actions || 85}px`, maxWidth: `${colWidths.actions || 85}px` }} 
+                          className="px-2 py-2.5 text-center border-b border-slate-200 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-center gap-1">
                             <button 
                               onClick={() => handleEdit(t)}
                               className="p-1 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded transition cursor-pointer"
                               title="Sửa kế hoạch"
                             >
-                              <Pencil size={15} />
+                              <Pencil size={14} />
                             </button>
                             <button 
                               onClick={() => handleDelete(t.id)}
                               className="p-1 hover:bg-slate-100 text-slate-500 hover:text-red-600 rounded transition cursor-pointer"
                               title="Xóa kế hoạch"
                             >
-                              <Trash2 size={15} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
