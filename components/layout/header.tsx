@@ -47,6 +47,7 @@ export default function Header({
   activeTab,
   setActiveTab,
   navTabs,
+  className,
 }: HeaderProps) {
   const pathname = usePathname();
 
