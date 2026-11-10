@@ -15,6 +15,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { upsertContactFromImport } from "@/lib/contact-operations";
+import { getStorageConfig } from "@/lib/storage-service";
 
 interface ContactImportModalProps {
   isOpen: boolean;
@@ -99,6 +100,16 @@ export default function ContactImportModal({
       setUserRefreshToken(savedRefreshToken);
       setUserClientId(savedClientId);
       setUserClientSecret(savedClientSecret);
+
+      if (!savedUrl || !savedRefreshToken) {
+        getStorageConfig().then((cfg) => {
+          const master = cfg.master_sheet_url || cfg.sheet_master_url || "";
+          if (!savedUrl && master) setSheetUrl(master);
+          if (!savedRefreshToken && cfg.drive_refresh_token) setUserRefreshToken(cfg.drive_refresh_token);
+          if (!savedClientId && cfg.drive_client_id) setUserClientId(cfg.drive_client_id);
+          if (!savedClientSecret && cfg.drive_client_secret) setUserClientSecret(cfg.drive_client_secret);
+        }).catch(() => {});
+      }
     }
   }, [isOpen]);
 

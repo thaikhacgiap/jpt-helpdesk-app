@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
+import { getCurrentUser, UserSession } from "@/lib/auth-operations";
 import { supabase } from "@/lib/supabase";
 import { logOperation } from "@/lib/logger";
 import { 
@@ -24,7 +25,12 @@ const SYSTEM_NAV_TABS = [
 ];
 
 export default function SystemPage() {
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [activeTab, setActiveTab] = useState<"app" | "db">("app");
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   // App Backup/Restore states
   const [appBackupLoading, setAppBackupLoading] = useState(false);
@@ -260,7 +266,7 @@ export default function SystemPage() {
       <Header 
         title="Quản Lý Hệ Thống" 
         description="Sao lưu và phục hồi ứng dụng, xuất/nhập và phục hồi dữ liệu cơ sở dữ liệu của phần mềm." 
-        navTabs={SYSTEM_NAV_TABS}
+        navTabs={currentUser?.role === "Admin" ? SYSTEM_NAV_TABS : SYSTEM_NAV_TABS.filter(t => t.href !== "/settings")}
       />
 
       {/* Tabs */}

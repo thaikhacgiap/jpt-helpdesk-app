@@ -19,6 +19,7 @@ import {
   Target
 } from "lucide-react";
 import { upsertOpportunityFromImport } from "@/lib/opportunity-operations";
+import { getStorageConfig } from "@/lib/storage-service";
 
 interface OpportunityImportModalProps {
   isOpen: boolean;
@@ -114,6 +115,17 @@ export default function OpportunityImportModal({
 
       if (savedToken || savedRefreshToken || savedClientId) {
         setShowAuthConfig(true);
+      }
+
+      if (!savedUrl || !savedRefreshToken) {
+        getStorageConfig().then((cfg) => {
+          const master = cfg.master_sheet_url || cfg.sheet_master_url || "";
+          if (!savedUrl && master) setSheetUrl(master);
+          if (!savedRefreshToken && cfg.drive_refresh_token) setUserRefreshToken(cfg.drive_refresh_token);
+          if (!savedClientId && cfg.drive_client_id) setUserClientId(cfg.drive_client_id);
+          if (!savedClientSecret && cfg.drive_client_secret) setUserClientSecret(cfg.drive_client_secret);
+          if (cfg.drive_refresh_token || cfg.drive_client_id) setShowAuthConfig(true);
+        }).catch(() => {});
       }
     }
   }, [isOpen]);

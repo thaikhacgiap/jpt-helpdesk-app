@@ -14,7 +14,9 @@ import {
   updateUserRole,
   fetchGroups,
   UserGroup,
-  SystemUser 
+  SystemUser,
+  getCurrentUser,
+  UserSession 
 } from "@/lib/auth-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
@@ -100,6 +102,11 @@ function UsersPageContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   // Create Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -505,7 +512,7 @@ function UsersPageContent() {
       <Header 
         title="Quản Lý Hệ Thống" 
         description="Quản trị tài khoản người dùng, phân quyền vai trò và thiết lập quyền truy cập chức năng của từng nhóm." 
-        navTabs={SYSTEM_NAV_TABS}
+        navTabs={currentUser?.role === "Admin" ? SYSTEM_NAV_TABS : SYSTEM_NAV_TABS.filter(t => t.href !== "/settings")}
       />
 
       {/* Sub Tabs: Người dùng & Phân quyền nhóm */}

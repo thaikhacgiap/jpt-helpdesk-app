@@ -243,6 +243,11 @@ export function hasAccess(role: UserSession["role"], pathname: string): boolean 
   const path = pathname.toLowerCase();
   if (path === "/guide" || path.startsWith("/guide/")) return true;
 
+  // STRICT RULE: Chỉ tài khoản Quản trị viên (Admin) mới có quyền truy cập Cấu hình hệ thống /settings
+  if (path === "/settings" || path.startsWith("/settings/")) {
+    return role === "Admin";
+  }
+
   if (role === "Admin") return true;
 
   const session = getCurrentUser();

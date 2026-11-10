@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getCurrentUser } from "./auth-operations";
 
 export type StorageProvider = "google_drive" | "supabase" | "local";
 
@@ -19,8 +20,17 @@ export interface StorageConfig {
   sheet_contact_tab?: string;
   sheet_nhan_su_tab?: string;
   sheet_contract_tab?: string;
+  // Aliases for form compatibility
+  master_sheet_url?: string;
+  master_sheet_tab_customer?: string;
+  master_sheet_tab_opportunity?: string;
+  master_sheet_tab_contact?: string;
+  master_sheet_tab_nhansu?: string;
+  master_sheet_tab_contract?: string;
   auto_subfolders: boolean;
   max_file_size_mb: number;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export interface AttachedFile {
@@ -51,110 +61,196 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   drive_client_email: "",
   drive_private_key: "",
   sheet_master_url: "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit",
+  master_sheet_url: "https://docs.google.com/spreadsheets/d/1uo-bOv9u5Z284oWLtkca4zYadxkiNvMGhSh5HFCwWG8/edit",
   sheet_customer_tab: "Customer",
+  master_sheet_tab_customer: "Customer",
   sheet_opportunity_tab: "Opportunity",
+  master_sheet_tab_opportunity: "Opportunity",
   sheet_contact_tab: "Contact",
+  master_sheet_tab_contact: "Contact",
   sheet_nhan_su_tab: "NhanSu",
+  master_sheet_tab_nhansu: "NhanSu",
   sheet_contract_tab: "Contract",
+  master_sheet_tab_contract: "Contract",
   auto_subfolders: true,
   max_file_size_mb: 50,
 };
 
 /**
+ * Sync storage configuration values to browser localStorage so all pages can immediately consume them
+ */
+export function syncStorageConfigToLocal(config: StorageConfig): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(STORAGE_LOCAL_KEY, JSON.stringify(config));
+
+    const masterUrl = config.master_sheet_url || config.sheet_master_url;
+    if (masterUrl) {
+      localStorage.setItem("jpt_customer_sheet_url", masterUrl);
+      localStorage.setItem("jpt_opp_sheet_url", masterUrl);
+      localStorage.setItem("jpt_contact_sheet_url", masterUrl);
+      localStorage.setItem("jpt_nhan_su_sheet_url", masterUrl);
+      localStorage.setItem("jpt_contract_sheet_url", masterUrl);
+      localStorage.setItem("jpt_master_sheet_url", masterUrl);
+    }
+    if (config.drive_client_id) {
+      localStorage.setItem("jpt_google_user_client_id", config.drive_client_id);
+    }
+    if (config.drive_client_secret) {
+      localStorage.setItem("jpt_google_user_client_secret", config.drive_client_secret);
+    }
+    if (config.drive_refresh_token) {
+      localStorage.setItem("jpt_google_user_refresh_token", config.drive_refresh_token);
+    }
+    if (config.drive_access_token) {
+      localStorage.setItem("jpt_google_user_access_token", config.drive_access_token);
+    }
+    const tabCustomer = config.master_sheet_tab_customer || config.sheet_customer_tab;
+    if (tabCustomer) {
+      localStorage.setItem("jpt_customer_sheet_name", tabCustomer);
+    }
+    const tabOpp = config.master_sheet_tab_opportunity || config.sheet_opportunity_tab;
+    if (tabOpp) {
+      localStorage.setItem("jpt_opp_sheet_name", tabOpp);
+    }
+    const tabContact = config.master_sheet_tab_contact || config.sheet_contact_tab;
+    if (tabContact) {
+      localStorage.setItem("jpt_contact_sheet_name", tabContact);
+    }
+    const tabNhanSu = config.master_sheet_tab_nhansu || config.sheet_nhan_su_tab;
+    if (tabNhanSu) {
+      localStorage.setItem("jpt_nhan_su_sheet_name", tabNhanSu);
+    }
+    const tabContract = config.master_sheet_tab_contract || config.sheet_contract_tab;
+    if (tabContract) {
+      localStorage.setItem("jpt_contract_sheet_name", tabContract);
+    }
+  } catch (e) {
+    console.warn("Error syncing storage config to localStorage:", e);
+  }
+}
+
+/**
  * Fetch current storage configuration from Supabase system_settings or localStorage fallback
  */
 export async function getStorageConfig(): Promise<StorageConfig> {
-  if (typeof window === "undefined") return DEFAULT_STORAGE_CONFIG;
+  let config: StorageConfig = DEFAULT_STORAGE_CONFIG;
 
   try {
     // Try fetching from Supabase system_settings table first
     const { data, error } = await supabase
       .from("system_settings")
-      .select("setting_value")
+      .select("setting_value, updated_at, updated_by")
       .eq("setting_key", "storage_config")
       .maybeSingle();
 
-    if (!error && data?.setting_value) {
-      const config = { ...DEFAULT_STORAGE_CONFIG, ...data.setting_value };
-      localStorage.setItem(STORAGE_LOCAL_KEY, JSON.stringify(config));
-      return config;
+    if (!error && data?.setting_value && Object.keys(data.setting_value).length > 0) {
+      const mergedConfig = {
+        ...DEFAULT_STORAGE_CONFIG,
+        ...data.setting_value,
+        updated_at: data.updated_at,
+        updated_by: data.updated_by,
+      };
+      // Normalize aliases
+      const masterUrl = mergedConfig.master_sheet_url || mergedConfig.sheet_master_url;
+      mergedConfig.master_sheet_url = masterUrl;
+      mergedConfig.sheet_master_url = masterUrl;
+      mergedConfig.master_sheet_tab_customer = mergedConfig.master_sheet_tab_customer || mergedConfig.sheet_customer_tab || "Customer";
+      mergedConfig.sheet_customer_tab = mergedConfig.master_sheet_tab_customer;
+      mergedConfig.master_sheet_tab_opportunity = mergedConfig.master_sheet_tab_opportunity || mergedConfig.sheet_opportunity_tab || "Opportunity";
+      mergedConfig.sheet_opportunity_tab = mergedConfig.master_sheet_tab_opportunity;
+      mergedConfig.master_sheet_tab_contact = mergedConfig.master_sheet_tab_contact || mergedConfig.sheet_contact_tab || "Contact";
+      mergedConfig.sheet_contact_tab = mergedConfig.master_sheet_tab_contact;
+      mergedConfig.master_sheet_tab_nhansu = mergedConfig.master_sheet_tab_nhansu || mergedConfig.sheet_nhan_su_tab || "NhanSu";
+      mergedConfig.sheet_nhan_su_tab = mergedConfig.master_sheet_tab_nhansu;
+      mergedConfig.master_sheet_tab_contract = mergedConfig.master_sheet_tab_contract || mergedConfig.sheet_contract_tab || "Contract";
+      mergedConfig.sheet_contract_tab = mergedConfig.master_sheet_tab_contract;
+
+      syncStorageConfigToLocal(mergedConfig);
+      return mergedConfig;
     }
   } catch (err) {
     console.warn("Could not load storage config from Supabase, trying localStorage:", err);
   }
 
   // Fallback to localStorage
-  try {
-    const localData = localStorage.getItem(STORAGE_LOCAL_KEY);
-    if (localData) {
-      return { ...DEFAULT_STORAGE_CONFIG, ...JSON.parse(localData) };
+  if (typeof window !== "undefined") {
+    try {
+      const localData = localStorage.getItem(STORAGE_LOCAL_KEY);
+      if (localData) {
+        config = { ...DEFAULT_STORAGE_CONFIG, ...JSON.parse(localData) };
+        return config;
+      }
+    } catch (err) {
+      console.error("Error reading localStorage storage config:", err);
     }
-  } catch (err) {
-    console.error("Error reading localStorage storage config:", err);
   }
 
   return DEFAULT_STORAGE_CONFIG;
 }
 
 /**
- * Save storage configuration to Supabase system_settings & localStorage
+ * Save storage configuration to Supabase system_settings & localStorage.
+ * STRICT: Only Admin user can save!
  */
 export async function saveStorageConfig(config: StorageConfig): Promise<{ success: boolean; error?: string }> {
+  // Permission verification: Only Admin can modify settings
+  const currentUser = getCurrentUser();
+  if (!currentUser || currentUser.role !== "Admin") {
+    return {
+      success: false,
+      error: "Từ chối quyền: Chỉ tài khoản Quản trị viên (Admin) mới có quyền chỉnh sửa và lưu cấu hình hệ thống.",
+    };
+  }
+
   try {
+    const masterUrl = config.master_sheet_url || config.sheet_master_url || "";
+    const tabCustomer = config.master_sheet_tab_customer || config.sheet_customer_tab || "Customer";
+    const tabOpportunity = config.master_sheet_tab_opportunity || config.sheet_opportunity_tab || "Opportunity";
+    const tabContact = config.master_sheet_tab_contact || config.sheet_contact_tab || "Contact";
+    const tabNhanSu = config.master_sheet_tab_nhansu || config.sheet_nhan_su_tab || "NhanSu";
+    const tabContract = config.master_sheet_tab_contract || config.sheet_contract_tab || "Contract";
+
+    const normalizedConfig: StorageConfig = {
+      ...config,
+      sheet_master_url: masterUrl,
+      master_sheet_url: masterUrl,
+      sheet_customer_tab: tabCustomer,
+      master_sheet_tab_customer: tabCustomer,
+      sheet_opportunity_tab: tabOpportunity,
+      master_sheet_tab_opportunity: tabOpportunity,
+      sheet_contact_tab: tabContact,
+      master_sheet_tab_contact: tabContact,
+      sheet_nhan_su_tab: tabNhanSu,
+      master_sheet_tab_nhansu: tabNhanSu,
+      sheet_contract_tab: tabContract,
+      master_sheet_tab_contract: tabContract,
+      updated_at: new Date().toISOString(),
+      updated_by: currentUser.name ? `${currentUser.name} (${currentUser.email})` : currentUser.email,
+    };
+
     // Save to localStorage immediately
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_LOCAL_KEY, JSON.stringify(config));
+    syncStorageConfigToLocal(normalizedConfig);
 
-      // Sync master credentials to global shared keys across modules
-      if (config.sheet_master_url) {
-        localStorage.setItem("jpt_customer_sheet_url", config.sheet_master_url);
-        localStorage.setItem("jpt_opp_sheet_url", config.sheet_master_url);
-        localStorage.setItem("jpt_contact_sheet_url", config.sheet_master_url);
-        localStorage.setItem("jpt_nhan_su_sheet_url", config.sheet_master_url);
-        localStorage.setItem("jpt_contract_sheet_url", config.sheet_master_url);
-      }
-      if (config.drive_client_id) {
-        localStorage.setItem("jpt_google_user_client_id", config.drive_client_id);
-      }
-      if (config.drive_client_secret) {
-        localStorage.setItem("jpt_google_user_client_secret", config.drive_client_secret);
-      }
-      if (config.drive_refresh_token) {
-        localStorage.setItem("jpt_google_user_refresh_token", config.drive_refresh_token);
-      }
-      if (config.drive_access_token) {
-        localStorage.setItem("jpt_google_user_access_token", config.drive_access_token);
-      }
-      if (config.sheet_customer_tab) {
-        localStorage.setItem("jpt_customer_sheet_name", config.sheet_customer_tab);
-      }
-      if (config.sheet_opportunity_tab) {
-        localStorage.setItem("jpt_opp_sheet_name", config.sheet_opportunity_tab);
-      }
-      if (config.sheet_contact_tab) {
-        localStorage.setItem("jpt_contact_sheet_name", config.sheet_contact_tab);
-      }
-      if (config.sheet_nhan_su_tab) {
-        localStorage.setItem("jpt_nhan_su_sheet_name", config.sheet_nhan_su_tab);
-      }
-      if (config.sheet_contract_tab) {
-        localStorage.setItem("jpt_contract_sheet_name", config.sheet_contract_tab);
-      }
-    }
-
-    // Upsert into Supabase system_settings
+    // Upsert into Supabase system_settings for application-wide persistence
     const { error } = await supabase.from("system_settings").upsert(
       {
         setting_key: "storage_config",
-        setting_value: config,
-        description: "Cấu hình lưu trữ tệp đính kèm phần mềm (Google Drive OAuth / Service Account / Supabase)",
-        updated_at: new Date().toISOString(),
+        setting_value: normalizedConfig,
+        description: "Cấu hình Google Drive & Google Sheets Master dùng chung toàn hệ thống",
+        updated_at: normalizedConfig.updated_at,
+        updated_by: normalizedConfig.updated_by,
       },
       { onConflict: "setting_key" }
     );
 
     if (error) {
       console.warn("Supabase upsert error, saved to local cache:", error.message);
+      return { 
+        success: false, 
+        error: `Lỗi lưu vào Cơ sở dữ liệu Supabase: ${error.message}` 
+      };
     }
 
     return { success: true };

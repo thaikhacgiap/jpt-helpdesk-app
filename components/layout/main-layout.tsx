@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./sidebar";
 import { getCurrentUser, hasAccess, UserSession } from "@/lib/auth-operations";
+import { getStorageConfig } from "@/lib/storage-service";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 
 export default function MainLayout({
@@ -33,6 +34,11 @@ export default function MainLayout({
     const authorized = hasAccess(session.role, pathname);
     setIsAuthorized(authorized);
     setChecking(false);
+
+    // Tự động nạp cấu hình hệ thống (Google Drive / Sheets Master) dùng chung từ Supabase
+    getStorageConfig().catch((err) => {
+      console.warn("Không thể tải cấu hình hệ thống từ Supabase:", err);
+    });
   }, [pathname, router]);
 
   if (checking) {

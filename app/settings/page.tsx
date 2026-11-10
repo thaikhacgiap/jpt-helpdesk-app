@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import MainLayout from "@/components/layout/main-layout";
 import Header from "@/components/layout/header";
+import { getCurrentUser, UserSession } from "@/lib/auth-operations";
 import { logOperation, fetchOperationLogs, OperationLog } from "@/lib/logger";
 import { 
   HardDrive, 
@@ -14,12 +16,15 @@ import {
   Calendar,
   Activity,
   ShieldCheck,
+  ShieldAlert,
+  ArrowLeft,
   Settings,
   FolderCheck,
   Save,
   Lock,
   ExternalLink,
-  Server
+  Server,
+  CloudCheck
 } from "lucide-react";
 import { 
   StorageConfig, 
@@ -36,6 +41,8 @@ const SYSTEM_NAV_TABS = [
 ];
 
 export default function SettingsPage() {
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<"storage" | "logs">("storage");
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -48,6 +55,13 @@ export default function SettingsPage() {
   const [testingDrive, setTestingDrive] = useState(false);
   const [storageSaveSuccess, setStorageSaveSuccess] = useState(false);
   const [driveTestResult, setDriveTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Load current user
+  useEffect(() => {
+    const user = getCurrentUser();
+    setCurrentUser(user);
+    setCheckingAuth(false);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -75,17 +89,25 @@ export default function SettingsPage() {
   };
 
   const handleSaveStorage = async () => {
+    if (!currentUser || currentUser.role !== "Admin") {
+      alert("Từ chối quyền: Chỉ tài khoản Quản trị viên (Admin) mới có quyền chỉnh sửa và lưu cấu hình hệ thống!");
+      return;
+    }
+
     setSavingStorage(true);
     setDriveTestResult(null);
     try {
       const res = await saveStorageConfig(storageConfig);
       if (res.success) {
         setStorageSaveSuccess(true);
+        // Refresh local storageConfig with updated timestamp
+        const refreshed = await getStorageConfig();
+        setStorageConfig(refreshed);
         await logOperation(
           "Cấu hình Lưu trữ",
-          `Cập nhật thành công nhà cung cấp lưu trữ tệp đính kèm: [${storageConfig.provider === "google_drive" ? "Google Drive" : "Supabase Storage"}] với thư mục "${storageConfig.drive_folder_name}".`
+          `Quản trị viên ${currentUser?.name || "Admin"} đã cập nhật cấu hình hệ thống lên Supabase: Thư mục "${storageConfig.drive_folder_name}", Master Sheet URL.`
         );
-        setTimeout(() => setStorageSaveSuccess(false), 3000);
+        setTimeout(() => setStorageSaveSuccess(false), 4000);
       } else {
         alert(res.error || "Không thể lưu cấu hình lưu trữ.");
       }
@@ -145,12 +167,46 @@ export default function SettingsPage() {
     return "bg-slate-50 text-slate-700 border-slate-200";
   };
 
+  // Access Control: Only Admin can access Setting
+  if (!checkingAuth && currentUser && currentUser.role !== "Admin") {
+    return (
+      <MainLayout>
+        <Header 
+          title="Quản Lý Hệ Thống" 
+          description="Cấu hình hệ thống lưu trữ và đồng bộ dữ liệu." 
+          navTabs={SYSTEM_NAV_TABS.filter(t => t.href !== "/settings")}
+        />
+        <div className="max-w-2xl mx-auto my-12 bg-white rounded-2xl border border-rose-200 p-8 shadow-sm text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100 shadow-inner">
+            <ShieldAlert size={28} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">Từ chối quyền truy cập</h2>
+          <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+            Chỉ tài khoản có vai trò <strong className="text-rose-700">Quản trị viên (Admin)</strong> mới có quyền xem và cấu hình Cài đặt hệ thống (Google Drive &amp; Google Sheets Master).
+          </p>
+          <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-500 inline-block border border-slate-200">
+            Tài khoản của bạn: <strong className="text-slate-800">{currentUser.name}</strong> ({currentUser.roleLabel || currentUser.role})
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 transition shadow-xs cursor-pointer"
+            >
+              <ArrowLeft size={14} />
+              <span>Quay về Bảng điều khiển</span>
+            </Link>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
       <Header 
         title="Quản Lý Hệ Thống" 
         description="Cấu hình nơi lưu trữ tệp đính kèm (Google Drive), Google Sheets Master và theo dõi nhật ký hoạt động của phần mềm." 
-        navTabs={SYSTEM_NAV_TABS}
+        navTabs={currentUser?.role === "Admin" ? SYSTEM_NAV_TABS : SYSTEM_NAV_TABS.filter(t => t.href !== "/settings")}
       />
 
       {/* Tabs */}
@@ -187,6 +243,33 @@ export default function SettingsPage() {
         {/* TAB: STORAGE CONFIGURATION (GOOGLE DRIVE DEDICATED EMAIL ACCOUNT) */}
         {activeTab === "storage" && (
           <div className="space-y-6">
+            {/* Centralized Storage & Admin Badge Notice */}
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-950">Chế độ Quản trị viên (Admin Only)</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold border border-emerald-300">
+                      Lưu tập trung Supabase Database
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                    Cấu hình lưu trữ và Google Sheets Master được lưu tập trung vào bảng <code>system_settings</code> trong Database. Khi bất kỳ nhân viên nào mở phần mềm, dữ liệu sẽ được tự động đồng bộ mà không cần cài đặt lại!
+                  </p>
+                </div>
+              </div>
+
+              {storageConfig.updated_at && (
+                <div className="text-[10px] text-slate-600 bg-white/90 px-3 py-2 rounded-xl border border-emerald-200 shrink-0 font-medium">
+                  <div>Cập nhật lần cuối: <strong className="text-slate-800">{new Date(storageConfig.updated_at).toLocaleString("vi-VN")}</strong></div>
+                  {storageConfig.updated_by && <div className="text-slate-500 mt-0.5">Bởi: <span className="font-semibold">{storageConfig.updated_by}</span></div>}
+                </div>
+              )}
+            </div>
+
             {/* Storage Banner */}
             <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
               <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-10 pointer-events-none">
@@ -583,15 +666,17 @@ export default function SettingsPage() {
                         ) : (
                           <Save size={14} />
                         )}
-                        <span>{savingStorage ? "Đang lưu..." : "Lưu Cấu Hình Storage"}</span>
+                        <span>{savingStorage ? "Đang lưu lên Hệ thống..." : "Lưu Cấu Hình (Áp Dụng Cho Mọi User)"}</span>
                       </button>
                     </div>
 
                     {storageSaveSuccess && (
-                      <p className="text-right text-xs font-bold text-emerald-600 flex items-center justify-end gap-1">
-                        <CheckCircle2 size={14} />
-                        <span>Đã lưu cấu hình Google Drive thành công!</span>
-                      </p>
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between animate-in fade-in">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                          <span>Đã lưu cấu hình lên Supabase Database thành công! Mọi user khi mở ứng dụng sẽ tự động nạp cấu hình mới này.</span>
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
