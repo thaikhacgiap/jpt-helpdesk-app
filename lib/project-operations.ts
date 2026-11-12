@@ -54,6 +54,15 @@ export interface ProjectSowItem {
   status: string;
 }
 
+export interface ProjectSubPlan {
+  id: string;
+  name: string;
+  type?: 'm-plan' | 's-plan';
+  tasks: ProjectTask[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type ProjectType = 'professional' | 'poc' | 'commercial' | 'internal';
 
 export interface Project {
@@ -75,6 +84,8 @@ export interface Project {
   status: 'Planning' | 'Active' | 'On Hold' | 'Completed' | 'Delayed';
   description: string;
   progress: number; // calculated from tasks
+  mainPlanName?: string;
+  subPlans?: ProjectSubPlan[];
   plan: ProjectTask[];
   timeline: ProjectMilestone[];
   documents: ProjectDocument[];
@@ -1063,6 +1074,24 @@ function isValidUUID(val?: string | null): boolean {
 }
 
 export function fromDbProject(r: any): Project {
+  let subPlans: ProjectSubPlan[] = [];
+  if (Array.isArray(r.sub_plans)) {
+    subPlans = r.sub_plans;
+  } else if (Array.isArray(r.subPlans)) {
+    subPlans = r.subPlans;
+  } else if (r.plan && typeof r.plan === 'object' && !Array.isArray(r.plan) && Array.isArray(r.plan.subPlans)) {
+    subPlans = r.plan.subPlans;
+  }
+
+  let mainPlanName = r.main_plan_name || r.mainPlanName || (r.plan && typeof r.plan === 'object' && !Array.isArray(r.plan) && r.plan.mainPlanName) || "M-Plan";
+
+  let planTasks: ProjectTask[] = [];
+  if (Array.isArray(r.plan)) {
+    planTasks = r.plan;
+  } else if (r.plan && typeof r.plan === 'object' && Array.isArray(r.plan.tasks)) {
+    planTasks = r.plan.tasks;
+  }
+
   return {
     id: r.id,
     code: r.code || "",
@@ -1082,7 +1111,9 @@ export function fromDbProject(r: any): Project {
     status: r.status || "Planning",
     description: r.description || "",
     progress: Number(r.progress) || 0,
-    plan: Array.isArray(r.plan) ? r.plan : [],
+    mainPlanName,
+    subPlans,
+    plan: planTasks,
     timeline: Array.isArray(r.timeline) ? r.timeline : [],
     documents: Array.isArray(r.documents) ? r.documents : [],
     diary: Array.isArray(r.diary) ? r.diary : [],
@@ -1113,7 +1144,22 @@ export function toDbProject(p: Partial<Project>): any {
   if (p.status !== undefined) dbObj.status = p.status;
   if (p.description !== undefined) dbObj.description = p.description;
   if (p.progress !== undefined) dbObj.progress = typeof p.progress === 'number' ? p.progress : Number(p.progress) || 0;
-  if (p.plan !== undefined) dbObj.plan = p.plan;
+
+  if (p.plan !== undefined || p.subPlans !== undefined || p.mainPlanName !== undefined) {
+    const hasSubPlans = p.subPlans && p.subPlans.length > 0;
+    const hasCustomMain = p.mainPlanName && p.mainPlanName !== "M-Plan";
+    if (hasSubPlans || hasCustomMain) {
+      dbObj.plan = {
+        isMultiPlan: true,
+        mainPlanName: p.mainPlanName || "M-Plan",
+        tasks: p.plan || [],
+        subPlans: p.subPlans || []
+      };
+    } else {
+      dbObj.plan = p.plan || [];
+    }
+  }
+
   if (p.timeline !== undefined) dbObj.timeline = p.timeline;
   if (p.documents !== undefined) dbObj.documents = p.documents;
   if (p.diary !== undefined) dbObj.diary = p.diary;
@@ -1362,6 +1408,12 @@ export async function fetchProjectById(id: string): Promise<Project | undefined>
         if (idx >= 0) {
           if (list[idx].plan && list[idx].plan.length > 0 && (!p.plan || p.plan.length === 0)) {
             p.plan = list[idx].plan;
+          }
+          if (list[idx].subPlans && list[idx].subPlans.length > 0 && (!p.subPlans || p.subPlans.length === 0)) {
+            p.subPlans = list[idx].subPlans;
+          }
+          if (list[idx].mainPlanName && (!p.mainPlanName || p.mainPlanName === "M-Plan")) {
+            p.mainPlanName = list[idx].mainPlanName;
           }
           list[idx] = p;
         } else {
@@ -1673,5 +1725,221 @@ export async function updateProjectPlanAsync(projectId: string, plan: ProjectTas
     console.warn("Supabase sync updateProjectPlanAsync error:", err);
   }
 
+  return projects[index];
+}
+
+export function updateSpecificPlanTasks(projectId: string, planId: string, tasks: ProjectTask[]): Project | undefined {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (planId === "main") {
+    projects[index].plan = tasks;
+    recalculateProgress(projects[index]);
+  } else {
+    if (!projects[index].subPlans) projects[index].subPlans = [];
+    const spIdx = projects[index].subPlans!.findIndex(sp => sp.id === planId);
+    if (spIdx !== -1) {
+      projects[index].subPlans![spIdx].tasks = tasks;
+      projects[index].subPlans![spIdx].updatedAt = new Date().toISOString();
+    }
+  }
+
+  setStoredProjects(projects);
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync updateSpecificPlanTasks error:", err));
+  return projects[index];
+}
+
+export async function updateSpecificPlanTasksAsync(projectId: string, planId: string, tasks: ProjectTask[]): Promise<Project | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (planId === "main") {
+    projects[index].plan = tasks;
+    recalculateProgress(projects[index]);
+  } else {
+    if (!projects[index].subPlans) projects[index].subPlans = [];
+    const spIdx = projects[index].subPlans!.findIndex(sp => sp.id === planId);
+    if (spIdx !== -1) {
+      projects[index].subPlans![spIdx].tasks = tasks;
+      projects[index].subPlans![spIdx].updatedAt = new Date().toISOString();
+    }
+  }
+
+  setStoredProjects(projects);
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync updateSpecificPlanTasksAsync error:", err);
+  }
+  return projects[index];
+}
+
+export function renameProjectPlan(projectId: string, planId: string, newName: string): Project | undefined {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  const trimmed = newName.trim();
+  if (planId === "main") {
+    projects[index].mainPlanName = trimmed || "M-Plan";
+  } else {
+    if (!projects[index].subPlans) projects[index].subPlans = [];
+    const spIdx = projects[index].subPlans!.findIndex(sp => sp.id === planId);
+    if (spIdx !== -1) {
+      projects[index].subPlans![spIdx].name = trimmed || "S-Plan";
+      projects[index].subPlans![spIdx].updatedAt = new Date().toISOString();
+    }
+  }
+
+  setStoredProjects(projects);
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync renameProjectPlan error:", err));
+  return projects[index];
+}
+
+export async function renameProjectPlanAsync(projectId: string, planId: string, newName: string): Promise<Project | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  const trimmed = newName.trim();
+  if (planId === "main") {
+    projects[index].mainPlanName = trimmed || "M-Plan";
+  } else {
+    if (!projects[index].subPlans) projects[index].subPlans = [];
+    const spIdx = projects[index].subPlans!.findIndex(sp => sp.id === planId);
+    if (spIdx !== -1) {
+      projects[index].subPlans![spIdx].name = trimmed || "S-Plan";
+      projects[index].subPlans![spIdx].updatedAt = new Date().toISOString();
+    }
+  }
+
+  setStoredProjects(projects);
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync renameProjectPlanAsync error:", err);
+  }
+  return projects[index];
+}
+
+export function createProjectSubPlan(
+  projectId: string,
+  name: string,
+  copyFromPlanId?: string
+): { project: Project; newSubPlan: ProjectSubPlan } | undefined {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (!projects[index].subPlans) projects[index].subPlans = [];
+
+  let initialTasks: ProjectTask[] = [];
+  if (copyFromPlanId === "main") {
+    initialTasks = (projects[index].plan || []).map(t => ({
+      ...t,
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    }));
+  } else if (copyFromPlanId) {
+    const src = projects[index].subPlans!.find(sp => sp.id === copyFromPlanId);
+    if (src) {
+      initialTasks = (src.tasks || []).map(t => ({
+        ...t,
+        id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+      }));
+    }
+  }
+
+  const newSubPlan: ProjectSubPlan = {
+    id: `s-plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    name: name.trim() || `S-Plan ${projects[index].subPlans!.length + 1}`,
+    type: 's-plan',
+    tasks: initialTasks,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  projects[index].subPlans!.push(newSubPlan);
+  setStoredProjects(projects);
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync createProjectSubPlan error:", err));
+  return { project: projects[index], newSubPlan };
+}
+
+export async function createProjectSubPlanAsync(
+  projectId: string,
+  name: string,
+  copyFromPlanId?: string
+): Promise<{ project: Project; newSubPlan: ProjectSubPlan } | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (!projects[index].subPlans) projects[index].subPlans = [];
+
+  let initialTasks: ProjectTask[] = [];
+  if (copyFromPlanId === "main") {
+    initialTasks = (projects[index].plan || []).map(t => ({
+      ...t,
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    }));
+  } else if (copyFromPlanId) {
+    const src = projects[index].subPlans!.find(sp => sp.id === copyFromPlanId);
+    if (src) {
+      initialTasks = (src.tasks || []).map(t => ({
+        ...t,
+        id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+      }));
+    }
+  }
+
+  const newSubPlan: ProjectSubPlan = {
+    id: `s-plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    name: name.trim() || `S-Plan ${projects[index].subPlans!.length + 1}`,
+    type: 's-plan',
+    tasks: initialTasks,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  projects[index].subPlans!.push(newSubPlan);
+  setStoredProjects(projects);
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync createProjectSubPlanAsync error:", err);
+  }
+  return { project: projects[index], newSubPlan };
+}
+
+export function deleteProjectSubPlan(projectId: string, subPlanId: string): Project | undefined {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (projects[index].subPlans) {
+    projects[index].subPlans = projects[index].subPlans!.filter(sp => sp.id !== subPlanId);
+  }
+
+  setStoredProjects(projects);
+  saveProjectToSupabase(projects[index]).catch(err => console.warn("Supabase sync deleteProjectSubPlan error:", err));
+  return projects[index];
+}
+
+export async function deleteProjectSubPlanAsync(projectId: string, subPlanId: string): Promise<Project | undefined> {
+  const projects = getStoredProjects();
+  const index = projects.findIndex(p => p.id === projectId);
+  if (index === -1) return undefined;
+
+  if (projects[index].subPlans) {
+    projects[index].subPlans = projects[index].subPlans!.filter(sp => sp.id !== subPlanId);
+  }
+
+  setStoredProjects(projects);
+  try {
+    await saveProjectToSupabase(projects[index]);
+  } catch (err) {
+    console.warn("Supabase sync deleteProjectSubPlanAsync error:", err);
+  }
   return projects[index];
 }

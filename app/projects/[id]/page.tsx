@@ -20,6 +20,15 @@ import {
   addDiaryEntryAsync,
   updateProjectPlan,
   updateProjectPlanAsync,
+  ProjectSubPlan,
+  updateSpecificPlanTasks,
+  updateSpecificPlanTasksAsync,
+  renameProjectPlan,
+  renameProjectPlanAsync,
+  createProjectSubPlan,
+  createProjectSubPlanAsync,
+  deleteProjectSubPlan,
+  deleteProjectSubPlanAsync,
   subscribeToProjects,
   Project,
   ProjectTask,
@@ -420,6 +429,22 @@ export default function ProjectDetailPage() {
   const [isImportingPlan, setIsImportingPlan] = useState(false);
   const [isExportingPlan, setIsExportingPlan] = useState(false);
   const [isTaskDropdownOpen, setIsTaskDropdownOpen] = useState(false);
+
+  // Multi-Plan States (M-Plan, S-Plans)
+  const [activePlanId, setActivePlanId] = useState<string>("main"); // "main" or subPlan.id
+  const [isRenamePlanModalOpen, setIsRenamePlanModalOpen] = useState(false);
+  const [planToRename, setPlanToRename] = useState<{ id: string; name: string } | null>(null);
+  const [renamePlanInput, setRenamePlanInput] = useState("");
+  const [isAddSubPlanModalOpen, setIsAddSubPlanModalOpen] = useState(false);
+  const [newSubPlanName, setNewSubPlanName] = useState("");
+  const [newSubPlanCopySource, setNewSubPlanCopySource] = useState<string>("empty");
+  const [isSubPlanSubmitting, setIsSubPlanSubmitting] = useState(false);
+
+  // Resolved active plan variables
+  const currentSubPlan = project?.subPlans?.find(sp => sp.id === activePlanId);
+  const resolvedPlanId = (activePlanId === "main" || currentSubPlan) ? activePlanId : "main";
+  const currentPlanName = resolvedPlanId === "main" ? (project?.mainPlanName || "M-Plan") : (currentSubPlan?.name || "S-Plan");
+  const currentPlanTasks: ProjectTask[] = resolvedPlanId === "main" ? (project?.plan || []) : (currentSubPlan?.tasks || []);
 
   // Selected task row & column freeze states for project plan table
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -855,10 +880,136 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // Multi-Plan Helpers & Persistence
+  const saveCurrentPlanTasks = (tasks: ProjectTask[], diaryMsg?: string) => {
+    if (!project) return;
+    if (resolvedPlanId === "main") {
+      setProject(prev => prev ? { ...prev, plan: tasks } : null);
+      updateProjectPlan(project.id, tasks);
+    } else {
+      const updatedSubPlans = (project.subPlans || []).map(sp =>
+        sp.id === resolvedPlanId ? { ...sp, tasks, updatedAt: new Date().toISOString() } : sp
+      );
+      setProject(prev => prev ? { ...prev, subPlans: updatedSubPlans } : null);
+      updateSpecificPlanTasks(project.id, resolvedPlanId, tasks);
+    }
+    if (diaryMsg) {
+      addDiaryEntry(project.id, {
+        author: "Admin",
+        content: diaryMsg,
+        category: "Update"
+      });
+    }
+  };
+
+  const saveCurrentPlanTasksAsync = async (tasks: ProjectTask[], diaryMsg?: string) => {
+    if (!project) return;
+    if (resolvedPlanId === "main") {
+      const updated = await updateProjectPlanAsync(project.id, tasks);
+      if (updated) setProject({ ...updated });
+    } else {
+      const updated = await updateSpecificPlanTasksAsync(project.id, resolvedPlanId, tasks);
+      if (updated) setProject({ ...updated });
+    }
+    if (diaryMsg) {
+      await addDiaryEntryAsync(project.id, {
+        author: "Admin",
+        content: diaryMsg,
+        category: "Update"
+      });
+    }
+  };
+
+  const handleOpenRenamePlan = (planId: string, currentName: string) => {
+    setPlanToRename({ id: planId, name: currentName });
+    setRenamePlanInput(currentName);
+    setIsRenamePlanModalOpen(true);
+  };
+
+  const handleConfirmRenamePlan = async () => {
+    if (!project || !planToRename || !renamePlanInput.trim()) return;
+    setIsSubPlanSubmitting(true);
+    try {
+      const updated = await renameProjectPlanAsync(project.id, planToRename.id, renamePlanInput.trim());
+      if (updated) {
+        setProject({ ...updated });
+        await addDiaryEntryAsync(project.id, {
+          author: "Admin",
+          content: `Đã đổi tên kế hoạch "${planToRename.name}" thành "${renamePlanInput.trim()}"`,
+          category: "Update"
+        });
+      }
+      setIsRenamePlanModalOpen(false);
+      setPlanToRename(null);
+      setRenamePlanInput("");
+    } finally {
+      setIsSubPlanSubmitting(false);
+    }
+  };
+
+  const handleOpenAddSubPlan = () => {
+    const nextIdx = (project?.subPlans?.length || 0) + 1;
+    setNewSubPlanName(`S-Plan ${nextIdx}`);
+    setNewSubPlanCopySource("empty");
+    setIsAddSubPlanModalOpen(true);
+  };
+
+  const handleConfirmAddSubPlan = async () => {
+    if (!project || !newSubPlanName.trim()) return;
+    setIsSubPlanSubmitting(true);
+    try {
+      const res = await createProjectSubPlanAsync(
+        project.id,
+        newSubPlanName.trim(),
+        newSubPlanCopySource === "empty" ? undefined : newSubPlanCopySource
+      );
+      if (res) {
+        setProject({ ...res.project });
+        setActivePlanId(res.newSubPlan.id);
+        setActiveTab("plan");
+        await addDiaryEntryAsync(project.id, {
+          author: "Admin",
+          content: `Đã tạo Sub-plan mới: "${res.newSubPlan.name}" (${res.newSubPlan.tasks.length} công việc)`,
+          category: "Update"
+        });
+      }
+      setIsAddSubPlanModalOpen(false);
+      setNewSubPlanName("");
+    } finally {
+      setIsSubPlanSubmitting(false);
+    }
+  };
+
+  const handleDeleteSubPlan = async (subPlanId: string) => {
+    if (!project) return;
+    const sp = project.subPlans?.find(s => s.id === subPlanId);
+    const spName = sp?.name || "Sub-Plan";
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa Sub-Plan "${spName}" cùng toàn bộ công việc bên trong không? Thao tác này không thể hoàn tác.`)) {
+      return;
+    }
+    const updated = await deleteProjectSubPlanAsync(project.id, subPlanId);
+    if (updated) {
+      setProject({ ...updated });
+      if (activePlanId === subPlanId) {
+        setActivePlanId("main");
+      }
+      await addDiaryEntryAsync(project.id, {
+        author: "Admin",
+        content: `Đã xóa Sub-plan: "${spName}"`,
+        category: "Update"
+      });
+    }
+  };
+
   // Task Operations
   const handleToggleTaskStatus = (taskId: string, currentStatus: ProjectTask["status"]) => {
     const nextStatus: ProjectTask["status"] = currentStatus === 'Completed' ? 'Todo' : 'Completed';
-    updateTask(project.id, taskId, { status: nextStatus });
+    if (resolvedPlanId === "main") {
+      updateTask(project.id, taskId, { status: nextStatus });
+    } else {
+      const nextPlan = currentPlanTasks.map(t => t.id === taskId ? { ...t, status: nextStatus, progress: nextStatus === 'Completed' ? 100 : 0 } : t);
+      saveCurrentPlanTasks(nextPlan);
+    }
     refreshProjectData();
   };
 
@@ -869,14 +1020,18 @@ export default function ProjectDetailPage() {
       return;
     }
     const assigneeStr = taskAssignees.join(", ");
-    addTask(project.id, { ...taskForm, assignee: assigneeStr });
-    
-    // Log diary
-    addDiaryEntry(project.id, {
-      author: "John D.",
-      content: `Thêm công việc mới: "${taskForm.title}" giao cho ${assigneeStr || 'Chưa phân công'}`,
-      category: "Update"
-    });
+    const newTask: ProjectTask = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      ...taskForm,
+      assignee: assigneeStr,
+      progress: taskForm.status === 'Completed' ? 100 : 0,
+      level: 'main',
+      isHeader: false
+    };
+    const nextPlan = [...currentPlanTasks, newTask];
+    const reindexed = autoAssignTaskIndices(nextPlan);
+    const synced = syncPlanProgressHierarchy(reindexed);
+    saveCurrentPlanTasks(synced, `Thêm công việc mới: "${taskForm.title}" giao cho ${assigneeStr || 'Chưa phân công'} (${currentPlanName})`);
 
     setIsTaskModalOpen(false);
     setTaskAssignees([]);
@@ -1091,10 +1246,10 @@ export default function ProjectDetailPage() {
   // Inline Plan Table Operations (directly edit without entering edit mode)
   const handleInlineTaskFieldChange = (idx: number, field: keyof ProjectTask, value: any) => {
     if (!project) return;
-    const currentVal = project.plan[idx]?.[field];
+    const currentVal = currentPlanTasks[idx]?.[field];
     if (currentVal === value) return;
 
-    const newPlan = [...project.plan];
+    const newPlan = [...currentPlanTasks];
     newPlan[idx] = {
       ...newPlan[idx],
       [field]: value
@@ -1102,8 +1257,7 @@ export default function ProjectDetailPage() {
 
     const reindexed = field === 'title' ? autoAssignTaskIndices(newPlan) : newPlan;
     const synced = syncPlanProgressHierarchy(reindexed);
-    setProject(prev => prev ? { ...prev, plan: synced } : null);
-    updateProjectPlan(project.id, synced);
+    saveCurrentPlanTasks(synced);
   };
 
   const handleInlineTaskStatusChange = (task: ProjectTask, idx: number, newStatus: ProjectTask["status"]) => {
@@ -1113,7 +1267,7 @@ export default function ProjectDetailPage() {
     else if (newStatus === "Todo") newProgress = 0;
     else if (newStatus === "In Progress" && (newProgress === 0 || newProgress === 100)) newProgress = 50;
 
-    const newPlan = [...project.plan];
+    const newPlan = [...currentPlanTasks];
     newPlan[idx] = {
       ...newPlan[idx],
       status: newStatus,
@@ -1122,8 +1276,7 @@ export default function ProjectDetailPage() {
     };
 
     const synced = syncPlanProgressHierarchy(newPlan);
-    setProject(prev => prev ? { ...prev, plan: synced } : null);
-    updateProjectPlan(project.id, synced);
+    saveCurrentPlanTasks(synced);
   };
 
   const handleInlineTaskProgressChange = (task: ProjectTask, idx: number, progressVal: number) => {
@@ -1135,7 +1288,7 @@ export default function ProjectDetailPage() {
     else if (validProgress > 0) newStatus = "In Progress";
     else newStatus = "Todo";
 
-    const newPlan = [...project.plan];
+    const newPlan = [...currentPlanTasks];
     newPlan[idx] = {
       ...newPlan[idx],
       progress: validProgress,
@@ -1143,8 +1296,7 @@ export default function ProjectDetailPage() {
       actualEndDate: validProgress === 100 ? (newPlan[idx].actualEndDate || new Date().toISOString().split("T")[0]) : (validProgress === 0 ? "" : newPlan[idx].actualEndDate)
     };
 
-    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
-    updateProjectPlan(project.id, newPlan);
+    saveCurrentPlanTasks(newPlan);
   };
 
   const handleInlineTaskTitleBlur = (task: ProjectTask, idx: number, newTitle: string) => {
@@ -1156,50 +1308,37 @@ export default function ProjectDetailPage() {
   const handleInlineTaskNotesBlur = (task: ProjectTask, idx: number, newNotes: string) => {
     if (!project) return;
     if ((task.notes || "") === newNotes.trim()) return;
-    const newPlan = [...project.plan];
+    const newPlan = [...currentPlanTasks];
     newPlan[idx] = {
       ...newPlan[idx],
       notes: newNotes.trim()
     };
-    setProject(prev => prev ? { ...prev, plan: newPlan } : null);
-    updateProjectPlan(project.id, newPlan);
+    saveCurrentPlanTasks(newPlan);
   };
 
   const handleDeletePlanTask = (task: ProjectTask, idx: number) => {
     if (!project) return;
     const isPhase = resolveTaskLevel(task) === 'Phase' || task.isHeader;
     if (isPhase) {
-      const childTasks = getSubTasksForHeader(project.plan, idx);
+      const childTasks = getSubTasksForHeader(currentPlanTasks, idx);
       let confirmMsg = `Bạn có chắc chắn muốn xóa Giai đoạn (Phase) "${task.title || 'Phase'}"?`;
       if (childTasks.length > 0) {
         confirmMsg += `\nLưu ý: Giai đoạn này đang có ${childTasks.length} công việc trực thuộc. Toàn bộ các công việc này cũng sẽ bị xóa cùng với giai đoạn.`;
       }
       if (window.confirm(confirmMsg)) {
         const deleteCount = 1 + childTasks.length;
-        const newPlan = [...project.plan];
+        const newPlan = [...currentPlanTasks];
         newPlan.splice(idx, deleteCount);
         const reindexed = autoAssignTaskIndices(newPlan);
         const synced = syncPlanProgressHierarchy(reindexed);
-        setProject(prev => prev ? { ...prev, plan: synced } : null);
-        updateProjectPlan(project.id, synced);
-        addDiaryEntry(project.id, {
-          author: "John D.",
-          content: `Đã xóa giai đoạn: "${task.title || 'Phase'}"${childTasks.length > 0 ? ` kèm ${childTasks.length} công việc trực thuộc` : ''}`,
-          category: "Update"
-        });
+        saveCurrentPlanTasks(synced, `Đã xóa giai đoạn: "${task.title || 'Phase'}"${childTasks.length > 0 ? ` kèm ${childTasks.length} công việc trực thuộc` : ''} trong ${currentPlanName}`);
       }
     } else {
       if (window.confirm(`Bạn có chắc chắn muốn xóa công việc "${task.title || 'Công việc'}"?`)) {
-        const newPlan = project.plan.filter((_, i) => i !== idx);
+        const newPlan = currentPlanTasks.filter((_, i) => i !== idx);
         const reindexed = autoAssignTaskIndices(newPlan);
         const synced = syncPlanProgressHierarchy(reindexed);
-        setProject(prev => prev ? { ...prev, plan: synced } : null);
-        updateProjectPlan(project.id, synced);
-        addDiaryEntry(project.id, {
-          author: "John D.",
-          content: `Đã xóa công việc: "${task.title}"`,
-          category: "Update"
-        });
+        saveCurrentPlanTasks(synced, `Đã xóa công việc: "${task.title}" trong ${currentPlanName}`);
       }
     }
   };
@@ -1207,7 +1346,7 @@ export default function ProjectDetailPage() {
   const handleStartEditPlan = () => {
     if (!project) return;
     setIsMoveMode(false);
-    setTempPlan(project.plan || []);
+    setTempPlan(currentPlanTasks || []);
     setIsEditingPlan(true);
   };
 
@@ -1215,18 +1354,10 @@ export default function ProjectDetailPage() {
     if (!project) return;
     const reindexed = autoAssignTaskIndices(tempPlan);
     const synced = syncPlanProgressHierarchy(reindexed);
-    const updated = await updateProjectPlanAsync(project.id, synced);
-    if (updated) {
-      setProject({ ...updated });
-      await addDiaryEntryAsync(project.id, {
-        author: "John D.",
-        content: `Cập nhật trực tiếp danh sách công việc dự án và lưu lại`,
-        category: "Update"
-      });
-      const latest = getProjectById(project.id);
-      if (latest) setProject({ ...latest });
-      setIsEditingPlan(false);
-    }
+    await saveCurrentPlanTasksAsync(synced, `Cập nhật trực tiếp danh sách công việc dự án trong [${currentPlanName}]`);
+    const latest = getProjectById(project.id);
+    if (latest) setProject({ ...latest });
+    setIsEditingPlan(false);
   };
 
   const handleCancelPlanEdits = () => {
@@ -1264,7 +1395,7 @@ export default function ProjectDetailPage() {
       setSelectedTaskId(newTask.id);
     } else {
       if (!project) return;
-      const prevPlan = project.plan || [];
+      const prevPlan = currentPlanTasks || [];
       const targetIdx = selectedTaskId 
         ? prevPlan.findIndex((t, i) => (t.id && t.id === selectedTaskId) || (t.id || String(i)) === selectedTaskId || String(i) === selectedTaskId)
         : -1;
@@ -1274,8 +1405,7 @@ export default function ProjectDetailPage() {
       const reindexed = autoAssignTaskIndices(nextPlan);
       const synced = syncPlanProgressHierarchy(reindexed);
 
-      setProject(prev => prev ? { ...prev, plan: synced } : null);
-      updateProjectPlan(project.id, synced);
+      saveCurrentPlanTasks(synced);
       setSelectedTaskId(newTask.id);
     }
   };
@@ -1312,17 +1442,11 @@ export default function ProjectDetailPage() {
       handleCloseTaskDetailModal();
     } else {
       if (!project) return;
-      const nextPlan = [...project.plan];
+      const nextPlan = [...currentPlanTasks];
       nextPlan[index] = updatedTask;
       const reindexed = autoAssignTaskIndices(nextPlan);
       const synced = syncPlanProgressHierarchy(reindexed);
-      setProject(prev => prev ? { ...prev, plan: synced } : null);
-      await updateProjectPlanAsync(project.id, synced);
-      addDiaryEntry(project.id, {
-        author: "John D.",
-        content: `Cập nhật chi tiết công việc: "${updatedTask.title || updatedTask.taskIndex}"`,
-        category: "Update"
-      });
+      await saveCurrentPlanTasksAsync(synced, `Cập nhật chi tiết công việc: "${updatedTask.title || updatedTask.taskIndex}" trong ${currentPlanName}`);
       handleCloseTaskDetailModal();
     }
   };
@@ -1508,27 +1632,24 @@ export default function ProjectDetailPage() {
     setDragOverIndex(null);
   };
 
-  // Move mode operations for project.plan
+  // Move mode operations for current plan tasks
   const handleMovePlanRow = (fromIdx: number, toIdx: number) => {
     if (!project) return;
-    const total = project.plan.length;
+    const total = currentPlanTasks.length;
     if (fromIdx < 0 || fromIdx >= total || toIdx < 0 || toIdx >= total || fromIdx === toIdx) return;
-    const newPlan = [...project.plan];
+    const newPlan = [...currentPlanTasks];
     const [movedItem] = newPlan.splice(fromIdx, 1);
     newPlan.splice(toIdx, 0, movedItem);
     const reindexed = autoAssignTaskIndices(newPlan);
     
-    // Cập nhật state trực tiếp ngay lập tức - tránh race condition với async Supabase fetch
-    setProject(prev => prev ? { ...prev, plan: reindexed } : null);
-    
-    // Lưu vào LocalStorage và đồng bộ Supabase ngầm
-    updateProjectPlan(project.id, reindexed);
+    // Cập nhật state và lưu
+    saveCurrentPlanTasks(reindexed);
   };
 
   const handleMovePlanRowToPosition = (fromIdx: number, targetRowVal: string | number) => {
     if (!project) return;
     const targetRow = typeof targetRowVal === "number" ? targetRowVal : parseInt(String(targetRowVal).trim(), 10);
-    const total = project.plan.length;
+    const total = currentPlanTasks.length;
     if (isNaN(targetRow) || targetRow < 1 || targetRow > total) return;
     const toIdx = targetRow - 1;
     if (toIdx === fromIdx) return;
@@ -1676,7 +1797,7 @@ export default function ProjectDetailPage() {
           manager: project.manager,
           startDate: project.startDate,
           endDate: project.endDate,
-          plan: isTemplate ? [] : project.plan,
+          plan: isTemplate ? [] : currentPlanTasks,
           isTemplate,
         }),
       });
@@ -1692,7 +1813,7 @@ export default function ProjectDetailPage() {
       downloadAnchor.href = url;
       downloadAnchor.download = isTemplate
         ? "mau_ke_hoach_du_an.xlsx"
-        : `ke_hoach_${project.code || "du_an"}.xlsx`;
+        : `ke_hoach_${project.code || "du_an"}_${currentPlanName.replace(/\s+/g, "_")}.xlsx`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -1702,7 +1823,7 @@ export default function ProjectDetailPage() {
         author: "John D.",
         content: isTemplate
           ? `Tải tệp mẫu kế hoạch dự án Excel (.xlsx)`
-          : `Xuất dữ liệu kế hoạch dự án ra tệp Excel (.xlsx)`,
+          : `Xuất dữ liệu kế hoạch [${currentPlanName}] ra tệp Excel (.xlsx)`,
         category: "Update",
       });
     } catch (err: any) {
@@ -1769,7 +1890,7 @@ export default function ProjectDetailPage() {
         ["3.2", "Ký biên bản nghiệm thu đưa vào vận hành", "2026-10-29", "2026-10-31", "", "", "John D.", "0%", "Chưa thực hiện", "Nghiệm thu chính thức"],
       ];
     } else {
-      rows = project.plan.map((t, idx) => {
+      rows = currentPlanTasks.map((t, idx) => {
         const levelLabel = resolveTaskLevel(t);
         const isPhase = levelLabel === "Phase";
         const viStatus = statusMapVi[t.status] || t.status || "Chưa thực hiện";
@@ -1805,7 +1926,7 @@ export default function ProjectDetailPage() {
     downloadAnchor.href = url;
     downloadAnchor.download = isTemplate
       ? "mau_ke_hoach_du_an.csv"
-      : `ke_hoach_${project.code || "du_an"}.csv`;
+      : `ke_hoach_${project.code || "du_an"}_${currentPlanName.replace(/\s+/g, "_")}.csv`;
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -1815,7 +1936,7 @@ export default function ProjectDetailPage() {
       author: "John D.",
       content: isTemplate
         ? `Tải tệp mẫu kế hoạch dự án CSV (.csv)`
-        : `Xuất dữ liệu kế hoạch dự án ra tệp CSV (.csv)`,
+        : `Xuất dữ liệu kế hoạch [${currentPlanName}] ra tệp CSV (.csv)`,
       category: "Update",
     });
   };
@@ -1824,18 +1945,18 @@ export default function ProjectDetailPage() {
   const handleExportJson = () => {
     if (!project) return;
     setIsExportDropdownOpen(false);
-    const cleanPlan = project.plan.map(({ id, ...rest }) => rest);
+    const cleanPlan = currentPlanTasks.map(({ id, ...rest }) => rest);
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanPlan, null, 2));
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `ke_hoach_${project.code}.json`);
+    downloadAnchor.setAttribute("download", `ke_hoach_${project.code}_${currentPlanName.replace(/\s+/g, "_")}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
 
     addDiaryEntry(project.id, {
       author: "John D.",
-      content: `Xuất dữ liệu kế hoạch dự án ra tệp sao lưu JSON (.json)`,
+      content: `Xuất dữ liệu kế hoạch [${currentPlanName}] ra tệp sao lưu JSON (.json)`,
       category: "Update"
     });
   };
@@ -1876,19 +1997,11 @@ export default function ProjectDetailPage() {
           }));
 
           const reindexed = autoAssignTaskIndices(validated);
-          const updated = await updateProjectPlanAsync(project.id, reindexed);
-          if (updated) {
-            setProject({ ...updated });
-            setTempPlan(reindexed);
-            await addDiaryEntryAsync(project.id, {
-              author: "John D.",
-              content: `Nhập dữ liệu kế hoạch dự án từ tệp JSON thành công (${reindexed.length} công việc)`,
-              category: "Update"
-            });
-            const latest = getProjectById(project.id);
-            if (latest) setProject({ ...latest });
-            alert(`Đã nhập thành công ${reindexed.length} công việc kế hoạch từ file JSON!`);
-          }
+          await saveCurrentPlanTasksAsync(reindexed, `Nhập dữ liệu kế hoạch [${currentPlanName}] từ tệp JSON thành công (${reindexed.length} công việc)`);
+          const latest = getProjectById(project.id);
+          if (latest) setProject({ ...latest });
+          setTempPlan(reindexed);
+          alert(`Đã nhập thành công ${reindexed.length} công việc vào [${currentPlanName}] từ file JSON!`);
           return;
         } else {
           throw new Error("File JSON không chứa danh sách mảng công việc hợp lệ.");
@@ -2053,28 +2166,22 @@ export default function ProjectDetailPage() {
       }
 
       const reindexed = autoAssignTaskIndices(parsedTasks);
-      const updated = await updateProjectPlanAsync(project.id, reindexed);
-      if (updated) {
-        const phaseCount = reindexed.filter(t => t.level === 'phase').length;
-        const mainCount = reindexed.filter(t => t.level === 'main').length;
-        const subCount = reindexed.filter(t => t.level === 'sub').length;
+      const phaseCount = reindexed.filter(t => t.level === 'phase').length;
+      const mainCount = reindexed.filter(t => t.level === 'main').length;
+      const subCount = reindexed.filter(t => t.level === 'sub').length;
 
-        setProject({ ...updated });
-        setTempPlan(reindexed);
+      await saveCurrentPlanTasksAsync(
+        reindexed,
+        `Nhập dữ liệu kế hoạch [${currentPlanName}] từ tệp "${file.name}" thành công (${reindexed.length} dòng: ${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task)`
+      );
 
-        await addDiaryEntryAsync(project.id, {
-          author: "John D.",
-          content: `Nhập dữ liệu kế hoạch dự án từ tệp "${file.name}" thành công (${reindexed.length} dòng: ${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task)`,
-          category: "Update"
-        });
+      const latest = getProjectById(project.id);
+      if (latest) setProject({ ...latest });
+      setTempPlan(reindexed);
 
-        const latest = getProjectById(project.id);
-        if (latest) setProject({ ...latest });
-
-        alert(
-          `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task) từ file "${file.name}"!`
-        );
-      }
+      alert(
+        `Đã nhập thành công ${reindexed.length} hạng mục (${phaseCount} Phase, ${mainCount} Main task, ${subCount} Sub task) vào [${currentPlanName}] từ file "${file.name}"!`
+      );
     } catch (err: any) {
       console.error("Lỗi khi nhập file kế hoạch:", err);
       alert("Lỗi khi nhập file kế hoạch: " + (err?.message || "Không thể xử lý tệp."));
@@ -2391,16 +2498,16 @@ export default function ProjectDetailPage() {
   // Organize tasks by Phase
   const phases = ["Phase 1: Chuẩn bị", "Phase 2: Triển khai", "Phase 3: Bàn giao"];
   const tasksByPhase = (phaseName: string) => {
-    return project.plan.filter(t => t.phase.toLowerCase().includes(phaseName.split(':')[0].toLowerCase().trim()));
+    return currentPlanTasks.filter(t => t.phase.toLowerCase().includes(phaseName.split(':')[0].toLowerCase().trim()));
   };
 
   // Calculate Gantt Chart day-by-day data
   const calculateGanttData = () => {
-    if (!project || !project.plan || project.plan.length === 0) {
+    if (!project || !currentPlanTasks || currentPlanTasks.length === 0) {
       return { tasks: [], days: [], monthGroups: [], todayIdx: -1 };
     }
 
-    const plan = project.plan;
+    const plan = currentPlanTasks;
 
     // 1. Resolve effective dates, level, and progress for every task in the hierarchy
     const taskDetails = plan.map((t, idx) => {
@@ -2686,19 +2793,97 @@ export default function ProjectDetailPage() {
             <span>Tổng quan dự án</span>
           </button>
 
+          {/* MAIN PLAN TAB (M-Plan) */}
+          <div className="flex items-center group relative">
+            <button
+              onClick={() => {
+                setActiveTab("plan");
+                setActivePlanId("main");
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "plan" && resolvedPlanId === "main"
+                  ? "border-blue-600 text-blue-600 bg-blue-50/60"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <ListTodo size={14} />
+              <span>{project.mainPlanName || "M-Plan"}</span>
+              <span className="bg-slate-200/70 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {project.plan.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenRenamePlan("main", project.mainPlanName || "M-Plan");
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer mr-0.5"
+              title="Đổi tên Main Plan"
+            >
+              <Edit size={11} />
+            </button>
+          </div>
+
+          {/* SUB-PLAN TABS (S-Plans) */}
+          {project.subPlans?.map((sp) => {
+            const isSpActive = activeTab === "plan" && resolvedPlanId === sp.id;
+            return (
+              <div key={sp.id} className="flex items-center group relative">
+                <button
+                  onClick={() => {
+                    setActiveTab("plan");
+                    setActivePlanId(sp.id);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                    isSpActive
+                      ? "border-indigo-600 text-indigo-700 bg-indigo-50/60"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Tag size={13} className={isSpActive ? "text-indigo-600" : "text-slate-400"} />
+                  <span>{sp.name}</span>
+                  <span className="bg-slate-200/70 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                    {sp.tasks?.length || 0}
+                  </span>
+                </button>
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenRenamePlan(sp.id, sp.name);
+                    }}
+                    className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
+                    title="Đổi tên Sub-Plan"
+                  >
+                    <Edit size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSubPlan(sp.id);
+                    }}
+                    className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
+                    title="Xóa Sub-Plan"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* BUTTON TẠO SUB-PLAN */}
           <button
-            onClick={() => setActiveTab("plan")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "plan"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
+            type="button"
+            onClick={handleOpenAddSubPlan}
+            className="flex items-center gap-1 px-2.5 py-1 my-auto text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/90 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all cursor-pointer whitespace-nowrap mx-1 shadow-2xs"
+            title="Thêm Sub-Plan mới cho dự án (bên cạnh Main Plan)"
           >
-            <ListTodo size={14} />
-            <span>Kế hoạch (Plan)</span>
-            <span className="bg-slate-100 text-slate-650 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-              {project.plan.length}
-            </span>
+            <Plus size={12} />
+            <span>+ Sub-Plan</span>
           </button>
 
           <button
@@ -3173,11 +3358,116 @@ export default function ProjectDetailPage() {
         {/* TAB 1: PLAN */}
         {activeTab === "plan" && (
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+            {/* Sub-Plan Switcher Toolbar */}
+            <div className="px-6 pt-3.5 pb-2.5 bg-slate-50 border-b border-slate-200/70 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-xl border border-slate-300/60 flex-wrap">
+                {/* M-Plan Pill */}
+                <button
+                  type="button"
+                  onClick={() => setActivePlanId("main")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    resolvedPlanId === "main"
+                      ? "bg-white text-blue-700 shadow-xs ring-1 ring-blue-500/20"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+                  <span>{project.mainPlanName || "M-Plan"}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-700 font-bold">
+                    {project.plan.length}
+                  </span>
+                </button>
+
+                {/* Sub-Plan Pills */}
+                {project.subPlans?.map((sp) => {
+                  const isActive = resolvedPlanId === sp.id;
+                  return (
+                    <div key={sp.id} className="flex items-center group">
+                      <button
+                        type="button"
+                        onClick={() => setActivePlanId(sp.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isActive
+                            ? "bg-white text-indigo-700 shadow-xs ring-1 ring-indigo-500/20"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+                        <span>{sp.name}</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-700 font-bold">
+                          {sp.tasks?.length || 0}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRenamePlan(sp.id, sp.name)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                        title="Đổi tên Sub-Plan"
+                      >
+                        <Edit size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSubPlan(sp.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 transition cursor-pointer"
+                        title="Xóa Sub-Plan"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Button Tạo Sub-Plan */}
+                <button
+                  type="button"
+                  onClick={handleOpenAddSubPlan}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-white/70 rounded-lg transition cursor-pointer"
+                  title="Tạo Sub-Plan mới cho dự án"
+                >
+                  <Plus size={13} />
+                  <span>+ Sub-Plan</span>
+                </button>
+              </div>
+
+              {/* Indicator Badge */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-500 font-medium">Đang thao tác:</span>
+                <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase tracking-wide border ${
+                  resolvedPlanId === "main" ? "bg-blue-50 text-blue-800 border-blue-200" : "bg-indigo-50 text-indigo-800 border-indigo-200"
+                }`}>
+                  {resolvedPlanId === "main" ? "Main Plan (M-Plan)" : "Sub Plan (S-Plan)"}
+                </span>
+              </div>
+            </div>
+
             {/* Tab Header with Add Button */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Danh mục Công việc Dự án (Kế hoạch)</h3>
-                <p className="text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800 text-base">
+                    {currentPlanName}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRenamePlan(resolvedPlanId, currentPlanName)}
+                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-200/80 rounded-lg transition cursor-pointer"
+                    title="Đổi tên kế hoạch này"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  {resolvedPlanId !== "main" && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubPlan(resolvedPlanId)}
+                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      title="Xóa Sub-plan này"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
                   {isEditingPlan 
                     ? "Đang chỉnh sửa kế hoạch. Bấm ▲/▼ để đổi vị trí, hoặc thêm hàng bằng nút trên." 
                     : isMoveMode
@@ -4198,14 +4488,14 @@ export default function ProjectDetailPage() {
                     )
                   ) : (
                     // READ ONLY VIEW
-                    project.plan.length === 0 ? (
+                    currentPlanTasks.length === 0 ? (
                       <tr>
                         <td colSpan={12} className="py-12 text-center text-slate-400 font-medium italic whitespace-nowrap">
                           Chưa có công việc nào được thiết lập. Hãy bấm Chỉnh sửa hoặc thêm mới để bắt đầu.
                         </td>
                       </tr>
                     ) : (
-                      project.plan.map((task, idx) => {
+                      currentPlanTasks.map((task, idx) => {
                         const level = resolveTaskLevel(task);
                         const isPhase = level === 'Phase';
                         const isMain = level === 'Main task';
@@ -4267,7 +4557,7 @@ export default function ProjectDetailPage() {
                                 <div className="inline-flex items-center justify-center gap-0.5">
                                   <MoveRowInput
                                     rowIndex={idx}
-                                    totalRows={project.plan.length}
+                                    totalRows={currentPlanTasks.length}
                                     onMoveToRow={handleMovePlanRowToPosition}
                                   />
                                   <div className="flex flex-col">
@@ -4286,7 +4576,7 @@ export default function ProjectDetailPage() {
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={idx === project.plan.length - 1}
+                                      disabled={idx === currentPlanTasks.length - 1}
                                       onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
@@ -4445,7 +4735,7 @@ export default function ProjectDetailPage() {
                             >
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
-                                  {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.startDate) || '—'; })()}
+                                  {(() => { const s = getPhaseStats(currentPlanTasks, idx); return formatDate(s.startDate) || '—'; })()}
                                 </span>
                               ) : (
                                 <InlineDateCell
@@ -4471,7 +4761,7 @@ export default function ProjectDetailPage() {
                             >
                               {isPhase ? (
                                 <span className="text-[11px] font-semibold text-blue-900">
-                                  {(() => { const s = getPhaseStats(project.plan, idx); return formatDate(s.endDate) || '—'; })()}
+                                  {(() => { const s = getPhaseStats(currentPlanTasks, idx); return formatDate(s.endDate) || '—'; })()}
                                 </span>
                               ) : (
                                 <InlineDateCell
@@ -4520,7 +4810,7 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {isPhase ? (
-                                (() => { const s = getPhaseStats(project.plan, idx); return s.actualEndDate ? <span className="text-emerald-700 font-bold text-xs">{formatDate(s.actualEndDate)}</span> : <span className="text-slate-400 text-xs">—</span>; })()
+                                (() => { const s = getPhaseStats(currentPlanTasks, idx); return s.actualEndDate ? <span className="text-emerald-700 font-bold text-xs">{formatDate(s.actualEndDate)}</span> : <span className="text-slate-400 text-xs">—</span>; })()
                               ) : (
                                 <InlineDateCell
                                   value={task.actualEndDate}
@@ -4544,7 +4834,7 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {isPhase ? (() => {
-                                const { assignees } = getPhaseStats(project.plan, idx);
+                                const { assignees } = getPhaseStats(currentPlanTasks, idx);
                                 return assignees.length > 0 ? (
                                   <div className="flex items-center justify-center">
                                     <span 
@@ -4581,7 +4871,7 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {(() => {
-                                const resolved = getResolvedTaskProgress(project.plan, idx);
+                                const resolved = getResolvedTaskProgress(currentPlanTasks, idx);
                                 if (resolved.isAuto) {
                                   return (
                                     <div className="flex items-center justify-center gap-0.5" title={isPhase ? "Tự động tính từ tỷ lệ % các Main tasks" : "Tự động tính từ tỷ lệ % các Sub tasks"}>
@@ -4627,7 +4917,7 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {isPhase ? (() => {
-                                const s = getPhaseStats(project.plan, idx);
+                                const s = getPhaseStats(currentPlanTasks, idx);
                                 const isCompleted = s.progress === 100;
                                 const isDoing = s.progress > 0 && s.progress < 100;
                                 return (
@@ -4737,13 +5027,50 @@ export default function ProjectDetailPage() {
                   <CalendarDays size={20} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Biểu đồ tiến độ Gantt</h3>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <span>Biểu đồ tiến độ Gantt</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                      {currentPlanName}
+                    </span>
+                  </h3>
                   <p className="text-xs text-slate-500">
                     Tự động đồng bộ theo kế hoạch: {gantt.tasks.length} hạng mục &bull; {gantt.days.length} ngày hiển thị
                     {gantt.days.length > 0 && ` (${formatDate(gantt.days[0].iso)} → ${formatDate(gantt.days[gantt.days.length - 1].iso)})`}
                   </p>
                 </div>
               </div>
+
+              {/* Sub-Plan Switcher in Gantt */}
+              {project.subPlans && project.subPlans.length > 0 && (
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+                  <span className="text-slate-500 font-bold px-1.5">Kế hoạch:</span>
+                  <button
+                    type="button"
+                    onClick={() => setActivePlanId("main")}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                      resolvedPlanId === "main"
+                        ? "bg-white text-blue-700 shadow-xs ring-1 ring-blue-500/20"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {project.mainPlanName || "M-Plan"} ({project.plan.length})
+                  </button>
+                  {project.subPlans.map(sp => (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      onClick={() => setActivePlanId(sp.id)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        resolvedPlanId === sp.id
+                          ? "bg-white text-indigo-700 shadow-xs ring-1 ring-indigo-500/20"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {sp.name} ({sp.tasks?.length || 0})
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Legend & Quick Actions */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -4792,7 +5119,7 @@ export default function ProjectDetailPage() {
 
             {/* Gantt Main Chart Box */}
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-              {project.plan.length === 0 ? (
+              {currentPlanTasks.length === 0 ? (
                 <div className="p-12 text-center bg-slate-50/50">
                   <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 text-blue-500 flex items-center justify-center mx-auto mb-3">
                     <CalendarDays size={28} />
@@ -5438,10 +5765,10 @@ export default function ProjectDetailPage() {
                   onChange={(e) => setTaskForm(prev => ({ ...prev, phase: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none"
                 >
-                  {project.plan.filter(t => t.isHeader).map(phase => (
+                  {currentPlanTasks.filter(t => t.isHeader).map(phase => (
                     <option key={phase.id} value={phase.phase}>{phase.phase}</option>
                   ))}
-                  {project.plan.filter(t => t.isHeader).length === 0 && (
+                  {currentPlanTasks.filter(t => t.isHeader).length === 0 && (
                     <option value="Phase 1: Chuẩn bị">Phase 1: Chuẩn bị</option>
                   )}
                 </select>
@@ -5904,6 +6231,162 @@ export default function ProjectDetailPage() {
                   Lưu thay đổi
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TẠO SUB-PLAN MỚI */}
+      {isAddSubPlanModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Plus size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Tạo Sub-Plan Mới</h3>
+                  <p className="text-xs text-slate-500">Tạo phân kỳ hoặc kế hoạch phụ bên cạnh Main Plan</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddSubPlanModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tên Sub-Plan *
+                </label>
+                <input
+                  type="text"
+                  value={newSubPlanName}
+                  onChange={(e) => setNewSubPlanName(e.target.value)}
+                  placeholder="Ví dụ: S-Plan 1, Phân kỳ 2, Kế hoạch dự phòng..."
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newSubPlanName.trim() && !isSubPlanSubmitting) {
+                      handleConfirmAddSubPlan();
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nguồn dữ liệu công việc ban đầu
+                </label>
+                <select
+                  value={newSubPlanCopySource}
+                  onChange={(e) => setNewSubPlanCopySource(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                >
+                  <option value="empty">Tạo kế hoạch trống (0 công việc)</option>
+                  <option value="main">
+                    Sao chép toàn bộ công việc từ {project?.mainPlanName || "M-Plan"} ({project?.plan?.length || 0} công việc)
+                  </option>
+                  {project?.subPlans?.map((sp) => (
+                    <option key={sp.id} value={sp.id}>
+                      Sao chép từ {sp.name} ({sp.tasks?.length || 0} công việc)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Sao chép giúp bạn tái sử dụng cấu trúc công việc sẵn có để điều chỉnh tiến độ hoặc phân công riêng.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddSubPlanModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={!newSubPlanName.trim() || isSubPlanSubmitting}
+                onClick={handleConfirmAddSubPlan}
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition disabled:opacity-50 shadow-sm shadow-indigo-200 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSubPlanSubmitting && <Loader2 size={13} className="animate-spin" />}
+                <span>Tạo Sub-Plan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ĐỔI TÊN KẾ HOẠCH (M-Plan hoặc S-Plan) */}
+      {isRenamePlanModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-100 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Edit size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Đổi Tên Kế Hoạch</h3>
+                  <p className="text-xs text-slate-500">
+                    {planToRename?.id === "main" ? "Đổi tên Main Plan (M-Plan)" : "Đổi tên Sub-Plan (S-Plan)"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRenamePlanModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Tên hiển thị mới *
+              </label>
+              <input
+                type="text"
+                value={renamePlanInput}
+                onChange={(e) => setRenamePlanInput(e.target.value)}
+                placeholder="Nhập tên kế hoạch..."
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && renamePlanInput.trim() && !isSubPlanSubmitting) {
+                    handleConfirmRenamePlan();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsRenamePlanModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={!renamePlanInput.trim() || isSubPlanSubmitting}
+                onClick={handleConfirmRenamePlan}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition disabled:opacity-50 shadow-sm shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSubPlanSubmitting && <Loader2 size={13} className="animate-spin" />}
+                <span>Lưu thay đổi</span>
+              </button>
             </div>
           </div>
         </div>
