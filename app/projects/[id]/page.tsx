@@ -31,6 +31,10 @@ import {
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import StaffSearchSelect from "@/components/common/staff-search-select";
+import { fetchCustomers, Customer } from "@/lib/customer-operations";
+import CustomerSearchSelect from "@/components/common/customer-search-select";
+import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
+import { fetchOpportunitiesByCustomer, Opportunity } from "@/lib/opportunity-operations";
 import {
   ArrowLeft,
   Calendar,
@@ -119,116 +123,9 @@ const MIN_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   actions: 60,
 };
 
-// Helper functions for mock SOW data
-const getSowData = (project: Project) => {
-  if (project.sow && project.sow.length > 0) {
-    return project.sow;
-  }
-  const projectId = project.id;
-  switch (projectId) {
-    case "proj-1":
-      return [
-        {
-          item: "Khảo sát & thiết kế",
-          deliverable: "Tài liệu đặc tả yêu cầu (URD), Thiết kế cơ sở dữ liệu chi tiết, Figma prototype giao diện",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Module quản lý Ticket",
-          deliverable: "Giao diện danh sách ticket, bộ lọc thông minh, form tạo/gửi ticket và quy trình phân phối tự động",
-          status: "Đang triển khai"
-        },
-        {
-          item: "Module quản lý SLA",
-          deliverable: "Hệ thống theo dõi hạn SLA tự động cho từng mức ưu tiên, gửi cảnh báo qua email khi trễ hạn",
-          status: "Đang triển khai"
-        },
-        {
-          item: "Module Nhân sự & Dự án",
-          deliverable: "Tích hợp danh sách nhân viên kỹ thuật, phân công công việc và hiển thị biểu đồ Gantt tiến độ",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Kiểm thử & Bàn giao",
-          deliverable: "Kịch bản test UAT, biên bản nghiệm thu người dùng và bàn giao mã nguồn kèm tài liệu hướng dẫn vận hành",
-          status: "Chưa triển khai"
-        }
-      ];
-    case "proj-2":
-      return [
-        {
-          item: "Khảo sát hạ tầng mặt bằng",
-          deliverable: "Sơ đồ bố trí các nút mạng, đo vẽ đường cáp chính và sơ đồ phòng Server Room",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Cung cấp vật tư & thiết bị mạng",
-          deliverable: "Cisco Switch Catalyst, AP Wifi 6, Firewall ASA, cáp Cat6 AMP và tủ Rack",
-          status: "Đang mua sắm"
-        },
-        {
-          item: "Thi công luồn cáp & lắp Rack",
-          deliverable: "Đi dây cáp mạng ngầm âm tường/trần cho 5 tầng lầu, bấm đầu mạng, lắp đặt thiết bị vào tủ Rack",
-          status: "Chưa triển khai"
-        },
-        {
-          item: "Cấu hình phân tách VLAN & Security",
-          deliverable: "Thiết lập VLAN cho các phòng ban, định tuyến IP routing, cấu hình chính sách bảo mật trên Firewall",
-          status: "Chưa triển khai"
-        },
-        {
-          item: "Đo kiểm tín hiệu & Bàn giao",
-          deliverable: "Đo kiểm băng thông từng node mạng, dán nhãn dây cáp và bàn giao sơ đồ hoàn công hệ thống",
-          status: "Chưa triển khai"
-        }
-      ];
-    case "proj-3":
-      return [
-        {
-          item: "Khảo sát và đánh giá DB cũ",
-          deliverable: "Bản phân tích cấu trúc dữ liệu Oracle 12c, đánh giá dung lượng và danh sách Procedure/Trigger",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Chuyển đổi Schema DB",
-          deliverable: "Mã nguồn schema tương thích PostgreSQL, xử lý các câu lệnh SQL/Procedure không tương thích",
-          status: "Đang xử lý"
-        },
-        {
-          item: "Thiết lập kênh đồng bộ DMS",
-          deliverable: "Kênh truyền AWS DMS đồng bộ dữ liệu liên tục từ On-premise Oracle lên AWS Aurora PG",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Chạy thử (Dry-run migration) 3 lần",
-          deliverable: "Biên bản đánh giá thời gian downtime, kiểm tra tính toàn vẹn của dữ liệu sau đồng bộ",
-          status: "Chưa triển khai"
-        },
-        {
-          item: "Cắt chuyển chính thức (Go-live)",
-          deliverable: "Thực hiện cắt chuyển hệ thống thật sang DB mới, bàn giao tài liệu vận hành và xử lý lỗi phát sinh",
-          status: "Chưa triển khai"
-        }
-      ];
-    default:
-      return [
-        {
-          item: "Khảo sát yêu cầu ban đầu",
-          deliverable: "Tài liệu khảo sát hiện trạng và định nghĩa phạm vi công việc chi tiết",
-          status: "Đã hoàn thành"
-        },
-        {
-          item: "Thực hiện các hạng mục cốt lõi",
-          deliverable: "Sản phẩm bàn giao theo các mốc công việc đã cam kết trong hợp đồng",
-          status: "Đang triển khai"
-        },
-        {
-          item: "Nghiệm thu bàn giao dự án",
-          deliverable: "Biên bản nghiệm thu bàn giao và bàn giao tài liệu vận hành chuyển giao công nghệ",
-          status: "Chưa triển khai"
-        }
-      ];
-  }
+// Helper functions for project SOW data (strictly real data, no mock/default)
+const getSowData = (project: Project): ProjectSowItem[] => {
+  return project.sow || [];
 };
 
 const getImplementationNotes = (project: Project) => {
@@ -483,11 +380,26 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [staffList, setStaffList] = useState<NhanSu[]>([]);
+  const [customerList, setCustomerList] = useState<Customer[]>([]);
+  const [customerContracts, setCustomerContracts] = useState<Contract[]>([]);
+  const [customerOpportunities, setCustomerOpportunities] = useState<Opportunity[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "plan" | "gantt" | "timeline" | "document" | "diary">("overview");
 
   // Overview Tab Edit States
   const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [editedCode, setEditedCode] = useState("");
   const [editedDesc, setEditedDesc] = useState("");
+  const [editedCustomer, setEditedCustomer] = useState("");
+  const [editedCustomerId, setEditedCustomerId] = useState("");
+  const [editedManager, setEditedManager] = useState("");
+  const [editedContractNo, setEditedContractNo] = useState("");
+  const [editedContractId, setEditedContractId] = useState("");
+  const [editedOpportunityCode, setEditedOpportunityCode] = useState("");
+  const [editedOpportunityName, setEditedOpportunityName] = useState("");
+  const [editedOpportunityId, setEditedOpportunityId] = useState("");
+  const [editedStartDate, setEditedStartDate] = useState("");
+  const [editedEndDate, setEditedEndDate] = useState("");
 
   const [isSowModalOpen, setIsSowModalOpen] = useState(false);
   const [editedSows, setEditedSows] = useState<ProjectSowItem[]>([]);
@@ -648,20 +560,126 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // Description Edit Handlers
-  const handleStartEditDesc = () => {
+  // Overview Tab Edit Handlers
+  const handleStartEditDesc = async () => {
     if (!project) return;
+    setEditedName(project.name || "");
+    setEditedCode(project.code || "");
     setEditedDesc(project.description || "");
+
+    let foundCustomerId = project.customerId || "";
+    if (!foundCustomerId && project.customer && customerList.length > 0) {
+      const match = customerList.find(c => c.name.toLowerCase() === project.customer.toLowerCase());
+      if (match) foundCustomerId = match.id;
+    }
+    setEditedCustomerId(foundCustomerId);
+    setEditedCustomer(project.customer || "");
+    setEditedManager(project.manager || "");
+    setEditedContractNo(project.contractNo || "");
+    setEditedContractId(project.contractId || "");
+    setEditedOpportunityCode(project.opportunityCode || "");
+    setEditedOpportunityName(project.opportunityName || "");
+    setEditedOpportunityId(project.opportunityId || "");
+    setEditedStartDate(project.startDate || "");
+    setEditedEndDate(project.endDate || "");
+
+    const searchIdent = foundCustomerId || project.customer;
+    if (searchIdent) {
+      try {
+        const [contracts, opps] = await Promise.all([
+          fetchContractsByCustomer(searchIdent).catch(() => []),
+          fetchOpportunitiesByCustomer(searchIdent).catch(() => [])
+        ]);
+        setCustomerContracts(contracts);
+        setCustomerOpportunities(opps);
+      } catch (err) {
+        console.warn("Could not load customer contracts/opps:", err);
+        setCustomerContracts([]);
+        setCustomerOpportunities([]);
+      }
+    } else {
+      setCustomerContracts([]);
+      setCustomerOpportunities([]);
+    }
+
     setIsEditingDesc(true);
+  };
+
+  const handleCustomerSelect = async (val: string, cust?: Customer | null) => {
+    const customerName = cust ? cust.name : val;
+    const customerId = cust ? cust.id : (customerList.find(c => c.name === val)?.id || "");
+    setEditedCustomerId(customerId);
+    setEditedCustomer(customerName);
+    setEditedContractId("");
+    setEditedContractNo("");
+    setEditedOpportunityId("");
+    setEditedOpportunityCode("");
+    setEditedOpportunityName("");
+
+    const searchIdent = customerId || customerName;
+    if (searchIdent) {
+      try {
+        const [contracts, opps] = await Promise.all([
+          fetchContractsByCustomer(searchIdent).catch(() => []),
+          fetchOpportunitiesByCustomer(searchIdent).catch(() => [])
+        ]);
+        setCustomerContracts(contracts);
+        setCustomerOpportunities(opps);
+      } catch {
+        setCustomerContracts([]);
+        setCustomerOpportunities([]);
+      }
+    } else {
+      setCustomerContracts([]);
+      setCustomerOpportunities([]);
+    }
+  };
+
+  const handleContractSelect = (contractId: string) => {
+    const c = customerContracts.find(item => item.id === contractId);
+    if (c) {
+      setEditedContractId(c.id);
+      setEditedContractNo(c.contract_no || c.code || "");
+    } else {
+      setEditedContractId("");
+      setEditedContractNo("");
+    }
+  };
+
+  const handleOpportunitySelect = (oppId: string) => {
+    const opp = customerOpportunities.find(o => o.id === oppId);
+    if (opp) {
+      setEditedOpportunityId(opp.id);
+      setEditedOpportunityCode(opp.code || "");
+      setEditedOpportunityName(opp.name || "");
+    } else {
+      setEditedOpportunityId("");
+      setEditedOpportunityCode("");
+      setEditedOpportunityName("");
+    }
   };
 
   const handleSaveDesc = () => {
     if (!project) return;
-    const updated = updateProject(project.id, { description: editedDesc });
+    const updated = updateProject(project.id, {
+      name: editedName.trim() || project.name,
+      code: editedCode.trim() || project.code,
+      description: editedDesc,
+      customer: editedCustomer,
+      customerId: editedCustomerId,
+      manager: editedManager,
+      contractNo: editedContractNo,
+      contractId: editedContractId,
+      opportunityCode: editedOpportunityCode,
+      opportunityName: editedOpportunityName,
+      opportunityId: editedOpportunityId,
+      startDate: editedStartDate || project.startDate,
+      endDate: editedEndDate || project.endDate,
+    });
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",
-        content: `Cập nhật mô tả dự án: "${editedDesc.substring(0, 60)}${editedDesc.length > 60 ? '...' : ''}"`,
+        content: `Cập nhật thông tin tổng quan dự án (Quản lý dự án: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
         category: "Update"
       });
       setIsEditingDesc(false);
@@ -672,7 +690,12 @@ export default function ProjectDetailPage() {
   // SOW Edit Handlers
   const handleStartEditSow = () => {
     if (!project) return;
-    setEditedSows(getSowData(project));
+    const current = getSowData(project);
+    if (current.length === 0) {
+      setEditedSows([{ item: "", deliverable: "", status: "Chưa triển khai" }]);
+    } else {
+      setEditedSows(current);
+    }
     setIsSowModalOpen(true);
   };
 
@@ -690,13 +713,13 @@ export default function ProjectDetailPage() {
 
   const handleSaveSow = () => {
     if (!project) return;
-    // Validate rows
-    const validSows = editedSows.filter(s => s.item.trim() !== "");
+    // Validate rows - only keep rows with item name
+    const validSows = editedSows.filter(s => s.item && s.item.trim() !== "");
     const updated = updateProject(project.id, { sow: validSows });
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",
-        content: `Cập nhật bảng phạm vi công việc (SOW) dự án`,
+        content: `Cập nhật bảng phạm vi công việc (SOW) dự án (${validSows.length} hạng mục)`,
         category: "Update"
       });
       setIsSowModalOpen(false);
@@ -778,6 +801,7 @@ export default function ProjectDetailPage() {
       if (fresh) setProject(fresh);
     });
     fetchNhanSu().then(setStaffList).catch(err => console.error("Error loading staff:", err));
+    fetchCustomers().then(setCustomerList).catch(err => console.error("Error loading customers:", err));
 
     // Auto Realtime sync for this project
     const unsubscribe = subscribeToProjects((latestProjects) => {
@@ -2749,47 +2773,228 @@ export default function ProjectDetailPage() {
               {/* Left Column: Info & Description & SOW */}
               <div className="lg:col-span-2 space-y-6">
                 
-                {/* Project Description Card */}
+                {/* Project Description & Overview Details Card */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
                       <Info size={18} className="text-blue-500" />
-                      <span>Mô tả Dự án</span>
+                      <span>Thông tin &amp; Mô tả Dự án</span>
                     </h3>
                     {!isEditingDesc && (
                       <button
                         onClick={handleStartEditDesc}
-                        className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 transition cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                       >
                         <Edit size={13} />
-                        <span>Sửa</span>
+                        <span>Sửa thông tin</span>
                       </button>
                     )}
                   </div>
                   
                   {isEditingDesc ? (
-                    <div className="space-y-3 pt-1">
-                      <textarea
-                        value={editedDesc}
-                        onChange={(e) => setEditedDesc(e.target.value)}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white resize-none"
-                        placeholder="Nhập mô tả chi tiết của dự án..."
-                      />
-                      <div className="flex justify-end gap-2 text-xs">
+                    <div className="space-y-4 pt-1 bg-slate-50/70 p-4 rounded-xl border border-slate-200">
+                      {/* Row 1: Project Name & Code */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                        <div className="md:col-span-8">
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Tên dự án <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            placeholder="Nhập tên dự án..."
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white font-medium"
+                          />
+                        </div>
+                        <div className="md:col-span-4">
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Mã dự án
+                          </label>
+                          <input
+                            type="text"
+                            value={editedCode}
+                            onChange={(e) => setEditedCode(e.target.value)}
+                            placeholder="VD: TT03-PJ-0991"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white font-mono uppercase"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 2: Description */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Mô tả chi tiết dự án
+                        </label>
+                        <textarea
+                          value={editedDesc}
+                          onChange={(e) => setEditedDesc(e.target.value)}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white resize-none"
+                          placeholder="Nhập mô tả chi tiết của dự án..."
+                        />
+                      </div>
+
+                      {/* Row 3: Customer & Manager (PM) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                            <Building2 size={13} className="text-blue-500 shrink-0" />
+                            <span>Khách hàng</span>
+                          </label>
+                          <CustomerSearchSelect
+                            value={editedCustomerId}
+                            valueKey="id"
+                            onChange={(val, cust) => handleCustomerSelect(val, cust)}
+                            customers={customerList}
+                            placeholder="-- Tìm và chọn khách hàng --"
+                            className="w-full text-xs"
+                            size="sm"
+                          />
+                          {editedCustomer && !editedCustomerId && (
+                            <p className="text-[10px] text-slate-500 mt-1 truncate">
+                              Tên hiện tại: <strong className="text-slate-700">{editedCustomer}</strong>
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                            <User size={13} className="text-purple-500 shrink-0" />
+                            <span>Chủ nhiệm dự án (PM)</span>
+                          </label>
+                          <StaffSearchSelect
+                            value={editedManager}
+                            valueKey="name"
+                            onChange={(val) => setEditedManager(val)}
+                            staffList={staffList}
+                            placeholder="-- Tìm và chọn chủ nhiệm dự án (PM) --"
+                            className="w-full text-xs"
+                            size="sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 4: Contract & Opportunity */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <FileText size={13} className="text-indigo-500 shrink-0" />
+                              <span>Hợp đồng liên quan</span>
+                            </span>
+                            {customerContracts.length > 0 && (
+                              <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded">
+                                {customerContracts.length} hợp đồng
+                              </span>
+                            )}
+                          </label>
+                          {customerContracts.length > 0 ? (
+                            <select
+                              value={editedContractId || ""}
+                              onChange={(e) => handleContractSelect(e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer"
+                            >
+                              <option value="">-- Không gắn hợp đồng --</option>
+                              {customerContracts.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.contract_no || c.code} - {c.service || c.name || "Hợp đồng"}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={editedContractNo}
+                              onChange={(e) => setEditedContractNo(e.target.value)}
+                              placeholder="Nhập số/mã hợp đồng liên quan..."
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                            />
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <Tag size={13} className="text-amber-500 shrink-0" />
+                              <span>Cơ hội liên kết</span>
+                            </span>
+                            {customerOpportunities.length > 0 && (
+                              <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.2 rounded">
+                                {customerOpportunities.length} cơ hội
+                              </span>
+                            )}
+                          </label>
+                          {customerOpportunities.length > 0 ? (
+                            <select
+                              value={editedOpportunityId || ""}
+                              onChange={(e) => handleOpportunitySelect(e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer"
+                            >
+                              <option value="">-- Không gắn cơ hội --</option>
+                              {customerOpportunities.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  [{o.code}] {o.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={editedOpportunityCode}
+                              onChange={(e) => setEditedOpportunityCode(e.target.value)}
+                              placeholder="Nhập mã cơ hội liên kết..."
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row 5: Start & End Dates */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                            <Calendar size={13} className="text-emerald-500 shrink-0" />
+                            <span>Ngày bắt đầu dự án</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={editedStartDate}
+                            onChange={(e) => setEditedStartDate(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                            <Calendar size={13} className="text-rose-500 shrink-0" />
+                            <span>Ngày kết thúc dự kiến</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={editedEndDate}
+                            onChange={(e) => setEditedEndDate(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 text-xs">
                         <button
                           type="button"
                           onClick={() => setIsEditingDesc(false)}
-                          className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer"
+                          className="px-3.5 py-2 border border-slate-200 rounded-xl hover:bg-slate-100 text-slate-700 font-bold transition cursor-pointer"
                         >
                           Hủy
                         </button>
                         <button
                           type="button"
                           onClick={handleSaveDesc}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold cursor-pointer"
+                          className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs hover:shadow-md cursor-pointer flex items-center gap-1.5"
                         >
-                          Lưu lại
+                          <CheckCircle2 size={14} />
+                          <span>Lưu thay đổi</span>
                         </button>
                       </div>
                     </div>
@@ -2800,36 +3005,38 @@ export default function ProjectDetailPage() {
                   )}
                   
                   {/* Additional Meta Details */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 text-xs">
-                    <div className="space-y-1">
-                      <span className="text-slate-400 font-medium block">Khách hàng</span>
-                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <Building2 size={14} className="text-blue-500 shrink-0" />
-                        <span className="truncate">{project.customer || "Chưa chọn khách hàng"}</span>
-                      </span>
+                  {!isEditingDesc && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 text-xs">
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Khách hàng</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                          <Building2 size={14} className="text-blue-500 shrink-0" />
+                          <span className="truncate">{project.customer || "Chưa chọn khách hàng"}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Hợp đồng liên quan</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                          <FileText size={14} className="text-indigo-500 shrink-0" />
+                          <span className="truncate">{project.contractNo || "Chưa gắn hợp đồng"}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Cơ hội liên kết</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                          <Tag size={14} className="text-amber-500 shrink-0" />
+                          <span className="truncate">{project.opportunityCode ? `[${project.opportunityCode}] ${project.opportunityName || ""}` : "Chưa gắn cơ hội"}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Chủ nhiệm (PM)</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
+                          <User size={14} className="text-purple-500 shrink-0" />
+                          <span className="truncate">{project.manager || "Chưa phân công"}</span>
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <span className="text-slate-400 font-medium block">Hợp đồng liên quan</span>
-                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <FileText size={14} className="text-indigo-500 shrink-0" />
-                        <span className="truncate">{project.contractNo || "Chưa gắn hợp đồng"}</span>
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-slate-400 font-medium block">Cơ hội liên kết</span>
-                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <Tag size={14} className="text-amber-500 shrink-0" />
-                        <span className="truncate">{project.opportunityCode ? `[${project.opportunityCode}] ${project.opportunityName || ""}` : "Chưa gắn cơ hội"}</span>
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-slate-400 font-medium block">Chủ nhiệm (PM)</span>
-                      <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
-                        <User size={14} className="text-purple-500 shrink-0" />
-                        <span className="truncate">{project.manager || "Chưa phân công"}</span>
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* SOW (Statement of Work) Table Card */}
@@ -2841,7 +3048,7 @@ export default function ProjectDetailPage() {
                     </h3>
                     <button
                       onClick={handleStartEditSow}
-                      className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 transition cursor-pointer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                     >
                       <Edit size={13} />
                       <span>Cập nhật SOW</span>
@@ -2859,18 +3066,38 @@ export default function ProjectDetailPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {getSowData(project).map((sow, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/50 transition">
-                            <td className="py-3 px-4 text-center font-mono font-medium text-slate-400">{idx + 1}</td>
-                            <td className="py-3 px-4 font-semibold text-slate-800">{sow.item}</td>
-                            <td className="py-3 px-4 text-slate-600 leading-relaxed">{sow.deliverable}</td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${getSowStatusClass(sow.status)}`}>
-                                {sow.status}
-                              </span>
+                        {getSowData(project).length > 0 ? (
+                          getSowData(project).map((sow, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition">
+                              <td className="py-3 px-4 text-center font-mono font-medium text-slate-400">{idx + 1}</td>
+                              <td className="py-3 px-4 font-semibold text-slate-800">{sow.item}</td>
+                              <td className="py-3 px-4 text-slate-600 leading-relaxed">{sow.deliverable}</td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${getSowStatusClass(sow.status)}`}>
+                                  {sow.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="py-10 text-center text-slate-400">
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                <ListTodo size={28} className="text-slate-300 stroke-[1.5]" />
+                                <p className="text-xs font-semibold text-slate-600">Chưa có hạng mục phạm vi công việc nào</p>
+                                <p className="text-[11px] text-slate-400 max-w-sm">Dự án này chưa được thiết lập SOW. Nhấn vào nút bên dưới để thêm các hạng mục công việc và bàn giao chi tiết.</p>
+                                <button
+                                  type="button"
+                                  onClick={handleStartEditSow}
+                                  className="mt-1 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <Plus size={14} />
+                                  <span>Thiết lập SOW</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -5308,58 +5535,66 @@ export default function ProjectDetailPage() {
 
             {/* List */}
             <div className="p-5 space-y-4">
-              <div className="space-y-3">
-                {editedSows.map((sow, idx) => (
-                  <div key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/60 relative group">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3">
-                      <div className="md:col-span-4">
-                        <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Hạng mục công việc</label>
-                        <input
-                          type="text"
-                          required
-                          value={sow.item}
-                          onChange={(e) => handleSowInputChange(idx, 'item', e.target.value)}
-                          placeholder="Tên hạng mục..."
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
-                        />
+              {editedSows.length === 0 ? (
+                <div className="py-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl space-y-2">
+                  <ListTodo size={28} className="text-slate-300 mx-auto stroke-[1.5]" />
+                  <p className="text-xs font-semibold text-slate-600">Hiện chưa có hạng mục SOW nào cho dự án này</p>
+                  <p className="text-[11px] text-slate-400">Bấm nút &quot;Thêm hạng mục công việc&quot; bên dưới để bắt đầu tạo hạng mục đầu tiên.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {editedSows.map((sow, idx) => (
+                    <div key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/60 relative group">
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3">
+                        <div className="md:col-span-4">
+                          <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Hạng mục công việc</label>
+                          <input
+                            type="text"
+                            required
+                            value={sow.item}
+                            onChange={(e) => handleSowInputChange(idx, 'item', e.target.value)}
+                            placeholder="Tên hạng mục..."
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
+                          />
+                        </div>
+                        <div className="md:col-span-5">
+                          <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Mô tả bàn giao chi tiết</label>
+                          <input
+                            type="text"
+                            required
+                            value={sow.deliverable}
+                            onChange={(e) => handleSowInputChange(idx, 'deliverable', e.target.value)}
+                            placeholder="Mô tả sản phẩm bàn giao..."
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Trạng thái</label>
+                          <select
+                            value={sow.status}
+                            onChange={(e) => handleSowInputChange(idx, 'status', e.target.value)}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
+                          >
+                            <option value="Đã hoàn thành">Đã hoàn thành</option>
+                            <option value="Đang triển khai">Đang triển khai</option>
+                            <option value="Đang xử lý">Đang xử lý</option>
+                            <option value="Đang mua sắm">Đang mua sắm</option>
+                            <option value="Chưa triển khai">Chưa triển khai</option>
+                          </select>
+                        </div>
                       </div>
-                      <div className="md:col-span-5">
-                        <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Mô tả bàn giao chi tiết</label>
-                        <input
-                          type="text"
-                          required
-                          value={sow.deliverable}
-                          onChange={(e) => handleSowInputChange(idx, 'deliverable', e.target.value)}
-                          placeholder="Mô tả sản phẩm bàn giao..."
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
-                        />
-                      </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Trạng thái</label>
-                        <select
-                          value={sow.status}
-                          onChange={(e) => handleSowInputChange(idx, 'status', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none"
-                        >
-                          <option value="Đã hoàn thành">Đã hoàn thành</option>
-                          <option value="Đang triển khai">Đang triển khai</option>
-                          <option value="Đang xử lý">Đang xử lý</option>
-                          <option value="Đang mua sắm">Đang mua sắm</option>
-                          <option value="Chưa triển khai">Chưa triển khai</option>
-                        </select>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSowRow(idx)}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition mt-4 cursor-pointer"
+                        title="Xóa hạng mục"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSowRow(idx)}
-                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition mt-4 cursor-pointer"
-                      title="Xóa hạng mục"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               <button
                 type="button"
