@@ -434,12 +434,17 @@ export default function SettingsPage() {
                       <input
                         type="text"
                         value={storageConfig.drive_folder_id || ""}
-                        onChange={(e) => setStorageConfig({ ...storageConfig, drive_folder_id: e.target.value.trim() })}
+                        onChange={(e) => {
+                          let val = e.target.value.trim();
+                          const match = val.match(/folders\/([a-zA-Z0-9_-]+)/);
+                          if (match) val = match[1];
+                          setStorageConfig({ ...storageConfig, drive_folder_id: val });
+                        }}
                         placeholder="1A2b3C4d5E6f7G8h9I0j-sample_folder_id"
                         className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
                       />
                       <p className="text-[10px] text-slate-400">
-                        Đường dẫn drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong> thì <code>1A2b3C4d5E6f...</code> là Folder ID.
+                        Đường dẫn drive.google.com/drive/folders/<strong>1A2b3C4d5E6f...</strong> thì <code>1A2b3C4d5E6f...</code> là Folder ID (Lưu ý: Có phân biệt chữ HOA - thường).
                       </p>
                     </div>
 

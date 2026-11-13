@@ -97,7 +97,13 @@ export async function POST(request: Request) {
     if (contentType.includes("application/json")) {
       const body = await request.json();
       if (body.action === "test") {
-        const folderId = body.folderId || "root";
+        let folderId = (body.folderId || "").trim();
+        const folderMatch = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
+        if (folderMatch) {
+          folderId = folderMatch[1];
+        }
+        if (!folderId) folderId = "root";
+
         const driveObj = await getDriveClient({
           clientId: body.clientId,
           clientSecret: body.clientSecret,
@@ -114,10 +120,11 @@ export async function POST(request: Request) {
         }
 
         try {
-          // Attempt to fetch folder metadata to test access
+          // Attempt to fetch folder metadata to test access (supportsAllDrives is required for Shared Drives / Team Drives)
           const res = await driveObj.drive.files.get({
             fileId: folderId,
             fields: "id, name, permissions, mimeType",
+            supportsAllDrives: true,
           });
 
           const folderName = res.data.name || "Folder Google Drive";
@@ -131,7 +138,7 @@ export async function POST(request: Request) {
           if (driveErr.status === 404) {
             return NextResponse.json({
               success: false,
-              error: `Không tìm thấy Folder ID "${folderId}" trên Google Drive hoặc tài khoản chưa có quyền truy cập.`,
+              error: `Không tìm thấy Folder ID "${folderId}" trên Google Drive hoặc tài khoản chưa có quyền truy cập. Lưu ý: Mã ID Google Drive phân biệt chính xác chữ HOA và chữ thường (ví dụ: WDdS khác WdDS). Vui lòng copy chính xác mã thư mục từ link Google Drive.`,
             }, { status: 400 });
           }
 
@@ -154,7 +161,14 @@ export async function POST(request: Request) {
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
-      const folderId = (formData.get("folderId") as string) || "root";
+      let folderId = (formData.get("folderId") as string) || "root";
+      folderId = folderId.trim();
+      const folderMatch = folderId.match(/folders\/([a-zA-Z0-9_-]+)/);
+      if (folderMatch) {
+        folderId = folderMatch[1];
+      }
+      if (!folderId) folderId = "root";
+
       const moduleName = (formData.get("module") as string) || "tickets";
 
       const driveObj = await getDriveClient({
@@ -178,7 +192,7 @@ export async function POST(request: Request) {
           stream.push(buffer);
           stream.push(null);
 
-          // Upload file to specified Google Drive folder
+          // Upload file to specified Google Drive folder (with supportsAllDrives)
           const driveResponse = await driveObj.drive.files.create({
             requestBody: {
               name: file.name,
@@ -189,6 +203,7 @@ export async function POST(request: Request) {
               body: stream,
             },
             fields: "id, webViewLink, webContentLink",
+            supportsAllDrives: true,
           });
 
           const fileId = driveResponse.data.id;
@@ -202,6 +217,7 @@ export async function POST(request: Request) {
                 role: "reader",
                 type: "anyone",
               },
+              supportsAllDrives: true,
             });
           } catch (permErr: any) {
             console.warn("Could not set public permission on uploaded file:", permErr.message);
