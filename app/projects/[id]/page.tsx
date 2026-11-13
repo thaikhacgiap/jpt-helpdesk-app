@@ -2875,17 +2875,6 @@ export default function ProjectDetailPage() {
             );
           })}
 
-          {/* BUTTON TẠO SUB-PLAN */}
-          <button
-            type="button"
-            onClick={handleOpenAddSubPlan}
-            className="flex items-center gap-1 px-2.5 py-1 my-auto text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/90 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all cursor-pointer whitespace-nowrap mx-1 shadow-2xs"
-            title="Thêm Sub-Plan mới cho dự án (bên cạnh Main Plan)"
-          >
-            <Plus size={12} />
-            <span>+ Sub-Plan</span>
-          </button>
-
           <button
             onClick={() => setActiveTab("gantt")}
             className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -3358,25 +3347,39 @@ export default function ProjectDetailPage() {
         {/* TAB 1: PLAN */}
         {activeTab === "plan" && (
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-            {/* Sub-Plan Switcher Toolbar */}
-            <div className="px-6 pt-3.5 pb-2.5 bg-slate-50 border-b border-slate-200/70 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-xl border border-slate-300/60 flex-wrap">
+            {/* Unified Single-Line Toolbar Header */}
+            <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-3 flex-wrap">
+              {/* Left: Sub-Plan Switcher Pills */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl border border-slate-300/50 flex-wrap">
                 {/* M-Plan Pill */}
-                <button
-                  type="button"
-                  onClick={() => setActivePlanId("main")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    resolvedPlanId === "main"
-                      ? "bg-white text-blue-700 shadow-xs ring-1 ring-blue-500/20"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-                  <span>{project.mainPlanName || "M-Plan"}</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-700 font-bold">
-                    {project.plan.length}
-                  </span>
-                </button>
+                <div className="flex items-center group">
+                  <button
+                    type="button"
+                    onClick={() => setActivePlanId("main")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      resolvedPlanId === "main"
+                        ? "bg-white text-blue-700 shadow-xs ring-1 ring-blue-500/20"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+                    <span>{project.mainPlanName || "M-Plan"}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-700 font-bold">
+                      {project.plan.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenRenamePlan("main", project.mainPlanName || "M-Plan");
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                    title="Đổi tên Main Plan"
+                  >
+                    <Edit size={11} />
+                  </button>
+                </div>
 
                 {/* Sub-Plan Pills */}
                 {project.subPlans?.map((sp) => {
@@ -3400,7 +3403,10 @@ export default function ProjectDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleOpenRenamePlan(sp.id, sp.name)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenRenamePlan(sp.id, sp.name);
+                        }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
                         title="Đổi tên Sub-Plan"
                       >
@@ -3408,7 +3414,10 @@ export default function ProjectDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteSubPlan(sp.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSubPlan(sp.id);
+                        }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 transition cursor-pointer"
                         title="Xóa Sub-Plan"
                       >
@@ -3418,64 +3427,19 @@ export default function ProjectDetailPage() {
                   );
                 })}
 
-                {/* Button Tạo Sub-Plan */}
+                {/* Button Tạo Sub-Plan (Single Plus) */}
                 <button
                   type="button"
                   onClick={handleOpenAddSubPlan}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-white/70 rounded-lg transition cursor-pointer"
                   title="Tạo Sub-Plan mới cho dự án"
                 >
-                  <Plus size={13} />
-                  <span>+ Sub-Plan</span>
+                  <Plus size={12} />
+                  <span>Sub-Plan</span>
                 </button>
               </div>
 
-              {/* Indicator Badge */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500 font-medium">Đang thao tác:</span>
-                <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase tracking-wide border ${
-                  resolvedPlanId === "main" ? "bg-blue-50 text-blue-800 border-blue-200" : "bg-indigo-50 text-indigo-800 border-indigo-200"
-                }`}>
-                  {resolvedPlanId === "main" ? "Main Plan (M-Plan)" : "Sub Plan (S-Plan)"}
-                </span>
-              </div>
-            </div>
-
-            {/* Tab Header with Add Button */}
-            <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-800 text-base">
-                    {currentPlanName}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenRenamePlan(resolvedPlanId, currentPlanName)}
-                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-200/80 rounded-lg transition cursor-pointer"
-                    title="Đổi tên kế hoạch này"
-                  >
-                    <Edit size={14} />
-                  </button>
-                  {resolvedPlanId !== "main" && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSubPlan(resolvedPlanId)}
-                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                      title="Xóa Sub-plan này"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {isEditingPlan 
-                    ? "Đang chỉnh sửa kế hoạch. Bấm ▲/▼ để đổi vị trí, hoặc thêm hàng bằng nút trên." 
-                    : isMoveMode
-                    ? "Chế độ di chuyển: Nhập số hàng vào ô để chuyển vị trí, hoặc dùng nút ▲/▼ / kéo thả hàng."
-                    : "Xem tiến độ chi tiết. Bấm 'Di chuyển' để đổi thứ tự hàng, hoặc 'Chỉnh sửa' để sửa toàn bộ."}
-                </p>
-              </div>
-              
+              {/* Right: Action Buttons */}
               {isEditingPlan ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="relative">
@@ -3486,7 +3450,7 @@ export default function ProjectDetailPage() {
                       title="Thêm công việc mới vào kế hoạch (chọn Phase, Main task hoặc Sub task)"
                     >
                       <Plus size={13} />
-                      <span>+ Task</span>
+                      <span>Task</span>
                       <ChevronDown size={11} className={`transition-transform duration-200 ${isTaskDropdownOpen ? "rotate-180" : ""}`} />
                     </button>
                     {isTaskDropdownOpen && renderTaskDropdownMenu()}
@@ -3547,7 +3511,7 @@ export default function ProjectDetailPage() {
                       title="Thêm công việc mới vào kế hoạch (chọn Phase, Main task hoặc Sub task)"
                     >
                       <Plus size={13} />
-                      <span>+ Task</span>
+                      <span>Task</span>
                       <ChevronDown size={11} className={`transition-transform duration-200 ${isTaskDropdownOpen ? "rotate-180" : ""}`} />
                     </button>
                     {isTaskDropdownOpen && renderTaskDropdownMenu()}
