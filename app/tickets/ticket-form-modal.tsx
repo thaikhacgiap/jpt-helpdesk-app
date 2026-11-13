@@ -20,7 +20,7 @@ import AttachmentUploader from "@/components/common/attachment-uploader";
 import DateTimePicker from "@/components/common/datetime-picker";
 import RequestSearchSelect, { RequestOption } from "@/components/common/request-search-select";
 import StaffSearchSelect from "@/components/common/staff-search-select";
-import { AttachedFile } from "@/lib/storage-service";
+import { AttachedFile, uploadFileToStorage, formatFileSize } from "@/lib/storage-service";
 import { getCurrentUser } from "@/lib/auth-operations";
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -2381,6 +2381,8 @@ export interface FinishedFormData {
   currentStatus?: string;
   reportUrl?: string;
   reportFileName?: string;
+  reportFileSize?: string;
+  reportFileId?: string;
   templateFileName?: string;
   approver?: string;
   approvalStatus?: string;
@@ -2438,6 +2440,9 @@ function CompletedForm({
     finishedData.templateFileName || "Mau_bao_cao_su_co_v2.docx"
   );
   const [templateUploadSuccess, setTemplateUploadSuccess] = useState(false);
+  const [isUploadingReport, setIsUploadingReport] = useState(false);
+  const [uploadReportError, setUploadReportError] = useState<string | null>(null);
+  const [uploadReportSuccess, setUploadReportSuccess] = useState<string | null>(null);
 
   // Time calculations & formatters
   const effectiveStartTime = finishedData.startTime || createData.startTime || ticket?.start_time || "";
@@ -2593,13 +2598,46 @@ function CompletedForm({
   const isApproverFilled = Boolean(finishedData.approver);
 
   // Handlers
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTriggerUpload = () => {
+    if (!editing && onEdit) {
+      onEdit();
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    onFinishedDataChange({
-      reportFileName: file.name,
-      reportUrl: URL.createObjectURL(file),
-    });
+
+    if (!editing && onEdit) {
+      onEdit();
+    }
+
+    setIsUploadingReport(true);
+    setUploadReportError(null);
+    setUploadReportSuccess(null);
+
+    try {
+      const result = await uploadFileToStorage(file, "tickets");
+      if (result.success && result.attachedFile) {
+        onFinishedDataChange({
+          reportFileName: file.name,
+          reportUrl: result.attachedFile.url,
+          reportFileSize: formatFileSize(file.size),
+          reportFileId: result.attachedFile.id,
+        });
+        const providerName = result.attachedFile.provider === "google_drive" ? "Google Drive" : "Hệ thống";
+        setUploadReportSuccess(`Đã tải lên tệp "${file.name}" lên ${providerName} thành công!`);
+        setTimeout(() => setUploadReportSuccess(null), 5000);
+      } else {
+        setUploadReportError(result.error || `Tải tệp "${file.name}" lên lưu trữ thất bại.`);
+      }
+    } catch (err: any) {
+      setUploadReportError(`Lỗi kết nối khi tải tệp: ${err.message || String(err)}`);
+    } finally {
+      setIsUploadingReport(false);
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2829,7 +2867,7 @@ function CompletedForm({
             )}
 
             {/* File Report Upload Box */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-600 block">
                 File report <span className="text-red-500">*</span>
               </label>
@@ -2843,40 +2881,94 @@ function CompletedForm({
               />
 
               {finishedData.reportFileName || finishedData.reportUrl || ticket?.document_link ? (
-                <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                <div className="p-2.5 bg-white border border-teal-200/80 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
                       <FileText size={16} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 truncate">
-                        {finishedData.reportFileName || "BaoCao_INC-20458.docx"}
+                      {finishedData.reportUrl || ticket?.document_link ? (
+                        <a
+                          href={finishedData.reportUrl || ticket?.document_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:underline truncate block flex items-center gap-1"
+                          title="Bấm để mở file trên Google Drive"
+                        >
+                          <span className="truncate">{finishedData.reportFileName || (ticket?.document_link ? "Tài liệu báo cáo sự cố" : "BaoCao_INC-20458.docx")}</span>
+                          <ExternalLink size={12} className="shrink-0 text-teal-600" />
+                        </a>
+                      ) : (
+                        <p className="text-xs font-bold text-slate-800 truncate">
+                          {finishedData.reportFileName || "BaoCao_INC-20458.docx"}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                        <span>{finishedData.reportFileSize || "Đã tải lên"}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-medium flex items-center gap-0.5">
+                          <HardDrive size={11} /> Google Drive
+                        </span>
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">236 KB · vừa tải lên</p>
                     </div>
                   </div>
-                  {editing && (
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => onFinishedDataChange({ reportFileName: "", reportUrl: "" })}
+                      onClick={handleTriggerUpload}
+                      disabled={isUploadingReport}
+                      className="p-1 text-slate-400 hover:text-teal-600 transition cursor-pointer"
+                      title="Tải lại file khác"
+                    >
+                      <UploadCloud size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editing && onEdit) onEdit();
+                        onFinishedDataChange({ reportFileName: "", reportUrl: "", reportFileSize: "", reportFileId: "" });
+                      }}
                       className="p-1 text-slate-400 hover:text-red-500 transition cursor-pointer"
                       title="Xóa file đính kèm"
                     >
                       <X size={15} />
                     </button>
-                  )}
+                  </div>
                 </div>
               ) : (
                 <button
                   type="button"
-                  disabled={!editing}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1"
+                  disabled={isUploadingReport}
+                  onClick={handleTriggerUpload}
+                  className="w-full py-2.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 group"
                 >
-                  <UploadCloud size={18} className="text-[#0d9488]" />
-                  <span className="text-xs font-semibold text-slate-700">Tải lên file báo cáo sự cố</span>
-                  <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx</span>
+                  {isUploadingReport ? (
+                    <>
+                      <Loader2 size={18} className="text-[#0d9488] animate-spin" />
+                      <span className="text-xs font-semibold text-teal-700">Đang đẩy file lên Google Drive...</span>
+                      <span className="text-[11px] text-slate-400">Vui lòng chờ trong giây lát</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud size={18} className="text-[#0d9488] group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-800">Tải lên file báo cáo sự cố</span>
+                      <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx (Tự động đẩy lên Google Drive)</span>
+                    </>
+                  )}
                 </button>
+              )}
+
+              {uploadReportError && (
+                <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded-lg border border-red-200 flex items-center gap-1.5">
+                  <AlertCircle size={13} className="shrink-0 text-red-500" />
+                  <span>{uploadReportError}</span>
+                </div>
+              )}
+              {uploadReportSuccess && (
+                <div className="text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                  <span>{uploadReportSuccess}</span>
+                </div>
               )}
             </div>
 
@@ -2892,6 +2984,7 @@ function CompletedForm({
                   staffList={nhanSuList}
                   value={finishedData.approver?.split(" – ")[0] || finishedData.approver || ""}
                   onChange={(val) => {
+                    if (!editing && onEdit) onEdit();
                     const ns = nhanSuList.find(s => s.ten_nhan_su === val);
                     const formatted = ns ? `${ns.ten_nhan_su} – ${ns.chuc_vu || "Kỹ thuật"}` : (val as string);
                     onFinishedDataChange({ approver: formatted });
