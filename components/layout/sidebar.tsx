@@ -26,6 +26,7 @@ import {
 
 import { fetchRequests } from "@/lib/request-operations";
 import { getTicketRequestCode } from "@/lib/ticket-operations";
+import UserProfileModal from "@/components/user/user-profile-modal";
 
 interface MenuItemProps {
   isActive: boolean;
@@ -36,6 +37,7 @@ export default function Sidebar() {
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   useEffect(() => {
     setUser(getCurrentUser());
@@ -130,12 +132,19 @@ export default function Sidebar() {
         {/* LOGO */}
         <div className="mb-6 px-1">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 flex items-center justify-center">
-              <img src="/jpt-logo.png" alt="JPT Logo" className="h-7 w-auto max-w-[80px] object-contain" style={{ mixBlendMode: 'screen' }} />
+            <div className="h-11 w-12 flex items-center justify-center shrink-0">
+              <img
+                src="/jpt-logo.png"
+                alt="JPT Logo"
+                className="h-10 w-auto max-w-[90px] object-contain drop-shadow-md"
+                style={{ mixBlendMode: 'screen' }}
+              />
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm font-black text-white tracking-tight leading-none">Helpdesk</h1>
-              <span className="text-[9px] text-cyan-400 font-bold uppercase tracking-wider mt-0.5">Portal & Management</span>
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-base font-black text-white tracking-tight leading-tight">Helpdesk</h1>
+              <span className="text-[9.5px] text-cyan-400 font-extrabold uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                Portal & Management
+              </span>
             </div>
           </div>
         </div>
@@ -292,8 +301,29 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* GUIDE & LOGOUT */}
-      <div className="pt-3 border-t border-slate-700 space-y-1">
+      {/* USER PROFILE & GUIDE & LOGOUT */}
+      <div className="pt-3 border-t border-slate-700/80 space-y-1.5">
+        {/* NÚT USER: MỞ FORM USER INFORMATION & ĐỔI MẬT KHẨU */}
+        <button
+          type="button"
+          onClick={() => setIsProfileModalOpen(true)}
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-slate-700/70 hover:border-cyan-500/50 text-left transition-all duration-200 cursor-pointer group shadow-sm"
+          title="Xem thông tin người dùng & Đổi mật khẩu"
+        >
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+            {user?.name ? user.name.charAt(0).toUpperCase() : <User size={15} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors">
+              {user?.name || "Tài khoản"}
+            </p>
+            <p className="text-[10px] text-gray-400 truncate">
+              {user?.roleLabel || user?.role || "Người dùng"}
+            </p>
+          </div>
+          <Settings size={14} className="text-gray-400 group-hover:text-cyan-300 transition shrink-0" />
+        </button>
+
         <Link
           href="/guide"
           className={menuItemClass({ isActive: pathname.startsWith("/guide") })}
@@ -310,6 +340,13 @@ export default function Sidebar() {
           Đăng xuất
         </button>
       </div>
+
+      {/* USER PROFILE & CHANGE PASSWORD MODAL */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        onUserUpdated={(updated) => setUser(updated)}
+      />
     </aside>
   );
 }

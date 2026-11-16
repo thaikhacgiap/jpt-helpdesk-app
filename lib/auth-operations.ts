@@ -617,3 +617,100 @@ export async function deleteGroup(id: string): Promise<{ success: boolean; error
   logOperation("Xóa nhóm phân quyền", `Đã xóa nhóm phân quyền ID ${id}.`);
   return { success: true };
 }
+
+/**
+ * Change password for the current user
+ */
+export async function changeCurrentUserPassword(
+  email: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleanEmail = email.toLowerCase().trim();
+    const { data: userData, error: fetchError } = await supabase
+      .from("system_users")
+      .select("id, password, name, email")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (fetchError || !userData) {
+      return { success: false, error: "Không tìm thấy thông tin tài khoản." };
+    }
+
+    if (userData.password && userData.password !== oldPassword) {
+      return { success: false, error: "Mật khẩu hiện tại không chính xác." };
+    }
+
+    if (!newPassword || newPassword.length < 3) {
+      return { success: false, error: "Mật khẩu mới phải có ít nhất 3 ký tự." };
+    }
+
+    const { error: updateError } = await supabase
+      .from("system_users")
+      .update({ password: newPassword })
+      .eq("id", userData.id);
+
+    if (updateError) {
+      console.error("Error updating user password:", updateError);
+      return { success: false, error: "Lỗi hệ thống khi cập nhật mật khẩu mới: " + updateError.message };
+    }
+
+    logOperation("Đổi mật khẩu", `Người dùng ${userData.name} (${userData.email}) đã đổi mật khẩu thành công.`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: `Lỗi hệ thống: ${err.message || String(err)}` };
+  }
+}
+
+/**
+ * Update profile details (Name, Phone, Department) for current user
+ */
+export async function updateCurrentUserProfile(
+  email: string,
+  updates: { name?: string; phone?: string; department?: string }
+): Promise<{ success: boolean; updatedUser?: UserSession; error?: string }> {
+  try {
+    const cleanEmail = email.toLowerCase().trim();
+    const { data: userData, error: fetchError } = await supabase
+      .from("system_users")
+      .select("*")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (fetchError || !userData) {
+      return { success: false, error: "Không tìm thấy thông tin tài khoản." };
+    }
+
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.phone !== undefined) payload.phone = updates.phone.trim();
+    if (updates.department !== undefined) payload.department = updates.department.trim();
+
+    const { error: updateError } = await supabase
+      .from("system_users")
+      .update(payload)
+      .eq("id", userData.id);
+
+    if (updateError) {
+      return { success: false, error: "Lỗi cập nhật thông tin: " + updateError.message };
+    }
+
+    const current = getCurrentUser();
+    if (current && isClient()) {
+      const updatedSession: UserSession = {
+        ...current,
+        name: updates.name !== undefined ? updates.name.trim() : current.name,
+        phone: updates.phone !== undefined ? updates.phone.trim() : current.phone,
+        department: updates.department !== undefined ? updates.department.trim() : current.department,
+      };
+      localStorage.setItem("jpt_auth_session", JSON.stringify(updatedSession));
+      logOperation("Cập nhật thông tin", `Người dùng ${updatedSession.name} đã cập nhật thông tin cá nhân.`);
+      return { success: true, updatedUser: updatedSession };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: `Lỗi hệ thống: ${err.message || String(err)}` };
+  }
+}
