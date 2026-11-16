@@ -36,6 +36,8 @@ interface Ticket {
   description?: string;
   customer_id?: string;
   customer_name?: string;
+  customer_short?: string;
+  customer_code?: string;
   contract_no?: string;
   request_code?: string;
   request_id?: string;
@@ -781,6 +783,33 @@ export default function TicketsPage() {
     return s;
   };
 
+  // Helper lấy Tên KH Viết tắt từ ticket
+  const getCustomerShortName = (t: Ticket): string => {
+    if (t.customer_short) return String(t.customer_short);
+    if ((t as any).customer_short_name) return String((t as any).customer_short_name);
+    if (t.customer_code) return String(t.customer_code);
+    if ((t as any).short_name) return String((t as any).short_name);
+
+    if (t.customer_id) {
+      const cust = dbCustomers.find((c) => c.id === t.customer_id || c.code === t.customer_id);
+      if (cust?.code) return cust.code;
+    }
+    if (t.customer_name) {
+      const cName = t.customer_name.trim().toLowerCase();
+      const cust = dbCustomers.find((c) => c.name.trim().toLowerCase() === cName);
+      if (cust?.code) return cust.code;
+    }
+    if (t.remark) {
+      try {
+        const parsed = typeof t.remark === "string" ? JSON.parse(t.remark) : t.remark;
+        if (parsed?.customer_short_name) return String(parsed.customer_short_name);
+        if (parsed?.customer_code) return String(parsed.customer_code);
+        if (parsed?.short_name) return String(parsed.short_name);
+      } catch {}
+    }
+    return "";
+  };
+
   // On-behalf ticket linking states
   const [linkedRequestDbId, setLinkedRequestDbId] = useState<string | null>(null);
   const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null);
@@ -821,6 +850,14 @@ export default function TicketsPage() {
               loadedOrder.push("request_status");
             }
           }
+          if (!loadedOrder.includes("customer_short")) {
+            const custNameIdx = loadedOrder.indexOf("customer_name");
+            if (custNameIdx !== -1) {
+              loadedOrder.splice(custNameIdx + 1, 0, "customer_short");
+            } else {
+              loadedOrder.push("customer_short");
+            }
+          }
           const fullOrder = [
             ...loadedOrder,
             ...DEFAULT_COLUMN_ORDER.filter((k) => !loadedOrder.includes(k)),
@@ -832,12 +869,18 @@ export default function TicketsPage() {
           if (vis.request_status === undefined) {
             vis.request_status = vis.request_code !== false;
           }
+          if (vis.customer_short === undefined) {
+            vis.customer_short = true;
+          }
           setVisibleColumns((prev) => ({ ...prev, ...vis }));
         }
         if (parsed.widths && typeof parsed.widths === "object") {
           const w = { ...parsed.widths };
           if (!w.request_status) {
             w.request_status = DEFAULT_COL_WIDTHS.request_status || 140;
+          }
+          if (!w.customer_short) {
+            w.customer_short = DEFAULT_COL_WIDTHS.customer_short || 110;
           }
           setColWidths((prev) => ({ ...prev, ...w }));
         }
@@ -1323,7 +1366,8 @@ export default function TicketsPage() {
       const matchObj = Object.values(t).some((v) => String(v ?? "").toLowerCase().includes(q));
       const matchReqCode = getTicketRequestCode(t as any).toLowerCase().includes(q);
       const matchReqStatus = getTicketStatus(t).toLowerCase().includes(q);
-      if (!matchObj && !matchReqCode && !matchReqStatus) return false;
+      const matchCustShort = getCustomerShortName(t).toLowerCase().includes(q);
+      if (!matchObj && !matchReqCode && !matchReqStatus && !matchCustShort) return false;
     }
     if (filters.tt_type.length > 0 && !filters.tt_type.includes(t.tt_type || "")) return false;
     if (filters.contract_scope.length > 0 && !filters.contract_scope.includes(t.contract_scope || "")) return false;
@@ -1337,7 +1381,8 @@ export default function TicketsPage() {
       const targetCust = filters.customer.toLowerCase().trim();
       const matchCust =
         (t.customer_name && t.customer_name.toLowerCase().trim() === targetCust) ||
-        (t.customer_id && t.customer_id.toLowerCase().trim() === targetCust);
+        (t.customer_id && t.customer_id.toLowerCase().trim() === targetCust) ||
+        (getCustomerShortName(t).toLowerCase().trim() === targetCust);
       if (!matchCust) return false;
     }
 
@@ -1452,6 +1497,7 @@ export default function TicketsPage() {
       "Request Status",
       "Tiêu đề",
       "Khách hàng",
+      "Tên KH viết tắt",
       "Người tạo",
       "Thời gian tạo",
       "Start time",
@@ -1485,6 +1531,7 @@ export default function TicketsPage() {
       escapeCsv(getTicketStatus(t)),
       escapeCsv(t.title),
       escapeCsv(t.customer_name || ""),
+      escapeCsv(getCustomerShortName(t)),
       escapeCsv(t.creator_name || ""),
       escapeCsv(formatDateTime(t.created_at || t.created_time, true)),
       escapeCsv(formatDateTime(t.start_time || t.startTime)),
@@ -1619,6 +1666,26 @@ export default function TicketsPage() {
             {ticket.customer_name || "—"}
           </td>
         );
+
+      case "customer_short": {
+        const shortName = getCustomerShortName(ticket);
+        return (
+          <td
+            key="customer_short"
+            style={{ width: `${colWidths.customer_short || 110}px`, minWidth: `${colWidths.customer_short || 110}px` }}
+            className="px-3 py-2 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={shortName ? `${shortName} (${ticket.customer_name || ""})` : (ticket.customer_name || "")}
+          >
+            {shortName ? (
+              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 font-mono tracking-tight shadow-2xs">
+                {shortName}
+              </span>
+            ) : (
+              <span className="text-slate-400">—</span>
+            )}
+          </td>
+        );
+      }
 
       case "creator_name":
         return (
