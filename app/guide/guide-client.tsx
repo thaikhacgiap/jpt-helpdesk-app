@@ -23,13 +23,13 @@ import {
 
 const CHAPTERS = [
   { id: "all", label: "Tất cả" },
-  { id: "ch1", label: "1. Tổng quan & Vai trò" },
-  { id: "ch2", label: "2. Đăng nhập & Dashboard" },
-  { id: "ch3", label: "3. Phân hệ Dịch vụ" },
-  { id: "ch4", label: "4. Dự án v4.0 & Gantt" },
-  { id: "ch5", label: "5. Quản lý Master Data & SLA" },
+  { id: "ch1", label: "1. Tổng quan & Đối tượng" },
+  { id: "ch2", label: "2. Đăng nhập & Quản lý User" },
+  { id: "ch3", label: "3. Phân hệ Dịch vụ & Yêu cầu" },
+  { id: "ch4", label: "4. Dự án & Sub-Plans (Gantt)" },
+  { id: "ch5", label: "5. Master Data & Google Sheets" },
   { id: "ch6", label: "6. Cổng Khách hàng (Portal)" },
-  { id: "ch7", label: "7. Quản trị & Sao lưu" },
+  { id: "ch7", label: "7. Quản trị & Lưu trữ Drive" },
   { id: "ch8", label: "8. Quy trình SOP & FAQ" }
 ];
 
@@ -135,258 +135,385 @@ export default function GuideClient() {
 
         {/* CONTENT SECTIONS */}
         <div className="space-y-6">
-          {/* SECTION 1: TỔNG QUAN & TÀI KHOẢN MẪU */}
-          {(activeChapter === "all" || activeChapter === "ch1") && matchesSearch("tổng quan tài khoản phân quyền admin pm technical customer") && (
+          {/* SECTION 1: TỔNG QUAN & ĐỐI TƯỢNG SỬ DỤNG */}
+          {(activeChapter === "all" || activeChapter === "ch1") && matchesSearch("tổng quan đối tượng triển khai hỗ trợ kỹ thuật xử lý sự cố bảo trì ban giám đốc kinh doanh") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                   <Shield className="text-teal-600" size={18} />
-                  <span>1. Tổng quan &amp; Danh sách Tài khoản Truy cập mẫu</span>
+                  <span>1. Tổng quan Phần mềm &amp; Đối tượng Sử dụng</span>
                 </h3>
-                <span className="text-xs text-slate-500 font-medium">Bản chính thức v4.0</span>
+                <span className="text-xs text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200 font-bold">Phiên bản v4.0</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Admin */}
-                <div className="p-4 rounded-xl border border-red-200 bg-red-50/40 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-red-100 text-red-700">ADMIN</span>
-                    <span className="text-xs text-slate-500">Ban Giám Đốc</span>
-                  </div>
-                  <div className="text-xs font-mono bg-white p-2 rounded border border-red-100 text-slate-800 flex items-center justify-between">
-                    <span>admin@jpt.vn</span>
-                    <button
-                      onClick={() => handleCopy("admin@jpt.vn", "u-admin")}
-                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                      title="Copy email"
-                    >
-                      {copiedKey === "u-admin" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
-                  <p className="text-[11px] text-slate-600">Toàn quyền hệ thống: Dashboard, Users, Quyền, Sao lưu, SLA, Master Data.</p>
-                </div>
-
-                {/* PM */}
-                <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-indigo-100 text-indigo-700">PM</span>
-                    <span className="text-xs text-slate-500">Quản lý Dự án</span>
-                  </div>
-                  <div className="text-xs font-mono bg-white p-2 rounded border border-indigo-100 text-slate-800 flex items-center justify-between">
-                    <span>pm@jpt.vn</span>
-                    <button
-                      onClick={() => handleCopy("pm@jpt.vn", "u-pm")}
-                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                      title="Copy email"
-                    >
-                      {copiedKey === "u-pm" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
-                  <p className="text-[11px] text-slate-600">Điều hành Dự án (Kế hoạch, Gantt, SOW), Hợp đồng, Khách hàng, Yêu cầu.</p>
-                </div>
-
-                {/* Technical */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* MÔ TẢ PHẦN MỀM */}
                 <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/40 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-teal-100 text-teal-800">TECHNICAL</span>
-                    <span className="text-xs text-slate-500">Kỹ thuật viên</span>
+                  <div className="font-extrabold text-teal-950 text-sm flex items-center gap-2">
+                    <BookOpen size={16} className="text-teal-600" />
+                    <span>Mô tả mục đích phần mềm:</span>
                   </div>
-                  <div className="text-xs font-mono bg-white p-2 rounded border border-teal-100 text-slate-800 flex items-center justify-between">
-                    <span>technical@jpt.vn</span>
-                    <button
-                      onClick={() => handleCopy("technical@jpt.vn", "u-tech")}
-                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                      title="Copy email"
-                    >
-                      {copiedKey === "u-tech" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
-                  <p className="text-[11px] text-slate-600">Tiếp nhận và giải quyết Ticket, Bấm giờ tạm dừng bảo vệ SLA, Bảo trì định kỳ.</p>
+                  <p className="text-slate-700 leading-relaxed">
+                    Phần mềm sử dụng để <strong>Quản lý toàn diện các dịch vụ của JPT</strong> bao gồm:
+                  </p>
+                  <ul className="space-y-1.5 text-slate-700 pl-2">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-teal-600 font-bold">•</span>
+                      <span><strong>Triển khai dự án:</strong> Điều hành dự án công nghệ, kế hoạch phân cấp (Main Plan, M-Plan, S-Plan...), biểu đồ Gantt thời gian thực và quản lý phạm vi SOW.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-teal-600 font-bold">•</span>
+                      <span><strong>Hỗ trợ kỹ thuật:</strong> Tiếp nhận tư vấn, giải đáp cấu hình thiết bị, hệ điều hành, cơ sở dữ liệu và chuyển giao công nghệ.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-teal-600 font-bold">•</span>
+                      <span><strong>Hỗ trợ xử lý sự cố:</strong> Chuẩn hóa tiếp nhận và giải quyết sự cố theo chuẩn quốc tế ITIL, phân cấp ưu tiên L1 - L4 và giám sát cam kết SLA.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-teal-600 font-bold">•</span>
+                      <span><strong>Bảo trì định kỳ:</strong> Lập kế hoạch và giám sát các đợt bảo dưỡng thiết bị máy chủ, sao lưu dữ liệu và kiểm tra an toàn theo chu kỳ hợp đồng.</span>
+                    </li>
+                  </ul>
                 </div>
 
-                {/* Customer */}
-                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-amber-100 text-amber-800">CUSTOMER</span>
-                    <span className="text-xs text-slate-500">Khách hàng</span>
+                {/* ĐỐI TƯỢNG SỬ DỤNG */}
+                <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2">
+                  <div className="font-extrabold text-indigo-950 text-sm flex items-center gap-2">
+                    <Users size={16} className="text-indigo-600" />
+                    <span>Đối tượng sử dụng hệ thống:</span>
                   </div>
-                  <div className="text-xs font-mono bg-white p-2 rounded border border-amber-100 text-slate-800 flex items-center justify-between">
-                    <span>customer@vpbank.vn</span>
-                    <button
-                      onClick={() => handleCopy("customer@vpbank.vn", "u-cust")}
-                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                      title="Copy email"
-                    >
-                      {copiedKey === "u-cust" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
-                  <p className="text-[11px] text-slate-600">Cổng tiếp nhận riêng (<code>/portal</code>): Gửi phiếu, tra cứu tiến độ dự án.</p>
+                  <p className="text-slate-700 leading-relaxed">
+                    Được thiết kế chuyên biệt dành cho <strong>Ban Giám Đốc, Đội ngũ Kỹ thuật, Kinh doanh</strong> và <strong>tất cả các bộ phận tham gia vào quá trình cung cấp dịch vụ cho khách hàng</strong>:
+                  </p>
+                  <ul className="space-y-1.5 text-slate-700 pl-2">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-indigo-600 font-bold">•</span>
+                      <span><strong>Ban Giám Đốc:</strong> Giám sát Dashboard tổng quan, tỷ lệ SLA, tình trạng phân bổ nhân sự và tiến độ triển khai chung.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-indigo-600 font-bold">•</span>
+                      <span><strong>Đội ngũ Kỹ thuật (Technical / Engineers):</strong> Tiếp nhận yêu cầu, xử lý ticket, bấm giờ tạm dừng On Hold bảo vệ SLA, upload file báo cáo kỹ thuật.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-indigo-600 font-bold">•</span>
+                      <span><strong>Kinh doanh (Sales / AM):</strong> Theo dõi thông tin khách hàng, cơ hội kinh doanh, danh mục hợp đồng và cảnh báo tái tục.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-indigo-600 font-bold">•</span>
+                      <span><strong>Các bộ phận liên quan:</strong> Điều phối viên dịch vụ (Dispatch Team), Quản lý Dự án (PM), Nhân sự (HR), Quản trị viên (Admin) và Đại diện Khách hàng qua Portal.</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
           )}
 
-          {/* SECTION 2: BÁO CÁO DASHBOARD */}
-          {(activeChapter === "all" || activeChapter === "ch2") && matchesSearch("dashboard báo cáo chỉ số kpi tổng hợp nhân sự workload") && (
+          {/* SECTION 2: ĐĂNG NHẬP, CẤP TÀI KHOẢN QUA HR & QUẢN LÝ USER */}
+          {(activeChapter === "all" || activeChapter === "ch2") && matchesSearch("đăng nhập mật khẩu nhân sự hr admin đổi mật khẩu tài khoản user information quyền") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                  <Layers className="text-teal-600" size={18} />
-                  <span>2. Bảng điều khiển (Dashboard) &amp; Báo cáo KPI</span>
+                  <Shield className="text-teal-600" size={18} />
+                  <span>2. Hướng dẫn Đăng nhập, Quy trình Cấp Tài khoản qua Nhân sự &amp; Quản lý Thông tin Cá nhân</span>
                 </h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-700">
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Báo cáo Tổng hợp (Synthesis)</div>
-                  <p className="text-slate-600 leading-relaxed">
-                    Tổng số Ticket tiếp nhận, Tỷ lệ hoàn thành đúng cam kết SLA (%), Số dự án đang chạy và số kỳ bảo trì đã chốt.
+
+              {/* ĐĂNG NHẬP & QUY TRÌNH HR */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="font-bold text-slate-900 text-sm">Link đăng nhập vào phần mềm:</div>
+                  <div className="font-mono bg-white p-2.5 rounded-lg border border-slate-200 text-teal-700 flex items-center justify-between">
+                    <span>https://jpt-helpdesk-app.vercel.app/login</span>
+                    <button
+                      onClick={() => handleCopy("https://jpt-helpdesk-app.vercel.app/login", "u-login-url")}
+                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                      title="Copy Link"
+                    >
+                      {copiedKey === "u-login-url" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                  <p className="text-slate-600">
+                    Người dùng truy cập link trên, nhập <strong>Email (hoặc Tên đăng nhập)</strong> và <strong>Mật khẩu</strong> để truy cập. Hệ thống tự động chuyển hướng theo phân quyền vai trò.
                   </p>
                 </div>
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Khối lượng Nhân sự (Staff Workload)</div>
-                  <p className="text-slate-600 leading-relaxed">
-                    Theo dõi số lượng ticket và nhiệm vụ đang gán cho từng kỹ sư, lọc theo phòng ban, cảnh báo nhân sự bị quá tải.
+
+                <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-2">
+                  <div className="font-bold text-amber-950 text-sm">Quy trình yêu cầu cấp tài khoản (Account Request):</div>
+                  <p className="text-slate-700 leading-relaxed">
+                    Để đảm bảo an toàn thông tin và tính bảo mật, quy trình cấp phát tài khoản được thực hiện như sau:
                   </p>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-700 pl-1">
+                    <li>Nhân sự mới / nhân viên gửi yêu cầu cấp tài khoản <strong>thông qua Bộ phận Nhân sự (HR) cấp phép</strong>.</li>
+                    <li>Sau khi kiểm tra và phê duyệt, Bộ phận Nhân sự sẽ gửi phiếu yêu cầu tới <strong>Quản trị viên (Admin)</strong>.</li>
+                    <li>Admin tạo tài khoản trên hệ thống, phân quyền vai trò phù hợp và bàn giao tài khoản an toàn cho nhân sự.</li>
+                  </ol>
                 </div>
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Báo cáo Chung &amp; Bảo trì &amp; Dự án</div>
-                  <p className="text-slate-600 leading-relaxed">
-                    Phân tích chi tiết các mức L1-L4, danh sách ticket trễ hạn, tiến độ các đợt bảo dưỡng và tiến độ hoàn thành các dự án.
-                  </p>
+              </div>
+
+              {/* QUẢN LÝ THÔNG TIN CÁ NHÂN SAU KHI ĐĂNG NHẬP */}
+              <div className="p-4 bg-teal-50/30 rounded-xl border border-teal-200 space-y-3 text-xs">
+                <div className="font-extrabold text-teal-950 text-sm">Quản lý thông tin cá nhân sau khi đăng nhập:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-white p-3 rounded-lg border border-teal-100 space-y-1">
+                    <div className="font-bold text-teal-900">1. Nơi xem thông tin cá nhân</div>
+                    <p className="text-slate-600 text-[11px]">
+                      Nhấp vào <strong>nút User ở góc dưới cùng Sidebar bên trái</strong> &rarr; Chọn <strong>"Thông tin cá nhân"</strong> để mở hộp thoại quản lý.
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-teal-100 space-y-1">
+                    <div className="font-bold text-teal-900">2. Cập nhật thông tin cá nhân</div>
+                    <p className="text-slate-600 text-[11px]">
+                      Tại tab <em>Hồ sơ cá nhân</em>: Có thể xem &amp; cập nhật <strong>Họ tên hiển thị</strong>, <strong>Số điện thoại</strong>, <strong>Phòng ban</strong> rồi bấm Lưu.
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-teal-100 space-y-1">
+                    <div className="font-bold text-teal-900">3. Cách đổi mật khẩu (Password)</div>
+                    <p className="text-slate-600 text-[11px]">
+                      Chuyển sang tab <em>Đổi mật khẩu</em>: Nhập mật khẩu hiện tại, nhập mật khẩu mới (tối thiểu 6 ký tự), xác nhận và bấm <strong>Cập nhật mật khẩu</strong>.
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-teal-100 space-y-1">
+                    <div className="font-bold text-teal-900">4. Xem phân quyền &amp; phân hệ</div>
+                    <p className="text-slate-600 text-[11px]">
+                      Tại tab <em>Quyền hạn &amp; Phân hệ</em>: Kiểm tra vai trò của mình, các phân hệ được phép truy cập và danh mục quyền thao tác chi tiết.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* TÀI KHOẢN MẪU */}
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-slate-700">Danh sách Tài khoản mẫu truy cập kiểm thử:</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Admin */}
+                  <div className="p-4 rounded-xl border border-red-200 bg-red-50/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-red-100 text-red-700">ADMIN</span>
+                      <span className="text-xs text-slate-500">Ban Giám Đốc</span>
+                    </div>
+                    <div className="text-xs font-mono bg-white p-2 rounded border border-red-100 text-slate-800 flex items-center justify-between">
+                      <span>admin@jpt.vn</span>
+                      <button
+                        onClick={() => handleCopy("admin@jpt.vn", "u-admin")}
+                        className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title="Copy email"
+                      >
+                        {copiedKey === "u-admin" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
+                    <p className="text-[11px] text-slate-600">Toàn quyền hệ thống: Dashboard, Users, Phân quyền, Google Drive OAuth, Sao lưu.</p>
+                  </div>
+
+                  {/* PM */}
+                  <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-indigo-100 text-indigo-700">PM</span>
+                      <span className="text-xs text-slate-500">Quản lý Dự án</span>
+                    </div>
+                    <div className="text-xs font-mono bg-white p-2 rounded border border-indigo-100 text-slate-800 flex items-center justify-between">
+                      <span>pm@jpt.vn</span>
+                      <button
+                        onClick={() => handleCopy("pm@jpt.vn", "u-pm")}
+                        className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title="Copy email"
+                      >
+                        {copiedKey === "u-pm" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
+                    <p className="text-[11px] text-slate-600">Điều hành Dự án (Kế hoạch Sub-Plans M/S-Plan, Gantt, SOW), Hợp đồng, Yêu cầu.</p>
+                  </div>
+
+                  {/* Technical */}
+                  <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-teal-100 text-teal-800">TECHNICAL</span>
+                      <span className="text-xs text-slate-500">Kỹ thuật viên</span>
+                    </div>
+                    <div className="text-xs font-mono bg-white p-2 rounded border border-teal-100 text-slate-800 flex items-center justify-between">
+                      <span>technical@jpt.vn</span>
+                      <button
+                        onClick={() => handleCopy("technical@jpt.vn", "u-tech")}
+                        className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title="Copy email"
+                      >
+                        {copiedKey === "u-tech" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
+                    <p className="text-[11px] text-slate-600">Tiếp nhận Ticket, Bấm giờ On Hold bảo vệ SLA, upload file báo cáo kỹ thuật, Bảo trì.</p>
+                  </div>
+
+                  {/* Customer */}
+                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-amber-100 text-amber-800">CUSTOMER</span>
+                      <span className="text-xs text-slate-500">Khách hàng</span>
+                    </div>
+                    <div className="text-xs font-mono bg-white p-2 rounded border border-amber-100 text-slate-800 flex items-center justify-between">
+                      <span>customer@vpbank.vn</span>
+                      <button
+                        onClick={() => handleCopy("customer@vpbank.vn", "u-cust")}
+                        className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title="Copy email"
+                      >
+                        {copiedKey === "u-cust" ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">Mật khẩu: <code className="font-bold text-slate-700">123</code></div>
+                    <p className="text-[11px] text-slate-600">Cổng tiếp nhận riêng (<code>/portal</code>): Gửi yêu cầu dịch vụ, tra cứu tiến độ dự án.</p>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* SECTION 3: QUY TRÌNH TICKET ITIL 5 BƯỚC */}
-          {(activeChapter === "all" || activeChapter === "ch3") && matchesSearch("ticket yêu cầu itil quy trình sla l1 l2 l3 l4 bảo trì hold") && (
+          {/* SECTION 3: PHÂN HỆ DỊCH VỤ - YÊU CẦU & QUY TRÌNH TICKET ITIL */}
+          {(activeChapter === "all" || activeChapter === "ch3") && matchesSearch("yêu cầu requests customer service task 3 khung warning ticket itil sla") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                   <Wrench className="text-teal-600" size={18} />
-                  <span>3. Quy trình Xử lý Sự cố Chuẩn ITIL 5 Bước &amp; Quản lý SLA</span>
+                  <span>3. Phân hệ Dịch Vụ - Quản lý Yêu Cầu (Requests - 3 Khung) &amp; Ticket Chuẩn ITIL</span>
                 </h3>
               </div>
 
-              {/* 5 STEPS */}
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">1</span>
-                    <span>Tạo Ticket</span>
+              {/* 3 KHUNG CHÍNH CỦA YÊU CẦU */}
+              <div className="space-y-2">
+                <div className="font-bold text-slate-900 text-xs">Giao diện Yêu Cầu (Requests) gồm 3 Khung chính:</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3.5 bg-red-50/60 border border-red-200 rounded-xl space-y-1.5">
+                    <div className="font-extrabold text-red-900 flex items-center justify-between">
+                      <span>Khung 1: Yêu cầu mới</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-200 text-red-800 font-bold animate-pulse">Warning!</span>
+                    </div>
+                    <p className="text-red-950 text-[11px] leading-relaxed">
+                      Dành cho các yêu cầu mới gửi tới chờ tiếp nhận. Khi có yêu cầu mới xuất hiện, hệ thống <strong>phát cảnh báo warning (viền nhấp nháy đỏ, âm thanh chuông cảnh báo và huy hiệu đếm ngược)</strong> để điều phối viên phản ứng ngay.
+                    </p>
                   </div>
-                  <p className="text-slate-600 text-[11px]">Chọn khách hàng, mức độ ưu tiên L1 - L4, loại sự cố, nhập mô tả.</p>
-                </div>
 
-                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">2</span>
-                    <span>Check Hợp đồng</span>
+                  <div className="p-3.5 bg-sky-50/60 border border-sky-200 rounded-xl space-y-1.5">
+                    <div className="font-extrabold text-sky-900">Khung 2: Đã tiếp nhận &amp; Đang xử lý</div>
+                    <p className="text-sky-950 text-[11px] leading-relaxed">
+                      Nằm ở khung bên trái giao diện làm việc. Dành cho những yêu cầu đã được tiếp nhận, đã gán nhân sự phụ trách và đang trong quá trình điều tra, xử lý kỹ thuật hoặc tạm dừng (On Hold).
+                    </p>
                   </div>
-                  <p className="text-slate-600 text-[11px]">Xác định phạm vi: <code>In scope</code>, <code>Out scope</code> hoặc <code>Presale</code>.</p>
-                </div>
 
-                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">3</span>
-                    <span>Điều phối</span>
+                  <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1.5">
+                    <div className="font-extrabold text-emerald-900">Khung 3: Đã xử lý xong</div>
+                    <p className="text-emerald-950 text-[11px] leading-relaxed">
+                      Nằm ở khung bên phải giao diện làm việc. Dành cho những yêu cầu đã được xử lý xong, hoàn tất giải quyết, hoặc đã được chuyển tiếp thành công sang Ticket chuyên sâu / đóng phiếu hoàn tất.
+                    </p>
                   </div>
-                  <p className="text-slate-600 text-[11px]">Gán Kỹ sư phụ trách chính (Assigned) và Người theo dõi (Following).</p>
-                </div>
-
-                <div className="p-3 rounded-xl border border-teal-200 bg-teal-50/50 space-y-1 text-xs">
-                  <div className="font-bold text-teal-900 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-teal-700 text-white flex items-center justify-center text-[10px]">4</span>
-                    <span>Troubleshooting</span>
-                  </div>
-                  <p className="text-teal-800 text-[11px]">Bấm giờ xử lý SLA. Có nút <strong>On Hold</strong> để dừng đồng hồ SLA khi chờ khách.</p>
-                </div>
-
-                <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-1 text-xs">
-                  <div className="font-bold text-emerald-900 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">5</span>
-                    <span>Hoàn tất / Đóng</span>
-                  </div>
-                  <p className="text-emerald-800 text-[11px]">Nhập nguyên nhân gốc (Root cause), giải pháp khắc phục, nghiệm thu.</p>
                 </div>
               </div>
 
-              {/* SLA TABLE */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border border-slate-200 rounded-xl overflow-hidden">
-                  <thead className="bg-slate-100 text-slate-800 font-bold">
-                    <tr>
-                      <th className="p-2.5">Mức ưu tiên</th>
-                      <th className="p-2.5">Thời gian Phản hồi (Response)</th>
-                      <th className="p-2.5">Thời gian Giải quyết (Resolution)</th>
-                      <th className="p-2.5">Cơ chế Bảo vệ SLA (On Hold)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    <tr>
-                      <td className="p-2.5 font-bold text-red-700 bg-red-50/40">L1 - Critical</td>
-                      <td className="p-2.5">&le; 15 - 30 phút</td>
-                      <td className="p-2.5">&le; 2 - 4 giờ</td>
-                      <td className="p-2.5 text-slate-600" rowSpan={4}>
-                        Khi cần chờ phản hồi từ khách hàng hoặc chờ linh kiện, kỹ sư chuyển trạng thái sang <code>On Hold</code> kèm lý do. Hệ thống sẽ tạm dừng đồng hồ đếm SLA, bảo vệ tính trung thực của cam kết.
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5 font-bold text-orange-700 bg-orange-50/40">L2 - Major</td>
-                      <td className="p-2.5">&le; 1 giờ</td>
-                      <td className="p-2.5">&le; 8 giờ</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5 font-bold text-yellow-700 bg-yellow-50/40">L3 - Minor</td>
-                      <td className="p-2.5">&le; 2 giờ</td>
-                      <td className="p-2.5">&le; 24 giờ</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2.5 font-bold text-blue-700 bg-blue-50/40">L4 - Warning</td>
-                      <td className="p-2.5">&le; 4 giờ</td>
-                      <td className="p-2.5">&le; 48 giờ</td>
-                    </tr>
-                  </tbody>
-                </table>
+              {/* 3 LOẠI YÊU CẦU */}
+              <div className="space-y-2 pt-2">
+                <div className="font-bold text-slate-900 text-xs">3 Loại Yêu Cầu trong hệ thống:</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">1. Customer request</div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Dùng để quản lý các yêu cầu dịch vụ từ khách hàng. Khách hàng sẽ tạo yêu cầu thông qua <strong>Web Portal</strong> hoặc <strong>Đội điều phối sẽ tạo giúp yêu cầu</strong> nếu khách hàng cần hỗ trợ thông qua Hotline / Email.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">2. Service request</div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Dùng để quản lý các yêu cầu cung cấp dịch vụ chuyên môn, ví dụ như: Yêu cầu triển khai dự án mới, yêu cầu thực hiện bảo trì định kỳ, yêu cầu thực hiện hỗ trợ ngoài hợp đồng (Out-of-scope).
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900">3. Task request</div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Dùng để tạo các yêu cầu thực hiện công việc trực tiếp cho từng cá nhân (phân công nhiệm vụ kỹ thuật cụ thể, công việc nội bộ chỉ định cho từng kỹ sư phụ trách).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* TICKET ITIL 5 BƯỚC */}
+              <div className="space-y-2 pt-2">
+                <div className="font-bold text-slate-900 text-xs">Quy trình Xử lý Ticket Chuẩn ITIL 5 Bước &amp; Tải Báo cáo Google Drive:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                  <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">1</span>
+                      <span>Tạo Ticket</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">Chọn khách hàng, mã KH viết tắt, mức ưu tiên L1 - L4, nhập mô tả.</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">2</span>
+                      <span>Check Hợp đồng</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">Xác định phạm vi: <code>In scope</code>, <code>Out scope</code> hoặc <code>Presale</code>.</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">3</span>
+                      <span>Điều phối</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">Gán Kỹ sư phụ trách chính (Assigned) và Người theo dõi (Following).</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/50 space-y-1 text-xs">
+                    <div className="font-bold text-teal-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-teal-700 text-white flex items-center justify-center text-[10px]">4</span>
+                      <span>Troubleshooting</span>
+                    </div>
+                    <p className="text-teal-800 text-[11px]">Bấm giờ xử lý SLA. Có nút <strong>On Hold</strong> để dừng đồng hồ SLA khi chờ khách.</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-1 text-xs">
+                    <div className="font-bold text-emerald-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">5</span>
+                      <span>Đóng &amp; Báo cáo</span>
+                    </div>
+                    <p className="text-emerald-800 text-[11px]">Upload file báo cáo sự cố qua Google Drive, gửi duyệt và nghiệm thu.</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* SECTION 4: DỰ ÁN V4.0 */}
-          {(activeChapter === "all" || activeChapter === "ch4") && matchesSearch("dự án project gantt kế hoạch plan sow milestone tiến độ phase") && (
+          {/* SECTION 4: DỰ ÁN V4.0 & SUB-PLANS */}
+          {(activeChapter === "all" || activeChapter === "ch4") && matchesSearch("dự án project gantt kế hoạch plan sow milestone tiến độ phase sub-plan m-plan s-plan") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                   <FolderOpen className="text-teal-600" size={18} />
-                  <span>4. Phân hệ Quản lý Dự án (Project Management v4.0)</span>
+                  <span>4. Phân hệ Quản lý Dự án &amp; Kế hoạch Sub-Plans (M-Plan, S-Plan, Gantt)</span>
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <div className="font-bold text-slate-900 text-sm">Bảng Kế hoạch (Plan) Phân cấp Tự động:</div>
-                  <ul className="list-disc list-inside space-y-1 text-slate-700">
-                    <li>Hỗ trợ phân rã 3 cấp: Giai đoạn (Phase) &rarr; Công việc chính &rarr; Công việc con.</li>
-                    <li><strong>% Hoàn thành Phase:</strong> Tự động tính trung bình % các task con.</li>
-                    <li><strong>Nhân sự Phase:</strong> Tự động tổng hợp danh sách kỹ sư từ các task con.</li>
-                    <li><strong>Ngày bắt đầu/kết thúc:</strong> Lấy ngày sớm nhất và muộn nhất từ các task con.</li>
-                    <li><strong>Đa nhân sự:</strong> Chọn nhiều kỹ sư cùng thực hiện một đầu việc dạng tag màu.</li>
-                    <li><strong>Sắp xếp linh hoạt:</strong> Kéo thả chuột hoặc gõ số dòng để đổi vị trí task.</li>
+                  <div className="font-bold text-slate-900 text-sm">Tạo Sub-Plan &amp; Bảng Kế hoạch (Plan) Đa cấp:</div>
+                  <ul className="list-disc list-inside space-y-1.5 text-slate-700">
+                    <li><strong>Tạo Sub-Plan (M-Plan, S-Plan):</strong> Bấm nút <code>++ Sub-Plan</code> để tạo thêm các tab kế hoạch phân cấp song song bên cạnh Main-Plan.</li>
+                    <li><strong>Đổi tên các Plan linh hoạt:</strong> Nhấp vào biểu tượng chỉnh sửa cạnh tên Plan để đổi tên (M-Plan, S-Plan, Kế hoạch hạ tầng...) và xóa khi cần.</li>
+                    <li><strong>Bảng công việc gọn gàng:</strong> Gộp chung toàn bộ nút thao tác (Thêm task, Di chuyển, Nhập/Xuất, Khóa bảng) trên 1 dòng duy nhất.</li>
+                    <li><strong>% Hoàn thành Phase:</strong> Tự động tính toán từ các task con theo trọng số.</li>
+                    <li><strong>Đa nhân sự &amp; Sắp xếp:</strong> Chọn nhiều kỹ sư tag màu, kéo thả hoặc gõ số dòng để đổi vị trí task nhanh.</li>
                   </ul>
                 </div>
 
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <div className="font-bold text-slate-900 text-sm">Biểu đồ Gantt 3 Cột Hiện đại:</div>
-                  <ul className="list-disc list-inside space-y-1 text-slate-700">
-                    <li>Cột 1: Tên công việc (phân cấp thụt lề rõ ràng).</li>
-                    <li>Cột 2: Tiến độ % kèm thanh Bar 2 màu trực quan.</li>
-                    <li>Cột 3: Lưới thời gian theo ngày &amp; tháng, tự động highlight cột <strong>Hôm nay (Today)</strong>.</li>
-                    <li>Màu sắc thanh Gantt bar phân biệt riêng biệt theo từng Giai đoạn dự án.</li>
-                    <li>Tích hợp các mốc nghiệm thu (Milestones), tài liệu dự án và nhật ký công việc (Diary).</li>
+                  <div className="font-bold text-slate-900 text-sm">Biểu đồ Gantt 3 Cột &amp; Tổng quan Tùy biến:</div>
+                  <ul className="list-disc list-inside space-y-1.5 text-slate-700">
+                    <li><strong>Tổng quan (Overview) không default:</strong> Chỉnh sửa linh hoạt Quản lý dự án (PM), Khách hàng, Hợp đồng và Bảng phạm vi SOW theo thực tế từng dự án.</li>
+                    <li><strong>Biểu đồ Gantt 3 cột đồng bộ:</strong> Tự động chuyển đổi hiển thị theo tab Plan đang mở (Main Plan hoặc Sub-Plans).</li>
+                    <li>Cột 1: Tên công việc (phân cấp rõ ràng) | Cột 2: Tiến độ % và thanh Bar 2 màu | Cột 3: Lưới Lịch Ngày/Tháng.</li>
+                    <li>Tự động highlight cột <strong>Hôm nay (Today)</strong> để theo dõi sát sao công việc đến hạn.</li>
+                    <li>Quản lý mốc nghiệm thu (Milestones), tài liệu dự án và nhật ký công việc (Diary).</li>
                   </ul>
                 </div>
               </div>
@@ -449,25 +576,31 @@ export default function GuideClient() {
             </div>
           )}
 
-          {/* SECTION 7: QUẢN TRỊ HỆ THỐNG */}
-          {(activeChapter === "all" || activeChapter === "ch7") && matchesSearch("hệ thống sao lưu backup restore phân quyền logs") && (
+          {/* SECTION 7: QUẢN TRỊ HỆ THỐNG & GOOGLE DRIVE */}
+          {(activeChapter === "all" || activeChapter === "ch7") && matchesSearch("hệ thống sao lưu backup restore phân quyền logs google drive oauth storage") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                   <Server className="text-teal-600" size={18} />
-                  <span>7. Quản trị Người dùng, Phân quyền &amp; Sao lưu Hệ thống</span>
+                  <span>7. Quản trị Người dùng, Phân quyền &amp; Lưu trữ Google Drive Toàn hệ thống</span>
                 </h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs text-slate-700">
+                <div className="p-3 bg-teal-50/50 border border-teal-200 rounded-xl space-y-1">
+                  <div className="font-bold text-teal-950 mb-1">Lưu trữ Google Drive Email Riêng</div>
+                  <p className="text-slate-600">
+                    Cấu hình OAuth 2.0 Client ID, Client Secret, Refresh Token và Folder ID. Tự động lưu mọi file báo cáo sự cố và tài liệu vào Google Drive công ty.
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900 mb-1">Quản lý Tài khoản (Users)</div>
                   <p className="text-slate-600">Tạo tài khoản, gán vai trò, khóa tài khoản tạm thời và đặt lại mật khẩu cho người dùng.</p>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900 mb-1">Phân quyền Nhóm (Settings)</div>
                   <p className="text-slate-600">Tích chọn các màn hình/đường dẫn phân hệ cho phép từng nhóm vai trò truy cập.</p>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900 mb-1">Sao lưu &amp; Nhật ký (Backup &amp; Logs)</div>
                   <p className="text-slate-600">Xuất file JSON sao lưu cơ sở dữ liệu Supabase, dọn dẹp bản ghi trùng và theo dõi audit logs.</p>
                 </div>
@@ -476,7 +609,7 @@ export default function GuideClient() {
           )}
 
           {/* SECTION 8: FAQ & QUY TRÌNH */}
-          {(activeChapter === "all" || activeChapter === "ch8") && matchesSearch("faq hỏi đáp tình huống sự cố sop quy trình") && (
+          {(activeChapter === "all" || activeChapter === "ch8") && matchesSearch("faq hỏi đáp tình huống sự cố sop quy trình hr đổi mật khẩu") && (
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
@@ -487,21 +620,28 @@ export default function GuideClient() {
 
               <div className="space-y-3 text-xs">
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Q1: Làm sao để bảo vệ SLA khi khách hàng phản hồi chậm?</div>
+                  <div className="font-bold text-slate-900 mb-1">Q1: Làm thế nào để xin cấp tài khoản mới hoặc đổi mật khẩu cá nhân?</div>
+                  <p className="text-slate-600 leading-relaxed">
+                    Mọi yêu cầu tạo tài khoản mới đều phải thông qua <strong>Bộ phận Nhân sự (HR) cấp phép</strong>, sau đó Nhân sự yêu cầu Admin tạo account. Sau khi đăng nhập, bạn có thể tự cập nhật Họ tên, SĐT, Phòng ban và Đổi mật khẩu bất cứ lúc nào bằng cách bấm vào <strong>nút User ở góc dưới cùng Sidebar</strong>.
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="font-bold text-slate-900 mb-1">Q2: Làm sao để bảo vệ SLA khi khách hàng phản hồi chậm?</div>
                   <p className="text-slate-600">
                     Kỹ sư mở Ticket đó lên &rarr; Chuyển trạng thái sang <strong>On Hold</strong> &rarr; Chọn lý do <code>Chờ phản hồi từ khách hàng</code>. Hệ thống sẽ lập tức tạm dừng đồng hồ tính giờ SLA và lưu vết mốc thời gian.
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Q2: Khi chuyển đổi vị trí công việc trong Kế hoạch dự án có bị mất dữ liệu không?</div>
+                  <div className="font-bold text-slate-900 mb-1">Q3: Khi tạo Sub-Plan (M-Plan, S-Plan) có đổi tên được không?</div>
                   <p className="text-slate-600">
-                    Hoàn toàn không. Phiên bản 4.0 hỗ trợ cả 2 phương thức: kéo thả chuột trực tiếp và gõ số thứ tự dòng mong muốn. Dữ liệu được đồng bộ ngay tức thì lên cơ sở dữ liệu Supabase.
+                    Có. Bạn có thể bấm nút <code>++ Sub-Plan</code> để tạo thêm tab kế hoạch song song, sau đó nhấp vào biểu tượng chỉnh sửa cạnh tên tab để đổi tên tùy ý hoặc xóa khi hoàn thành.
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="font-bold text-slate-900 mb-1">Q3: Tại sao Kỹ sư không nhìn thấy phân hệ Quản lý Người dùng?</div>
+                  <div className="font-bold text-slate-900 mb-1">Q4: Tại sao Kỹ sư không nhìn thấy phân hệ Quản lý Người dùng &amp; Cấu hình hệ thống?</div>
                   <p className="text-slate-600">
                     Các phân hệ Quản lý người dùng, Phân quyền nhóm và Cấu hình sao lưu chỉ dành riêng cho Ban Giám Đốc (nhóm quyền <code>Admin</code>).
                   </p>
