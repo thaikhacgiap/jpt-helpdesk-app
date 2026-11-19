@@ -2062,6 +2062,63 @@ function ArrangeResourceForm({
     return colors[index];
   };
 
+  // Helper to categorize ticket type accurately across English & Vietnamese labels
+  const categorizeTicketType = (typeStr?: string | null): "healthCheck" | "techSupport" | "implementation" | "other" => {
+    if (!typeStr) return "other";
+    const norm = typeStr.toLowerCase().trim().replace(/[-_]/g, " ");
+
+    // Health check / Bảo trì / Maintenance / Định kỳ
+    if (
+      norm.includes("health") ||
+      norm.includes("bảo trì") ||
+      norm.includes("bao tri") ||
+      norm.includes("maintenance") ||
+      norm.includes("định kỳ") ||
+      norm.includes("dinh ky")
+    ) {
+      return "healthCheck";
+    }
+
+    // Technical support / Hỗ trợ kỹ thuật / Sự cố / Incident / Bug
+    if (
+      norm.includes("hỗ trợ") ||
+      norm.includes("ho tro") ||
+      norm.includes("htkt") ||
+      norm.includes("technical") ||
+      norm.includes("support") ||
+      norm.includes("sự cố") ||
+      norm.includes("su co") ||
+      norm.includes("incident") ||
+      norm.includes("bug")
+    ) {
+      return "techSupport";
+    }
+
+    // Implementation / Triển khai / Thay đổi hệ thống / Yêu cầu công việc / Tư vấn
+    if (
+      norm.includes("triển khai") ||
+      norm.includes("trien khai") ||
+      norm.includes("implementation") ||
+      norm.includes("thay đổi") ||
+      norm.includes("thay doi") ||
+      norm.includes("điều chỉnh") ||
+      norm.includes("dieu chinh") ||
+      norm.includes("dự án") ||
+      norm.includes("du an") ||
+      norm.includes("công việc") ||
+      norm.includes("cong viec") ||
+      norm.includes("request") ||
+      norm.includes("feature") ||
+      norm.includes("tư vấn") ||
+      norm.includes("tu van") ||
+      norm.includes("consult")
+    ) {
+      return "implementation";
+    }
+
+    return "other";
+  };
+
   useEffect(() => {
     if (data.assigned.length === 0) {
       setTaskCounts([]);
@@ -2079,16 +2136,20 @@ function ArrangeResourceForm({
           let healthCheck = 0;
           let techSupport = 0;
           let implementation = 0;
+          let other = 0;
 
           tickets.forEach((t) => {
             const assignedNames = t.assigned ? t.assigned.split(",").map((s) => s.trim()) : [];
             if (assignedNames.includes(name)) {
-              if (t.tt_type === "Health-Check") {
+              const cat = categorizeTicketType(t.tt_type);
+              if (cat === "healthCheck") {
                 healthCheck++;
-              } else if (t.tt_type === "Technical support") {
+              } else if (cat === "techSupport") {
                 techSupport++;
-              } else if (t.tt_type === "Implementation") {
+              } else if (cat === "implementation") {
                 implementation++;
+              } else {
+                other++;
               }
             }
           });
@@ -2098,7 +2159,7 @@ function ArrangeResourceForm({
             healthCheck,
             techSupport,
             implementation,
-            total: healthCheck + techSupport + implementation,
+            total: healthCheck + techSupport + implementation + other,
           };
         });
         setTaskCounts(counts);
@@ -2120,18 +2181,18 @@ function ArrangeResourceForm({
           const assignedNames = t.assigned ? t.assigned.split(",").map((s) => s.trim()) : [];
           assignedNames.forEach((name) => {
             if (data.assigned.includes(name)) {
-              // Ongoing calculation: status is NOT closed and NOT finished
-              const isClosedOrFinished = 
-                (t.tt_status || "").toLowerCase() === "closed" || 
-                (t.tt_status || "").toLowerCase() === "finished";
-              if (!isClosedOrFinished) {
+              // Ongoing calculation: status is active (exclude completed, closed, cancel, finished, resolved)
+              const st = (t.tt_status || "").toLowerCase().trim();
+              const isDone = st === "completed" || st === "closed" || st === "cancel" || st === "cancelled" || st === "finished" || st === "resolved";
+              if (!isDone) {
                 ongoing[name] = (ongoing[name] || 0) + 1;
               }
 
               // Monthly calculation: created in current month
-              if (t.created_at) {
-                const date = new Date(t.created_at);
-                if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
+              const dateInput = t.created_at || t.start_time || (t as any).request_time;
+              if (dateInput) {
+                const date = parseServerDate(dateInput) || new Date(dateInput);
+                if (date && date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
                   monthly[name] = (monthly[name] || 0) + 1;
                 }
               }
@@ -2149,44 +2210,24 @@ function ArrangeResourceForm({
     loadStats();
   }, [data.assigned]);
 
-  // Fallbacks if data is empty (to match screenshot visual demo)
-  const totalTasksComputed = taskCounts.reduce((a, b) => a + b.total, 0);
-  const totalOngoingComputed = Object.values(ongoingCounts).reduce((a, b) => a + b, 0);
-  const totalMonthlyComputed = Object.values(monthlyCounts).reduce((a, b) => a + b, 0);
-
-  const displayTaskCounts = taskCounts.map(row => {
-    if (totalTasksComputed > 0) return row;
-    if (row.name === "Lê Thị Linh") {
-      return { name: row.name, healthCheck: 1, techSupport: 2, implementation: 2, total: 5 };
-    }
-    if (row.name === "Võ Thị Thu Hà") {
-      return { name: row.name, healthCheck: 0, techSupport: 0, implementation: 1, total: 1 };
-    }
-    if (row.name === "Lý Thanh Tùng") {
-      return { name: row.name, healthCheck: 0, techSupport: 0, implementation: 1, total: 1 };
-    }
-    return row;
-  });
-
-  const getOngoingVal = (name: string) => {
-    if (totalOngoingComputed > 0) return ongoingCounts[name] || 0;
-    if (name === "Lê Thị Linh") return 3;
-    if (name === "Võ Thị Thu Hà") return 1;
-    if (name === "Lý Thanh Tùng") return 1;
-    return 0;
-  };
-
-  const getMonthlyVal = (name: string) => {
-    if (totalMonthlyComputed > 0) return monthlyCounts[name] || 0;
-    if (name === "Lê Thị Linh") return 12;
-    if (name === "Võ Thị Thu Hà") return 4;
-    if (name === "Lý Thanh Tùng") return 3;
-    return 0;
-  };
+  const displayTaskCounts = taskCounts;
+  const getOngoingVal = (name: string) => ongoingCounts[name] || 0;
+  const getMonthlyVal = (name: string) => monthlyCounts[name] || 0;
 
   const finalTotalOngoing = data.assigned.reduce((sum, name) => sum + getOngoingVal(name), 0);
   const finalTotalMonthly = data.assigned.reduce((sum, name) => sum + getMonthlyVal(name), 0);
   const isRotated = data.assigned.length > 4;
+
+  // Dynamic scales for charts so bars don't overflow
+  const maxOngoingVal = Math.max(1, ...data.assigned.map(getOngoingVal));
+  const maxOngoingScale = Math.max(6, Math.ceil(maxOngoingVal * 1.25));
+  const ongoingGridTicks = [6, 5, 4, 3, 2, 1, 0].map(v => Math.round((v / 6) * maxOngoingScale));
+
+  const maxMonthlyVal = Math.max(1, ...data.assigned.map(getMonthlyVal));
+  const maxMonthlyScale = Math.max(14, Math.ceil(maxMonthlyVal * 1.25));
+  const monthlyGridTicks = [14, 12, 10, 8, 6, 4, 2, 0].map(v => Math.round((v / 14) * maxMonthlyScale));
+
+  const currentMonthYearStr = `${String(new Date().getMonth() + 1).padStart(2, "0")}/${new Date().getFullYear()}`;
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5 bg-white text-xs">
@@ -2315,9 +2356,9 @@ function ArrangeResourceForm({
           <div className="relative h-36 w-full flex items-end justify-around border-b border-slate-200 pl-6 pb-2.5 pr-2">
             {/* Background Grid Lines */}
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[8px] text-slate-400/80 pt-1 pb-2.5">
-              {[6, 5, 4, 3, 2, 1, 0].map((val, idx) => (
+              {ongoingGridTicks.map((val, idx) => (
                 <div key={idx} className="w-full flex items-center gap-2">
-                  <span className="w-2.5 text-right font-semibold">{val}</span>
+                  <span className="w-3 text-right font-semibold">{val}</span>
                   <div className="flex-1 border-t border-slate-100" />
                 </div>
               ))}
@@ -2326,7 +2367,7 @@ function ArrangeResourceForm({
             {/* Bars */}
             {data.assigned.map((name, i) => {
               const val = getOngoingVal(name);
-              const heightPercent = (val / 6) * 100;
+              const heightPercent = Math.min(100, Math.max(0, (val / maxOngoingScale) * 100));
               const barColor = i % 2 === 0 ? "bg-emerald-500/85 hover:bg-emerald-500" : "bg-purple-400/85 hover:bg-purple-400";
               return (
                 <div key={name} className="flex flex-col items-center z-10 overflow-visible relative">
@@ -2376,7 +2417,7 @@ function ArrangeResourceForm({
               <span title="Tổng công việc trong tháng này"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
             </div>
             <div className="flex items-center gap-1 text-[9px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg shadow-3xs">
-              06/2026 <ChevronDown size={10} className="text-slate-400" />
+              {currentMonthYearStr} <ChevronDown size={10} className="text-slate-400" />
             </div>
           </div>
 
@@ -2384,9 +2425,9 @@ function ArrangeResourceForm({
           <div className="relative h-36 w-full flex items-end justify-around border-b border-slate-200 pl-6 pb-2.5 pr-2">
             {/* Background Grid Lines */}
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[8px] text-slate-400/80 pt-1 pb-2.5">
-              {[14, 12, 10, 8, 6, 4, 2, 0].map((val, idx) => (
+              {monthlyGridTicks.map((val, idx) => (
                 <div key={idx} className="w-full flex items-center gap-2">
-                  <span className="w-2.5 text-right font-semibold">{val}</span>
+                  <span className="w-3 text-right font-semibold">{val}</span>
                   <div className="flex-1 border-t border-slate-100" />
                 </div>
               ))}
@@ -2395,7 +2436,7 @@ function ArrangeResourceForm({
             {/* Bars */}
             {data.assigned.map((name, i) => {
               const val = getMonthlyVal(name);
-              const heightPercent = (val / 14) * 100;
+              const heightPercent = Math.min(100, Math.max(0, (val / maxMonthlyScale) * 100));
               const barColor = i % 2 === 0 ? "bg-emerald-500/85 hover:bg-emerald-500" : "bg-purple-400/85 hover:bg-purple-400";
               return (
                 <div key={name} className="flex flex-col items-center z-10 overflow-visible relative">
