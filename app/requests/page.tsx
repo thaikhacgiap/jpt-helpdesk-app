@@ -55,10 +55,56 @@ const TT_TYPE_OPTIONS = [
   "Triển Khai Dự Án"
 ];
 
+export const parseServerDate = (dateInput?: string | Date | null): Date | null => {
+  if (!dateInput) return null;
+  if (dateInput instanceof Date) return isNaN(dateInput.getTime()) ? null : dateInput;
+
+  try {
+    const s = String(dateInput).trim();
+    if (!s) return null;
+
+    // If it has timezone offset or 'Z' (e.g. Supabase created_at ISO strings)
+    if (s.endsWith("Z") || /[+-]\d{2}(:?\d{2})?$/.test(s)) {
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // If it's a server UTC timestamp (e.g. contains microseconds like .123456 or millis .308)
+    if (/\.\d{3,6}/.test(s)) {
+      const d = new Date(s.replace(" ", "T") + "Z");
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Format YYYY-MM-DD or YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm without timezone -> local time
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) {
+      const parts = s.split(/[-/ T:]/);
+      if (parts.length >= 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const min = parts[4] ? parseInt(parts[4], 10) : 0;
+        const sec = parts[5] ? parseInt(parts[5], 10) : 0;
+        return new Date(year, month, day, hour, min, sec);
+      }
+    }
+
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+};
+
 const getLocalDateTimeString = (dateInput?: Date | string | null): string => {
+  if (dateInput === undefined) {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
   if (!dateInput) return "";
-  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  if (isNaN(d.getTime())) return typeof dateInput === "string" ? dateInput : "";
+  const d = parseServerDate(dateInput);
+  if (!d) return typeof dateInput === "string" ? dateInput : "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
@@ -499,17 +545,22 @@ export default function RequestsPage() {
       if (customerFormData.contract_no) remarkParts.push(`Hợp đồng: ${customerFormData.contract_no}`);
       if (customerFormData.requester.trim()) remarkParts.push(`Người yêu cầu: ${customerFormData.requester.trim()}`);
 
-      const startTimeValue = customerFormData.receive_time
-        ? new Date(customerFormData.receive_time).toISOString()
-        : new Date().toISOString();
+      // Format payload time ensuring local time string YYYY-MM-DDTHH:mm:ss without timezone shift
+      const formatPayloadTime = (val?: string | null) => {
+        if (!val || !val.trim()) return null;
+        const v = val.trim();
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
+          return `${v}:00`;
+        }
+        return v;
+      };
 
-      const eventTimeValue = customerFormData.incident_start_time
-        ? new Date(customerFormData.incident_start_time).toISOString()
-        : startTimeValue;
-
-      const endTimeValue = customerFormData.end_time
-        ? new Date(customerFormData.end_time).toISOString()
-        : null;
+      const nowLocal = getLocalDateTimeString();
+      const incidentTimeValue = formatPayloadTime(customerFormData.incident_start_time) || formatPayloadTime(nowLocal);
+      const receiveTimeValue = formatPayloadTime(customerFormData.receive_time) || incidentTimeValue;
+      const startTimeValue = incidentTimeValue;
+      const eventTimeValue = incidentTimeValue;
+      const endTimeValue = formatPayloadTime(customerFormData.end_time);
 
       const updateData = {
         title: customerFormData.title.trim(),
@@ -545,9 +596,9 @@ export default function RequestsPage() {
           creator_name: customerFormData.requester.trim() || null,
           start_time: startTimeValue,
           event_time: eventTimeValue,
+          end_time: endTimeValue,
           tt_status: resolvedStatus,
           request_time: requestTimeIso || undefined,
-          end_time: completeTimeIso || undefined,
           close_time: completeTimeIso || undefined,
           tt_close_time: completeTimeIso || undefined,
           customer_id: customerFormData.customerId
@@ -557,7 +608,9 @@ export default function RequestsPage() {
         if (linked) {
           await updateServiceTicket(linked.id, {
             tt_type: customerFormData.tt_type,
-            category: customerFormData.category
+            category: customerFormData.category,
+            start_time: startTimeValue,
+            event_time: eventTimeValue,
           });
         }
       } else {
@@ -569,9 +622,10 @@ export default function RequestsPage() {
           priority: customerFormData.priority,
           contract_no: customerFormData.contract_no,
           affected_service: customerFormData.affected_service,
-          start_time: updateData.start_time,
+          start_time: startTimeValue,
+          event_time: eventTimeValue,
           assigned: updateData.assigned,
-          end_time: updateData.end_time,
+          end_time: endTimeValue,
           creator_name: customerFormData.requester.trim() || null,
           tt_status: updateData.tt_status,
           requester: customerFormData.requester.trim() || null
@@ -791,11 +845,12 @@ export default function RequestsPage() {
     try {
       const currentUser = getCurrentUser();
       const receiver = currentUser?.name || "Kỹ thuật viên";
-      const receiveTime = new Date().toISOString();
+      const nowLocal = getLocalDateTimeString() + ":00";
       await updateServiceTicket(ticket.id, {
         tt_status: "In progress",
         assigned: receiver,
-        start_time: receiveTime,
+        start_time: ticket.start_time || nowLocal,
+        event_time: (ticket as any).event_time || ticket.start_time || nowLocal,
         updated_at: new Date().toISOString()
       });
       loadCustomerTicketsList();
@@ -808,8 +863,7 @@ export default function RequestsPage() {
   const handleModalCustomerReceive = async () => {
     const currentUser = getCurrentUser();
     const receiverName = currentUser?.name || "Kỹ thuật viên";
-    const nowIso = new Date().toISOString();
-    const nowLocal = nowIso.substring(0, 16);
+    const nowLocal = getLocalDateTimeString();
 
     setCustomerFormData(prev => ({
       ...prev,
@@ -820,11 +874,14 @@ export default function RequestsPage() {
 
     if (editingCustomerTicket) {
       try {
+        const payloadStart = customerFormData.incident_start_time || customerFormData.receive_time || nowLocal;
+        const formattedStart = payloadStart.length === 16 ? `${payloadStart}:00` : payloadStart;
         await updateServiceTicket(editingCustomerTicket.id, {
           tt_status: "In progress",
           assigned: receiverName,
-          start_time: customerFormData.receive_time ? new Date(customerFormData.receive_time).toISOString() : nowIso,
-          updated_at: nowIso
+          start_time: formattedStart,
+          event_time: formattedStart,
+          updated_at: new Date().toISOString()
         });
         loadCustomerTicketsList();
       } catch (err) {
@@ -852,7 +909,7 @@ export default function RequestsPage() {
       console.error("Error setting assignee before creating ticket:", err);
     }
 
-    const incidentTime = (ticket as any).event_time || (ticket as any).incident_start_time || ticket.start_time || "";
+    const incidentTime = getLocalDateTimeString((ticket as any).event_time || (ticket as any).incident_start_time || ticket.start_time);
 
     const query = new URLSearchParams({
       action: "create",
@@ -1119,16 +1176,16 @@ export default function RequestsPage() {
   // Helper date formatter
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
-    if (dateStr.includes("T")) {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      return date.toLocaleDateString("vi-VN") + " " + date.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
+    const d = parseServerDate(dateStr);
+    if (!d) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      return dateStr;
     }
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return dateStr;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   };
 
   // Helper to extract contract code and description

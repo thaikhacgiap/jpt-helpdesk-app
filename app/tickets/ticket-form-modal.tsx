@@ -6034,10 +6034,10 @@ export default function TicketFormModal({
           if (typeof window !== "undefined") {
             const reqCode = createData.requestCode;
             if (reqCode) {
-              const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+              const formattedStart = createData.startTime ? (createData.startTime.length === 16 ? `${createData.startTime}:00` : createData.startTime) : undefined;
               syncTicketToRequest(res.ticketId || res.dbId || "", {
                 ttStatus: ttStatus || "In progress",
-                startTime: startTimeIso || undefined,
+                startTime: formattedStart,
                 title: createData.title || undefined,
                 ttType: createData.ttType || undefined,
                 category: createData.category || undefined,
@@ -6074,13 +6074,13 @@ export default function TicketFormModal({
           // Đồng bộ 2 chiều: nếu ticket gắn mã yêu cầu (CR-/TH-), cập nhật sang yêu cầu đó
           const targetReqCode = createData.requestCode;
           if (targetReqCode) {
-            const startTimeIso = createData.startTime ? new Date(createData.startTime).toISOString() : null;
+            const formattedStart = createData.startTime ? (createData.startTime.length === 16 ? `${createData.startTime}:00` : createData.startTime) : undefined;
             syncTicketToRequest(ticket?.ticket_id || dbId, {
               ttStatus: ttStatus || undefined,
               title: createData.title || undefined,
               ttType: createData.ttType || undefined,
               category: createData.category || undefined,
-              startTime: startTimeIso || undefined,
+              startTime: formattedStart,
             }).catch((e) => console.warn("Error syncTicketToRequest on info step:", e));
           }
         }

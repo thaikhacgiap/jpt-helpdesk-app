@@ -334,7 +334,10 @@ export async function syncTicketToRequest(
     if (extraUpdates?.title || tk.title) reqUpdates.title = extraUpdates?.title || tk.title;
     if (extraUpdates?.ttType || tk.tt_type) reqUpdates.tt_type = extraUpdates?.ttType || tk.tt_type;
     if (extraUpdates?.category || tk.category) reqUpdates.category = extraUpdates?.category || tk.category;
-    if (extraUpdates?.startTime || tk.start_time) reqUpdates.start_time = extraUpdates?.startTime || tk.start_time;
+    if (extraUpdates?.startTime || tk.start_time) {
+      reqUpdates.start_time = extraUpdates?.startTime || tk.start_time;
+      reqUpdates.event_time = extraUpdates?.startTime || (tk as any).event_time || tk.start_time;
+    }
 
     const endTime = extraUpdates?.endTime || tk.end_time || tk.tt_close_time || tk.close_time;
     if (status === 'Completed') {

@@ -103,6 +103,7 @@ export async function createServiceRequest(customerId: string, data: {
   contract_no?: string | null;
   affected_service?: string | null;
   start_time?: string | null;
+  event_time?: string | null;
   assigned?: string | null;
   end_time?: string | null;
   creator_name?: string | null;
@@ -142,6 +143,7 @@ export async function createServiceRequest(customerId: string, data: {
     creator_name: data.creator_name || data.requester || null,
     tt_status: data.tt_status || "New",
     start_time: data.start_time || new Date().toISOString(),
+    event_time: data.event_time || data.start_time || null,
     end_time: data.end_time || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
