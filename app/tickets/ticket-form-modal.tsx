@@ -80,11 +80,11 @@ interface TicketFormModalProps {
 /* ═══════════════════════════════════════════════════════════ */
 /* Options                                                     */
 /* ═══════════════════════════════════════════════════════════ */
-const TT_TYPE_OPTIONS   = ["Xử Lý Sự Cố", "Hỗ Trợ Kỹ Thuật", "Điều Chỉnh/Thay đổi hệ thống", "Bảo Trì", "Triển Khai Dự Án"];
-const CATEGORY_OPTIONS  = ["Phần mềm", "Phần cứng", "Database", "Network", "Security", "Cloud", "Khác"];
-const PRIORITY_OPTIONS  = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
+const TT_TYPE_OPTIONS = ["Xử Lý Sự Cố", "Hỗ Trợ Kỹ Thuật", "Điều Chỉnh/Thay đổi hệ thống", "Bảo Trì", "Triển Khai Dự Án"];
+const CATEGORY_OPTIONS = ["Phần mềm", "Phần cứng", "Database", "Network", "Security", "Cloud", "Khác"];
+const PRIORITY_OPTIONS = ["L1(Critical)", "L2(Major)", "L3(Minor)", "L4(Warning)"];
 const TT_STATUS_OPTIONS = ["In progress", "On Hold", "Reporting", "Cancel", "Completed", "Closed"];
-const SCOPE_OPTIONS     = ["In scope", "Out scope", "Presale"];
+const SCOPE_OPTIONS = ["In scope", "Out scope", "Presale"];
 
 /* ═══════════════════════════════════════════════════════════ */
 /* Process steps                                               */
@@ -92,20 +92,20 @@ const SCOPE_OPTIONS     = ["In scope", "Out scope", "Presale"];
 type StepKey = "create" | "check" | "arrange" | "troubleshoot" | "completed";
 
 const STEPS: { key: StepKey; label: string }[] = [
-  { key: "create",       label: "Create Ticket" },
-  { key: "check",        label: "Check Contract" },
-  { key: "arrange",      label: "Arrange resource" },
+  { key: "create", label: "Create Ticket" },
+  { key: "check", label: "Check Contract" },
+  { key: "arrange", label: "Arrange resource" },
   { key: "troubleshoot", label: "Troubleshooting" },
-  { key: "completed",    label: "Completed" },
+  { key: "completed", label: "Completed" },
 ];
 
 const STATUS_TO_STEP: Record<string, StepKey> = {
   "In progress": "troubleshoot",
-  "On Hold":     "arrange",
-  "Reporting":   "completed",
-  "Completed":   "completed",
-  "Cancel":      "completed",
-  "Closed":      "completed",
+  "On Hold": "arrange",
+  "Reporting": "completed",
+  "Completed": "completed",
+  "Cancel": "completed",
+  "Closed": "completed",
 };
 
 const getHeaderStepIcon = (step: StepKey) => {
@@ -205,7 +205,7 @@ const splitDateTime = (dateStr: string) => {
 function parseProgress(progressStr: string | null | undefined, currentStep: StepKey): { completed: Set<StepKey>; saved: Set<StepKey> } {
   const completed = new Set<StepKey>();
   const saved = new Set<StepKey>();
-  
+
   if (progressStr && progressStr.length === STEPS.length) {
     for (let i = 0; i < STEPS.length; i++) {
       const char = progressStr[i];
@@ -223,7 +223,7 @@ function parseProgress(progressStr: string | null | undefined, currentStep: Step
       completed.add(STEPS[i].key);
     }
   }
-  
+
   return { completed, saved };
 }
 
@@ -256,7 +256,7 @@ function TealSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const ref    = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -413,7 +413,7 @@ function TealField({ value, placeholder, editing, onChange, type = "text", rows,
         className={`${base} py-2 resize-none`} />
     );
   }
-  
+
   if (type === "datetime-local" || type === "datetime") {
     if (!editing) {
       return (
@@ -433,13 +433,13 @@ function TealField({ value, placeholder, editing, onChange, type = "text", rows,
   }
 
   return (
-    <input 
-      type={type} 
-      value={value || ""} 
+    <input
+      type={type}
+      value={value || ""}
       readOnly={!editing}
-      placeholder={placeholder} 
+      placeholder={placeholder}
       onChange={(e) => onChange?.(e.target.value)}
-      className={`${base} h-10`} 
+      className={`${base} h-10`}
     />
   );
 }
@@ -452,9 +452,9 @@ function CustomerPicker({ customers, value, onChange, loading, readOnly }: {
   onChange: (c: Customer | null) => void; loading: boolean; readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [q, setQ]       = useState("");
-  const ref             = useRef<HTMLDivElement>(null);
-  const btnRef          = useRef<HTMLButtonElement>(null);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
@@ -630,15 +630,14 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
         type="button"
         disabled={disabled}
         onClick={handleToggle}
-        className={`w-full flex items-center justify-between gap-2 border rounded-xl h-10 px-3.5 text-xs sm:text-sm transition outline-none cursor-pointer ${
-          disabled
-            ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
-            : open
+        className={`w-full flex items-center justify-between gap-2 border rounded-xl h-10 px-3.5 text-xs sm:text-sm transition outline-none cursor-pointer ${disabled
+          ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+          : open
             ? "border-teal-500 ring-2 ring-teal-500/10 shadow-xs bg-white"
             : value
-            ? "border-[#0099cc] bg-[#f0faff] text-[#0099cc] hover:bg-[#e6f6fc]"
-            : "border-slate-200 text-slate-400 bg-white hover:border-slate-300"
-        }`}
+              ? "border-[#0099cc] bg-[#f0faff] text-[#0099cc] hover:bg-[#e6f6fc]"
+              : "border-slate-200 text-slate-400 bg-white hover:border-slate-300"
+          }`}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileText size={14} className={`shrink-0 ${value ? "text-[#0099cc]" : "text-slate-400"}`} />
@@ -730,11 +729,10 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
               <button
                 type="button"
                 onClick={() => setFilterMode("valid")}
-                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  filterMode === "valid"
-                    ? "bg-white text-emerald-700 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${filterMode === "valid"
+                  ? "bg-white text-emerald-700 shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 <span>Hợp đồng còn hạn</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${filterMode === "valid" ? "bg-emerald-100 text-emerald-800" : "bg-slate-300/60 text-slate-700"}`}>
@@ -744,11 +742,10 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
               <button
                 type="button"
                 onClick={() => setFilterMode("all")}
-                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  filterMode === "all"
-                    ? "bg-white text-teal-800 shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
+                className={`flex-1 py-1 px-2 rounded-lg text-center transition flex items-center justify-center gap-1.5 cursor-pointer ${filterMode === "all"
+                  ? "bg-white text-teal-800 shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
               >
                 <span>Tất cả hợp đồng</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${filterMode === "all" ? "bg-teal-100 text-teal-800" : "bg-slate-300/60 text-slate-700"}`}>
@@ -771,11 +768,10 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
                   name: "Không hợp đồng",
                 } as any)
               }
-              className={`w-full text-left p-2 rounded-xl text-xs transition flex items-center justify-between cursor-pointer border ${
-                value?.id === "no-contract"
-                  ? "bg-teal-50 border-teal-300 text-teal-900 font-semibold"
-                  : "hover:bg-slate-50 border-transparent text-slate-600"
-              }`}
+              className={`w-full text-left p-2 rounded-xl text-xs transition flex items-center justify-between cursor-pointer border ${value?.id === "no-contract"
+                ? "bg-teal-50 border-teal-300 text-teal-900 font-semibold"
+                : "hover:bg-slate-50 border-transparent text-slate-600"
+                }`}
             >
               <div className="flex items-center gap-2">
                 <FileText size={14} className="text-slate-400 shrink-0" />
@@ -814,18 +810,16 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
                     key={c.id || cNo}
                     type="button"
                     onClick={() => handleSelect(c)}
-                    className={`w-full text-left p-2.5 rounded-xl text-xs transition flex items-start justify-between gap-2.5 cursor-pointer border ${
-                      isSelected
-                        ? "bg-teal-50 border-teal-300 shadow-xs"
-                        : "hover:bg-slate-50/80 border-transparent text-slate-700"
-                    }`}
+                    className={`w-full text-left p-2.5 rounded-xl text-xs transition flex items-start justify-between gap-2.5 cursor-pointer border ${isSelected
+                      ? "bg-teal-50 border-teal-300 shadow-xs"
+                      : "hover:bg-slate-50/80 border-transparent text-slate-700"
+                      }`}
                   >
                     <div className="flex items-start gap-2.5 min-w-0 flex-1">
                       <FileText
                         size={15}
-                        className={`shrink-0 mt-0.5 ${
-                          isValid ? "text-emerald-500" : "text-slate-400"
-                        }`}
+                        className={`shrink-0 mt-0.5 ${isValid ? "text-emerald-500" : "text-slate-400"
+                          }`}
                       />
                       <div className="min-w-0 flex-1 space-y-1">
                         {/* Row 1: Số HĐ, Mã HĐ, Trạng thái hạn */}
@@ -837,11 +831,10 @@ function ContractPicker({ contracts, value, onChange, loading, disabled, readOnl
                             </span>
                           )}
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                              isValid
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-rose-50 text-rose-700 border-rose-200"
-                            }`}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${isValid
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                              }`}
                           >
                             {isValid ? "Còn hạn" : "Hết hạn"}
                           </span>
@@ -1002,8 +995,8 @@ function ProcessPanel({
         <div className="flex flex-col">
           {STEPS.map((step, i) => {
             const isCompleted = completedSteps.has(step.key);
-            const isSaved     = savedSteps.has(step.key);
-            const isActive    = step.key === currentStep;
+            const isSaved = savedSteps.has(step.key);
+            const isActive = step.key === currentStep;
 
             let circleColorClass = "bg-white border border-slate-200 text-slate-400";
             let iconColorClass = "text-slate-400";
@@ -1034,16 +1027,14 @@ function ProcessPanel({
               <div
                 key={step.key}
                 onClick={() => onStepClick(step.key)}
-                className={`relative flex items-stretch gap-2.5 cursor-pointer group select-none transition ${
-                  i < STEPS.length - 1 ? "pb-3.5" : "pb-0.5"
-                }`}
+                className={`relative flex items-stretch gap-2.5 cursor-pointer group select-none transition ${i < STEPS.length - 1 ? "pb-3.5" : "pb-0.5"
+                  }`}
               >
                 {/* Connector Line */}
                 {i < STEPS.length - 1 && (
                   <div
-                    className={`absolute left-3 top-6 bottom-0 w-0.5 -translate-x-1/2 transition ${
-                      isLineActive ? "bg-green-400" : "bg-slate-200"
-                    }`}
+                    className={`absolute left-3 top-6 bottom-0 w-0.5 -translate-x-1/2 transition ${isLineActive ? "bg-green-400" : "bg-slate-200"
+                      }`}
                   />
                 )}
 
@@ -1201,8 +1192,8 @@ function FooterBar({
             ${isStepDone
               ? "bg-green-600 text-white border border-green-600 cursor-default"
               : hasUnstoppedHold
-              ? "bg-slate-300 text-slate-500 border border-slate-300 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 text-white border border-blue-600"}`}
+                ? "bg-slate-300 text-slate-500 border border-slate-300 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white border border-blue-600"}`}
         >
           <CheckCircle size={13} />
           <span>{isStepDone ? "Confirmed" : "Confirm"}</span>
@@ -1229,8 +1220,8 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
 
   const labelStyle = "text-xs font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1.5";
   const inputWrapperStyle = (hasValue: boolean) => `relative flex items-center border rounded-xl bg-white transition shadow-sm h-11 px-3.5
-    ${editing 
-      ? "border-slate-200 focus-within:border-[#0099cc] focus-within:ring-1 focus-within:ring-[#0099cc]" 
+    ${editing
+      ? "border-slate-200 focus-within:border-[#0099cc] focus-within:ring-1 focus-within:ring-[#0099cc]"
       : "border-slate-100 bg-slate-50/50 pointer-events-none"}`;
 
   return (
@@ -1260,7 +1251,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
                   const p = req.priority;
                   patch.priority = p.includes("L1") || p.includes("Critical") ? "L1(Critical)"
                     : p.includes("L2") || p.includes("Major") ? "L2(Major)"
-                    : p.includes("L3") || p.includes("Minor") ? "L3(Minor)" : "L4(Warning)";
+                      : p.includes("L3") || p.includes("Minor") ? "L3(Minor)" : "L4(Warning)";
                 }
                 if (req.category) patch.category = req.category;
                 if (req.ttType) patch.ttType = req.ttType;
@@ -1309,8 +1300,8 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
           <span className="text-[10px] font-semibold text-slate-400">{(data.description || "").length}/2000</span>
         </div>
         <div className={`relative border rounded-xl bg-white transition shadow-sm p-3.5 flex gap-2.5
-          ${editing 
-            ? "border-slate-200 focus-within:border-[#0099cc] focus-within:ring-1 focus-within:ring-[#0099cc]" 
+          ${editing
+            ? "border-slate-200 focus-within:border-[#0099cc] focus-within:ring-1 focus-within:ring-[#0099cc]"
             : "border-slate-100 bg-slate-50/50 pointer-events-none"}`}>
           <List size={16} className="text-slate-400 mt-1 shrink-0" />
           <textarea
@@ -1476,7 +1467,7 @@ function CheckContractForm({
   customers: Customer[]; loadingCustomers: boolean;
   ticketType?: string;
 }) {
-  const [contracts,        setContracts]        = useState<Contract[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -1489,7 +1480,7 @@ function CheckContractForm({
       .then((projs) => {
         if (Array.isArray(projs)) setProjectSuggestions(projs);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   /* Sync customer from data.customerId when customers load */
@@ -1516,10 +1507,10 @@ function CheckContractForm({
               name: "Không hợp đồng"
             } as any);
             onChange({
-              contractName:   "Không hợp đồng",
-              saleResp:       "",
-              contractStart:  "",
-              contractEnd:    "",
+              contractName: "Không hợp đồng",
+              saleResp: "",
+              contractStart: "",
+              contractEnd: "",
               contractStatus: "",
             });
           } else {
@@ -1529,10 +1520,10 @@ function CheckContractForm({
               const foundProjId = (found as any).project_id || (found as any).projectId || "";
               /* Propagate auto-filled fields to parent so they display */
               onChange({
-                contractName:   found.name || (found as any).description || (found as any).service || "",
-                saleResp:       found.owner_name || (found as any).am || "",
-                contractStart:  found.start_date || (found as any).signed_date || "",
-                contractEnd:    found.end_date || (found as any).expiry_date || "",
+                contractName: found.name || (found as any).description || (found as any).service || "",
+                saleResp: found.owner_name || (found as any).am || "",
+                contractStart: found.start_date || (found as any).signed_date || "",
+                contractEnd: found.end_date || (found as any).expiry_date || "",
                 contractStatus: found.status || "",
                 ...(foundProjId && !data.projectId ? { projectId: foundProjId } : {}),
               });
@@ -1590,14 +1581,14 @@ function CheckContractForm({
     setSelectedContract(c);
     const projId = (c as any)?.project_id || (c as any)?.projectId || "";
     onChange({
-      contractId:     c?.id           || "",
-      contractNo:     c?.contract_no  || c?.code || "",
-      contractName:   c?.name || (c as any)?.description || (c as any)?.service || "",
-      saleResp:       (c as any)?.owner_name || (c as any)?.am || "",
-      contractStart:  (c as any)?.start_date || (c as any)?.signed_date || "",
-      contractEnd:    (c as any)?.end_date || (c as any)?.expiry_date || "",
+      contractId: c?.id || "",
+      contractNo: c?.contract_no || c?.code || "",
+      contractName: c?.name || (c as any)?.description || (c as any)?.service || "",
+      saleResp: (c as any)?.owner_name || (c as any)?.am || "",
+      contractStart: (c as any)?.start_date || (c as any)?.signed_date || "",
+      contractEnd: (c as any)?.end_date || (c as any)?.expiry_date || "",
       contractStatus: (c as any)?.status || "",
-      projectId:      projId || data.projectId || "",
+      projectId: projId || data.projectId || "",
       healthCheckRound: "",
     });
   };
@@ -1803,7 +1794,7 @@ function CheckContractForm({
               />
             </div>
           </div>
-          
+
           {/* Sale responsible */}
           <div className="flex-1 flex items-center gap-3">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32 shrink-0">Sale responsible</label>
@@ -1867,19 +1858,17 @@ function CheckContractForm({
               </div>
 
               <div className="relative h-1.5 w-full bg-slate-100 rounded-full">
-                <div 
-                  className={`absolute left-0 top-0 h-full rounded-full transition-colors ${
-                    timelineStats.isExpired ? "bg-rose-500" : "bg-emerald-500"
-                  }`}
+                <div
+                  className={`absolute left-0 top-0 h-full rounded-full transition-colors ${timelineStats.isExpired ? "bg-rose-500" : "bg-emerald-500"
+                    }`}
                   style={{ width: `${timelineStats.percent}%` }}
                 />
-                <div 
-                  className={`absolute top-1/2 w-2.5 h-2.5 rounded-full border border-white -translate-y-1/2 -translate-x-1/2 z-10 transition-colors ${
-                    timelineStats.isExpired ? "bg-rose-600" : "bg-emerald-600"
-                  }`}
+                <div
+                  className={`absolute top-1/2 w-2.5 h-2.5 rounded-full border border-white -translate-y-1/2 -translate-x-1/2 z-10 transition-colors ${timelineStats.isExpired ? "bg-rose-600" : "bg-emerald-600"
+                    }`}
                   style={{ left: `${timelineStats.percent}%` }}
                 />
-                <div 
+                <div
                   className="absolute top-1/2 w-2.5 h-2.5 rounded-full bg-blue-500 border border-white -translate-y-1/2 -translate-x-1/2 z-10"
                   style={{ left: "100%" }}
                 />
@@ -1895,21 +1884,19 @@ function CheckContractForm({
         {/* Contract Status Banner */}
         <div className="flex items-center gap-3">
           <label className={labelCls}>Contract Status</label>
-          <div className={`flex-1 flex items-center justify-center rounded-xl h-10 text-xs font-bold border transition ${
-            isContractActive
-              ? "bg-[#ecfbf5] border-[#c3f2dd] text-[#27ae60]"
-              : isContractExpired
+          <div className={`flex-1 flex items-center justify-center rounded-xl h-10 text-xs font-bold border transition ${isContractActive
+            ? "bg-[#ecfbf5] border-[#c3f2dd] text-[#27ae60]"
+            : isContractExpired
               ? "bg-[#fdf2f2] border-[#fde8e8] text-[#e02424]"
               : "bg-slate-50 border-slate-200 text-slate-500"
-          }`}>
+            }`}>
             <span className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                isContractActive 
-                  ? 'bg-[#27ae60]' 
-                  : isContractExpired 
-                  ? 'bg-[#e02424]' 
+              <span className={`w-1.5 h-1.5 rounded-full ${isContractActive
+                ? 'bg-[#27ae60]'
+                : isContractExpired
+                  ? 'bg-[#e02424]'
                   : 'bg-slate-400'
-              }`} />
+                }`} />
               {isExpired ? "Expired" : (data.contractStatus || "Chưa xác định")}
             </span>
           </div>
@@ -1927,8 +1914,8 @@ function CheckContractForm({
           <div className="flex-1 flex items-center gap-3">
             <label className={labelCls}>Sale support</label>
             <div className={`relative flex-1 flex items-center border rounded-xl bg-white transition shadow-sm h-10 px-3
-              ${editing 
-                ? "border-slate-200 focus-within:border-[#0099cc]" 
+              ${editing
+                ? "border-slate-200 focus-within:border-[#0099cc]"
                 : "border-slate-100 bg-slate-50/50 pointer-events-none"}`}>
               <User size={14} className="text-slate-400 mr-2 shrink-0" />
               <input
@@ -1945,8 +1932,8 @@ function CheckContractForm({
           <div className="flex-1 flex items-center gap-3">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32 shrink-0">Confirm Status</label>
             <div className={`relative flex-1 flex items-center border rounded-xl bg-white transition shadow-sm h-10 px-3
-              ${editing 
-                ? "border-slate-200 focus-within:border-[#0099cc]" 
+              ${editing
+                ? "border-slate-200 focus-within:border-[#0099cc]"
                 : "border-slate-100 bg-slate-50/50 pointer-events-none"}`}>
               <Shield size={14} className="text-slate-400 mr-2 shrink-0" />
               <select
@@ -1975,10 +1962,10 @@ function CheckContractForm({
               </span>
             )}
           </div>
-          
+
           <div className={`relative flex-1 border rounded-xl bg-white transition shadow-sm p-2.5 flex gap-2
-            ${editing 
-              ? "border-slate-200 focus-within:border-[#0099cc]" 
+            ${editing
+              ? "border-slate-200 focus-within:border-[#0099cc]"
               : "border-slate-100 bg-slate-50/50 pointer-events-none"}`}>
             <textarea
               value={data.saleRemark}
@@ -2036,9 +2023,6 @@ function ArrangeResourceForm({
   editing: boolean; data: ArrangeFormData;
   onChange: (patch: Partial<ArrangeFormData>) => void;
 }) {
-  const [taskCounts, setTaskCounts] = useState<ResourceTaskCount[]>([]);
-  const [ongoingCounts, setOngoingCounts] = useState<{ [name: string]: number }>({});
-  const [monthlyCounts, setMonthlyCounts] = useState<{ [name: string]: number }>({});
 
   // Get avatar initials helper
   const getInitials = (nameStr: string) => {
@@ -2051,7 +2035,7 @@ function ArrangeResourceForm({
   // Avatar bg hash colors helper
   const getAvatarColor = (name: string) => {
     const colors = [
-      "bg-blue-500", "bg-purple-500", "bg-emerald-500", 
+      "bg-blue-500", "bg-purple-500", "bg-emerald-500",
       "bg-indigo-500", "bg-rose-500", "bg-amber-500"
     ];
     let hash = 0;
@@ -2119,10 +2103,21 @@ function ArrangeResourceForm({
     return "other";
   };
 
+  const [resourceFilter, setResourceFilter] = useState<"ongoing" | "all" | "monthly">("ongoing");
+  const [ongoingTaskCounts, setOngoingTaskCounts] = useState<ResourceTaskCount[]>([]);
+  const [allTaskCounts, setAllTaskCounts] = useState<ResourceTaskCount[]>([]);
+  const [monthlyTaskCounts, setMonthlyTaskCounts] = useState<ResourceTaskCount[]>([]);
+  const [allCounts, setAllCounts] = useState<{ [name: string]: number }>({});
+  const [ongoingCounts, setOngoingCounts] = useState<{ [name: string]: number }>({});
+  const [monthlyCounts, setMonthlyCounts] = useState<{ [name: string]: number }>({});
+
   useEffect(() => {
     if (data.assigned.length === 0) {
-      setTaskCounts([]);
+      setOngoingTaskCounts([]);
+      setAllTaskCounts([]);
+      setMonthlyTaskCounts([]);
       setOngoingCounts({});
+      setAllCounts({});
       setMonthlyCounts({});
       return;
     }
@@ -2130,78 +2125,95 @@ function ArrangeResourceForm({
     async function loadStats() {
       try {
         const tickets = await fetchTickets();
-        
-        // 1. Table task counts calculation
-        const counts: ResourceTaskCount[] = data.assigned.map((name) => {
-          let healthCheck = 0;
-          let techSupport = 0;
-          let implementation = 0;
-          let other = 0;
 
-          tickets.forEach((t) => {
-            const assignedNames = t.assigned ? t.assigned.split(",").map((s) => s.trim()) : [];
-            if (assignedNames.includes(name)) {
-              const cat = categorizeTicketType(t.tt_type);
-              if (cat === "healthCheck") {
-                healthCheck++;
-              } else if (cat === "techSupport") {
-                techSupport++;
-              } else if (cat === "implementation") {
-                implementation++;
-              } else {
-                other++;
-              }
-            }
-          });
-
-          return {
-            name,
-            healthCheck,
-            techSupport,
-            implementation,
-            total: healthCheck + techSupport + implementation + other,
-          };
-        });
-        setTaskCounts(counts);
-
-        // 2. Charts ongoing & monthly calculation
-        const ongoing: { [name: string]: number } = {};
-        const monthly: { [name: string]: number } = {};
-        
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
+        // Helper to compute breakdown for each assignee based on filter
+        const calcCounts = (filterType: "ongoing" | "all" | "monthly"): ResourceTaskCount[] => {
+          return data.assigned.map((name) => {
+            let healthCheck = 0;
+            let techSupport = 0;
+            let implementation = 0;
+            let other = 0;
+
+            tickets.forEach((t) => {
+              const assignedNames = t.assigned ? t.assigned.split(",").map((s) => s.trim()) : [];
+              if (!assignedNames.includes(name)) return;
+
+              const st = (t.tt_status || "").toLowerCase().trim();
+              const isDone = st === "completed" || st === "closed" || st === "cancel" || st === "cancelled" || st === "finished" || st === "resolved";
+
+              const dateInput = t.created_at || t.start_time || (t as any).request_time;
+              let isCurrentMonth = false;
+              if (dateInput) {
+                const d = parseServerDate(dateInput) || new Date(dateInput);
+                if (d && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                  isCurrentMonth = true;
+                }
+              }
+
+              if (filterType === "ongoing" && isDone) return;
+              if (filterType === "monthly" && !isCurrentMonth) return;
+
+              const cat = categorizeTicketType(t.tt_type);
+              if (cat === "healthCheck") healthCheck++;
+              else if (cat === "techSupport") techSupport++;
+              else if (cat === "implementation") implementation++;
+              else other++;
+            });
+
+            return {
+              name,
+              healthCheck,
+              techSupport,
+              implementation,
+              total: healthCheck + techSupport + implementation + other,
+            };
+          });
+        };
+
+        setOngoingTaskCounts(calcCounts("ongoing"));
+        setAllTaskCounts(calcCounts("all"));
+        setMonthlyTaskCounts(calcCounts("monthly"));
+
+        const ongoingMap: { [name: string]: number } = {};
+        const allMap: { [name: string]: number } = {};
+        const monthlyMap: { [name: string]: number } = {};
+
         data.assigned.forEach((name) => {
-          ongoing[name] = 0;
-          monthly[name] = 0;
+          ongoingMap[name] = 0;
+          allMap[name] = 0;
+          monthlyMap[name] = 0;
         });
 
         tickets.forEach((t) => {
           const assignedNames = t.assigned ? t.assigned.split(",").map((s) => s.trim()) : [];
           assignedNames.forEach((name) => {
-            if (data.assigned.includes(name)) {
-              // Ongoing calculation: status is active (exclude completed, closed, cancel, finished, resolved)
-              const st = (t.tt_status || "").toLowerCase().trim();
-              const isDone = st === "completed" || st === "closed" || st === "cancel" || st === "cancelled" || st === "finished" || st === "resolved";
-              if (!isDone) {
-                ongoing[name] = (ongoing[name] || 0) + 1;
-              }
+            if (!data.assigned.includes(name)) return;
 
-              // Monthly calculation: created in current month
-              const dateInput = t.created_at || t.start_time || (t as any).request_time;
-              if (dateInput) {
-                const date = parseServerDate(dateInput) || new Date(dateInput);
-                if (date && date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
-                  monthly[name] = (monthly[name] || 0) + 1;
-                }
+            allMap[name] = (allMap[name] || 0) + 1;
+
+            const st = (t.tt_status || "").toLowerCase().trim();
+            const isDone = st === "completed" || st === "closed" || st === "cancel" || st === "cancelled" || st === "finished" || st === "resolved";
+            if (!isDone) {
+              ongoingMap[name] = (ongoingMap[name] || 0) + 1;
+            }
+
+            const dateInput = t.created_at || t.start_time || (t as any).request_time;
+            if (dateInput) {
+              const d = parseServerDate(dateInput) || new Date(dateInput);
+              if (d && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                monthlyMap[name] = (monthlyMap[name] || 0) + 1;
               }
             }
           });
         });
 
-        setOngoingCounts(ongoing);
-        setMonthlyCounts(monthly);
+        setOngoingCounts(ongoingMap);
+        setAllCounts(allMap);
+        setMonthlyCounts(monthlyMap);
       } catch (e) {
         console.error("Error loading stats:", e);
       }
@@ -2210,18 +2222,25 @@ function ArrangeResourceForm({
     loadStats();
   }, [data.assigned]);
 
-  const displayTaskCounts = taskCounts;
-  const getOngoingVal = (name: string) => ongoingCounts[name] || 0;
+  const displayTaskCounts =
+    resourceFilter === "all"
+      ? allTaskCounts
+      : resourceFilter === "monthly"
+        ? monthlyTaskCounts
+        : ongoingTaskCounts;
+
+  const isChart1All = resourceFilter === "all";
+  const getChart1Val = (name: string) => isChart1All ? (allCounts[name] || 0) : (ongoingCounts[name] || 0);
   const getMonthlyVal = (name: string) => monthlyCounts[name] || 0;
 
-  const finalTotalOngoing = data.assigned.reduce((sum, name) => sum + getOngoingVal(name), 0);
+  const finalTotalChart1 = data.assigned.reduce((sum, name) => sum + getChart1Val(name), 0);
   const finalTotalMonthly = data.assigned.reduce((sum, name) => sum + getMonthlyVal(name), 0);
   const isRotated = data.assigned.length > 4;
 
   // Dynamic scales for charts so bars don't overflow
-  const maxOngoingVal = Math.max(1, ...data.assigned.map(getOngoingVal));
-  const maxOngoingScale = Math.max(6, Math.ceil(maxOngoingVal * 1.25));
-  const ongoingGridTicks = [6, 5, 4, 3, 2, 1, 0].map(v => Math.round((v / 6) * maxOngoingScale));
+  const maxChart1Val = Math.max(1, ...data.assigned.map(getChart1Val));
+  const maxChart1Scale = Math.max(6, Math.ceil(maxChart1Val * 1.25));
+  const chart1GridTicks = [6, 5, 4, 3, 2, 1, 0].map(v => Math.round((v / 6) * maxChart1Scale));
 
   const maxMonthlyVal = Math.max(1, ...data.assigned.map(getMonthlyVal));
   const maxMonthlyScale = Math.max(14, Math.ceil(maxMonthlyVal * 1.25));
@@ -2247,7 +2266,7 @@ function ArrangeResourceForm({
             />
           </div>
         </div>
-        
+
         {/* Following */}
         <div className="flex items-center gap-3 min-w-0">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20 shrink-0">
@@ -2266,14 +2285,56 @@ function ArrangeResourceForm({
 
       {/* Row 2: Table Section */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-          <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-            <ClipboardList size={14} className="text-slate-400 shrink-0" />
-            Resource Assigned status (List from "Assign")
-          </h3>
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-lg font-semibold shadow-2xs">
-            <Users size={12} className="text-slate-400" />
-            <span>{data.assigned.length} resources</span>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <ClipboardList size={14} className="text-slate-400 shrink-0" />
+              Resource Assigned status (List from "Assign")
+            </h3>
+            <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+              {resourceFilter === "all" ? "Tất cả trạng thái" : resourceFilter === "monthly" ? `Tháng ${currentMonthYearStr}` : "Đang xử lý (Ongoing)"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Filter buttons */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[10px] font-semibold text-slate-600 shadow-3xs">
+              <button
+                type="button"
+                onClick={() => setResourceFilter("ongoing")}
+                className={`px-2 py-0.5 rounded-md transition cursor-pointer ${resourceFilter === "ongoing"
+                  ? "bg-blue-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-200/60 text-slate-600"
+                  }`}
+              >
+                Đang xử lý (Ongoing)
+              </button>
+              <button
+                type="button"
+                onClick={() => setResourceFilter("all")}
+                className={`px-2 py-0.5 rounded-md transition cursor-pointer ${resourceFilter === "all"
+                  ? "bg-blue-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-200/60 text-slate-600"
+                  }`}
+              >
+                Tất cả (All status)
+              </button>
+              <button
+                type="button"
+                onClick={() => setResourceFilter("monthly")}
+                className={`px-2 py-0.5 rounded-md transition cursor-pointer ${resourceFilter === "monthly"
+                  ? "bg-blue-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-200/60 text-slate-600"
+                  }`}
+              >
+                Tháng này ({currentMonthYearStr})
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-lg font-semibold shadow-2xs">
+              <Users size={12} className="text-slate-400" />
+              <span>{data.assigned.length} resources</span>
+            </div>
           </div>
         </div>
 
@@ -2337,18 +2398,23 @@ function ArrangeResourceForm({
 
       {/* Row 3: Charts Section (Side-by-side) */}
       <div className="grid grid-cols-2 gap-6 pt-4">
-        {/* Left Chart: Tasks Ongoing */}
-        {/* Left Chart: Tasks Ongoing */}
-        <div className={`border border-slate-150 rounded-2xl bg-white p-4 shadow-2xs transition-all duration-200 ${
-          isRotated ? "space-y-11 pb-5" : "space-y-4"
-        }`}>
+        {/* Left Chart: Tasks Ongoing / All */}
+        <div className={`border border-slate-150 rounded-2xl bg-white p-4 shadow-2xs transition-all duration-200 ${isRotated ? "space-y-11 pb-5" : "space-y-4"
+          }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              <span>Tasks Ongoing by Assignee</span>
-              <span title="Số lượng công việc đang xử lý"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
+              <span>{isChart1All ? "Total Tasks by Assignee" : "Tasks Ongoing by Assignee"}</span>
+              <span title={isChart1All ? "Tổng công việc tất cả trạng thái" : "Số lượng công việc đang xử lý"}><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
             </div>
-            <div className="flex items-center gap-1 text-[9px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg shadow-3xs">
-              All status <ChevronDown size={10} className="text-slate-400" />
+            <div className="flex items-center gap-1">
+              <select
+                value={isChart1All ? "all" : "ongoing"}
+                onChange={(e) => setResourceFilter(e.target.value as any)}
+                className="text-[9px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg shadow-3xs cursor-pointer focus:outline-none"
+              >
+                <option value="ongoing">Ongoing (Đang xử lý)</option>
+                <option value="all">All status (Tất cả)</option>
+              </select>
             </div>
           </div>
 
@@ -2356,7 +2422,7 @@ function ArrangeResourceForm({
           <div className="relative h-36 w-full flex items-end justify-around border-b border-slate-200 pl-6 pb-2.5 pr-2">
             {/* Background Grid Lines */}
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[8px] text-slate-400/80 pt-1 pb-2.5">
-              {ongoingGridTicks.map((val, idx) => (
+              {chart1GridTicks.map((val, idx) => (
                 <div key={idx} className="w-full flex items-center gap-2">
                   <span className="w-3 text-right font-semibold">{val}</span>
                   <div className="flex-1 border-t border-slate-100" />
@@ -2366,13 +2432,13 @@ function ArrangeResourceForm({
 
             {/* Bars */}
             {data.assigned.map((name, i) => {
-              const val = getOngoingVal(name);
-              const heightPercent = Math.min(100, Math.max(0, (val / maxOngoingScale) * 100));
+              const val = getChart1Val(name);
+              const heightPercent = Math.min(100, Math.max(0, (val / maxChart1Scale) * 100));
               const barColor = i % 2 === 0 ? "bg-emerald-500/85 hover:bg-emerald-500" : "bg-purple-400/85 hover:bg-purple-400";
               return (
                 <div key={name} className="flex flex-col items-center z-10 overflow-visible relative">
                   <div className="relative w-8 flex flex-col justify-end" style={{ height: "100px" }}>
-                    <div 
+                    <div
                       className={`w-full rounded-t-sm transition-all duration-500 relative ${barColor}`}
                       style={{ height: `${heightPercent}%` }}
                     >
@@ -2383,12 +2449,11 @@ function ArrangeResourceForm({
                   </div>
                   {/* Rotating Name label */}
                   <div className="h-4 relative overflow-visible mt-2 flex justify-center w-full">
-                    <span 
-                      className={`text-[8px] font-bold text-slate-500 whitespace-nowrap absolute transition-transform duration-200 ${
-                        isRotated 
-                          ? "origin-top-left rotate-[40deg] translate-x-1.5 translate-y-1 block max-w-none text-left" 
-                          : "truncate max-w-[65px] text-center"
-                      }`}
+                    <span
+                      className={`text-[8px] font-bold text-slate-500 whitespace-nowrap absolute transition-transform duration-200 ${isRotated
+                        ? "origin-top-left rotate-[40deg] translate-x-1.5 translate-y-1 block max-w-none text-left"
+                        : "truncate max-w-[65px] text-center"
+                        }`}
                     >
                       {name}
                     </span>
@@ -2401,16 +2466,15 @@ function ArrangeResourceForm({
           {/* Summary */}
           <div className="flex items-center justify-between border border-slate-100 rounded-xl bg-slate-50/20 px-3 py-2 shadow-3xs">
             <span className="flex items-center gap-1.5 text-[10px] text-slate-500 font-semibold">
-              <User size={12} className="text-slate-400" /> Total ongoing tasks
+              <User size={12} className="text-slate-400" /> {isChart1All ? "Total tasks (All status)" : "Total ongoing tasks"}
             </span>
-            <span className="text-xs font-bold text-emerald-600">{finalTotalOngoing}</span>
+            <span className="text-xs font-bold text-emerald-600">{finalTotalChart1}</span>
           </div>
         </div>
 
         {/* Right Chart: Monthly Total Tasks */}
-        <div className={`border border-slate-150 rounded-2xl bg-white p-4 shadow-2xs transition-all duration-200 ${
-          isRotated ? "space-y-11 pb-5" : "space-y-4"
-        }`}>
+        <div className={`border border-slate-150 rounded-2xl bg-white p-4 shadow-2xs transition-all duration-200 ${isRotated ? "space-y-11 pb-5" : "space-y-4"
+          }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <span>Total Tasks in this Month by Assignee</span>
@@ -2441,7 +2505,7 @@ function ArrangeResourceForm({
               return (
                 <div key={name} className="flex flex-col items-center z-10 overflow-visible relative">
                   <div className="relative w-8 flex flex-col justify-end" style={{ height: "100px" }}>
-                    <div 
+                    <div
                       className={`w-full rounded-t-sm transition-all duration-500 relative ${barColor}`}
                       style={{ height: `${heightPercent}%` }}
                     >
@@ -2452,12 +2516,11 @@ function ArrangeResourceForm({
                   </div>
                   {/* Rotating Name label */}
                   <div className="h-4 relative overflow-visible mt-2 flex justify-center w-full">
-                    <span 
-                      className={`text-[8px] font-bold text-slate-500 whitespace-nowrap absolute transition-transform duration-200 ${
-                        isRotated 
-                          ? "origin-top-left rotate-[40deg] translate-x-1.5 translate-y-1 block max-w-none text-left" 
-                          : "truncate max-w-[65px] text-center"
-                      }`}
+                    <span
+                      className={`text-[8px] font-bold text-slate-500 whitespace-nowrap absolute transition-transform duration-200 ${isRotated
+                        ? "origin-top-left rotate-[40deg] translate-x-1.5 translate-y-1 block max-w-none text-left"
+                        : "truncate max-w-[65px] text-center"
+                        }`}
                     >
                       {name}
                     </span>
@@ -2636,7 +2699,7 @@ function CompletedForm({
 
   // Hold calculations strictly from troubleshoot holdsList
   const realHoldsList = Array.isArray(holdsList) ? holdsList.filter((h) => h && (h.reason || h.startTime)) : [];
-  
+
   const calculateHoldMinutes = (list: any[]) => {
     if (!list || list.length === 0) return 0;
     const intervals: { start: number; end: number }[] = [];
@@ -2774,583 +2837,583 @@ function CompletedForm({
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#eef4f2] text-slate-800">
       {/* Scrollable content area */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4.5 pt-3 pb-2 flex flex-col space-y-2.5">
-      {/* ═══════════════════════════════════════════════════════════ */}
-      {/* HEADER: TICKET CODE, TITLE, STATUS & METADATA               */}
-      {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="space-y-1 shrink-0 px-0.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xl sm:text-2xl font-black text-[#0f433f] tracking-tight">
-              {ticket?.ticket_id || ticket?.request_code || "INC-20458"}
-            </span>
-            <span className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
-              {ticket?.title || createData.title || "Lỗi VPN không kết nối được từ chi nhánh Hải Phòng"}
-            </span>
-          </div>
-
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#d4ede6] text-[#0f544a] border border-[#aee0d4]">
-            <span className="w-2 h-2 rounded-full bg-[#0d9488]" />
-            <span>{ttStatus || ticket?.tt_status || "Đang xử lý"}</span>
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500 font-normal">
-          <div>
-            <span>Người yêu cầu: </span>
-            <strong className="text-slate-900 font-semibold">{ticket?.creator_name || createData.requestCode || "Trần Minh Anh"}</strong>
-          </div>
-          <div>
-            <span>Nhóm xử lý: </span>
-            <strong className="text-slate-900 font-semibold">{ticket?.category || createData.category || "Network Ops"}</strong>
-          </div>
-          <div>
-            <span>Người xử lý: </span>
-            <strong className="text-slate-900 font-semibold">{ticket?.assigned || getCurrentUser()?.name || "Lê Quốc Bảo"}</strong>
-          </div>
-          <div>
-            <span>Ưu tiên: </span>
-            <strong className="text-slate-900 font-semibold">{ticket?.priority || createData.priority || "P2 – Cao"}</strong>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════ */}
-      {/* 3-COLUMN DASHBOARD (WIDER SUMMARY, STRETCHED TO BOTTOM)    */}
-      {/* ═══════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr_1fr] gap-2.5 sm:gap-3 items-stretch flex-1 min-h-0">
-        {/* ─────────────────────────────────────────────────────────── */}
-        {/* COLUMN 1: HOÀN THÀNH                                        */}
-        {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
-          <div className="space-y-3">
-            <h3 className="text-base font-bold text-slate-900 tracking-tight">Hoàn thành</h3>
-
-            {/* Row: Start & Resolve Times */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-600 block">
-                  Thời gian bắt đầu <span className="text-red-500">*</span>
-                </label>
-                <DateTimePicker
-                  value={effectiveStartTime}
-                  onChange={(v) => {
-                    onFinishedDataChange({ startTime: v });
-                    onCreateDataChange({ startTime: v });
-                    onReportingDataChange({ thoiGianTiepNhan: v });
-                  }}
-                  readOnly={!editing}
-                  placeholder="09/21/2026 09:00 AM"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-600 block">
-                  Thời gian hoàn thành
-                </label>
-                <DateTimePicker
-                  value={effectiveResolveTime}
-                  onChange={(v) => {
-                    onFinishedDataChange({ resolveTime: v });
-                    onCloseTimeChange(v);
-                    onReportingDataChange({ thoiGianKetThuc: v });
-                  }}
-                  readOnly={!editing}
-                  placeholder="DD/MM/YYYY HH:mm"
-                />
-              </div>
-            </div>
-
-            {/* Field: Tóm tắt xử lý */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 block">
-                Tóm tắt xử lý
-              </label>
-              <div className="relative">
-                <textarea
-                  value={finishedData.briefSummary}
-                  onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 1000) })}
-                  disabled={!editing}
-                  rows={13}
-                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700 min-h-[280px]"
-                />
-                <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
-                  {(finishedData.briefSummary || "").length}/1000
-                </div>
-              </div>
-            </div>
-
-            {/* Field: Kết luận / Nguyên nhân gốc */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 block">
-                Kết luận / Nguyên nhân gốc
-              </label>
-              <div className="relative">
-                <textarea
-                  value={finishedData.rootcause || reportingData.chanDoan || ""}
-                  onChange={(e) => {
-                    const val = e.target.value.slice(0, 500);
-                    onFinishedDataChange({ rootcause: val });
-                    onReportingDataChange({ chanDoan: val });
-                  }}
-                  disabled={!editing}
-                  rows={6}
-                  className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
-                />
-                <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
-                  {(finishedData.rootcause || reportingData.chanDoan || "").length}/500
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Status inside Column 1 */}
-          <div className="pt-1 flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${isTimeFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
-            <span className={isTimeFilled ? "text-slate-600 font-medium" : "text-slate-400"}>
-              {isTimeFilled ? "Các trường bắt buộc đã hoàn tất" : "Vui lòng nhập đủ các trường bắt buộc"}
-            </span>
-          </div>
-        </div>
-
-        {/* ─────────────────────────────────────────────────────────── */}
-        {/* COLUMN 2: REPORT                                            */}
-        {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">Report</h3>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                <span>{currentApprovalStatus}</span>
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* HEADER: TICKET CODE, TITLE, STATUS & METADATA               */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <div className="space-y-1 shrink-0 px-0.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl sm:text-2xl font-black text-[#0f433f] tracking-tight">
+                {ticket?.ticket_id || ticket?.request_code || "INC-20458"}
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
+                {ticket?.title || createData.title || "Lỗi VPN không kết nối được từ chi nhánh Hải Phòng"}
               </span>
             </div>
 
-            {/* Template Download & Upload Box */}
-            <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2.5 shadow-2xs">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-bold text-slate-900 truncate" title={customTemplateName}>
-                    {customTemplateName}
-                  </p>
-                  {editing && (
-                    <button
-                      type="button"
-                      onClick={() => templateInputRef.current?.click()}
-                      className="text-slate-400 hover:text-teal-700 transition cursor-pointer"
-                      title="Tải lên template thay thế (.doc, .docx)"
-                    >
-                      <Upload size={12} />
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Template báo cáo sự cố · 48 KB</p>
-              </div>
-
-              <div className="shrink-0">
-                <button
-                  type="button"
-                  onClick={handleDownloadTemplate}
-                  className="flex flex-col items-center justify-center px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer group"
-                  title="Tải mẫu template về máy"
-                >
-                  <Download size={13} className="text-slate-500 mb-0.5 group-hover:text-teal-700 transition" />
-                  <span className="text-[10.5px] font-bold">Tải template</span>
-                </button>
-              </div>
-
-              {/* Hidden template file input */}
-              <input
-                type="file"
-                ref={templateInputRef}
-                onChange={handleTemplateUpload}
-                className="hidden"
-                accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              />
-            </div>
-
-            {templateUploadSuccess && (
-              <div className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1.5">
-                <Check size={12} className="text-emerald-600" />
-                <span>Đã cập nhật template mới thành công!</span>
-              </div>
-            )}
-
-            {/* File Report Upload Box */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-600 block">
-                File report <span className="text-red-500">*</span>
-              </label>
-              
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                className="hidden"
-                accept=".doc,.docx,.pdf,.xls,.xlsx"
-              />
-
-              {finishedData.reportFileName || finishedData.reportUrl || ticket?.document_link ? (
-                <div className="p-2.5 bg-white border border-teal-200/80 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
-                      <FileText size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      {finishedData.reportUrl || ticket?.document_link ? (
-                        <a
-                          href={finishedData.reportUrl || ticket?.document_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:underline truncate block flex items-center gap-1"
-                          title="Bấm để mở file trên Google Drive"
-                        >
-                          <span className="truncate">{finishedData.reportFileName || (ticket?.document_link ? "Tài liệu báo cáo sự cố" : "BaoCao_INC-20458.docx")}</span>
-                          <ExternalLink size={12} className="shrink-0 text-teal-600" />
-                        </a>
-                      ) : (
-                        <p className="text-xs font-bold text-slate-800 truncate">
-                          {finishedData.reportFileName || "BaoCao_INC-20458.docx"}
-                        </p>
-                      )}
-                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                        <span>{finishedData.reportFileSize || "Đã tải lên"}</span>
-                        <span>•</span>
-                        <span className="text-emerald-600 font-medium flex items-center gap-0.5">
-                          <HardDrive size={11} /> Google Drive
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handleTriggerUpload}
-                      disabled={isUploadingReport}
-                      className="p-1 text-slate-400 hover:text-teal-600 transition cursor-pointer"
-                      title="Tải lại file khác"
-                    >
-                      <UploadCloud size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!editing && onEdit) onEdit();
-                        onFinishedDataChange({ reportFileName: "", reportUrl: "", reportFileSize: "", reportFileId: "" });
-                      }}
-                      className="p-1 text-slate-400 hover:text-red-500 transition cursor-pointer"
-                      title="Xóa file đính kèm"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  disabled={isUploadingReport}
-                  onClick={handleTriggerUpload}
-                  className="w-full py-2.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 group"
-                >
-                  {isUploadingReport ? (
-                    <>
-                      <Loader2 size={18} className="text-[#0d9488] animate-spin" />
-                      <span className="text-xs font-semibold text-teal-700">Đang đẩy file lên Google Drive...</span>
-                      <span className="text-[11px] text-slate-400">Vui lòng chờ trong giây lát</span>
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud size={18} className="text-[#0d9488] group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-800">Tải lên file báo cáo sự cố</span>
-                      <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx (Tự động đẩy lên Google Drive)</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {uploadReportError && (
-                <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded-lg border border-red-200 flex items-center gap-1.5">
-                  <AlertCircle size={13} className="shrink-0 text-red-500" />
-                  <span>{uploadReportError}</span>
-                </div>
-              )}
-              {uploadReportSuccess && (
-                <div className="text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
-                  <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                  <span>{uploadReportSuccess}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Row: Người duyệt & Trạng thái duyệt */}
-            <div className="grid grid-cols-12 gap-2">
-              <div className="col-span-7 space-y-1">
-                <label className="text-xs font-medium text-slate-600 block">
-                  Người duyệt <span className="text-red-500">*</span>
-                </label>
-                <StaffSearchSelect
-                  mode="single"
-                  size="sm"
-                  staffList={nhanSuList}
-                  value={finishedData.approver?.split(" – ")[0] || finishedData.approver || ""}
-                  onChange={(val) => {
-                    if (!editing && onEdit) onEdit();
-                    const ns = nhanSuList.find(s => s.ten_nhan_su === val);
-                    const formatted = ns ? `${ns.ten_nhan_su} – ${ns.chuc_vu || "Kỹ thuật"}` : (val as string);
-                    onFinishedDataChange({ approver: formatted });
-                  }}
-                  disabled={!editing}
-                  placeholder="Chọn người duyệt..."
-                />
-              </div>
-
-              <div className="col-span-5 space-y-1">
-                <label className="text-xs font-medium text-slate-600 block">Trạng thái duyệt</label>
-                <div className="h-8.5 px-2.5 rounded-xl bg-slate-100/90 border border-slate-200 flex items-center gap-1.5 text-xs font-medium text-slate-600 truncate">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                  <span className="truncate">{currentApprovalStatus}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Field: Lý do từ chối */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 block">Lý do từ chối</label>
-              <textarea
-                value={finishedData.rejectReason || ""}
-                onChange={(e) => onFinishedDataChange({ rejectReason: e.target.value })}
-                disabled={currentApprovalStatus !== "Từ chối" || !editing}
-                rows={2}
-                placeholder="Chỉ hiển thị khi người duyệt từ chối report."
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-[#f9fafb] text-slate-600 placeholder:text-slate-400 resize-none disabled:text-slate-400 focus:outline-none"
-              />
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#d4ede6] text-[#0f544a] border border-[#aee0d4]">
+              <span className="w-2 h-2 rounded-full bg-[#0d9488]" />
+              <span>{ttStatus || ticket?.tt_status || "Đang xử lý"}</span>
+            </span>
           </div>
 
-          {/* Checklist bàn giao */}
-          <div className="space-y-1.5 pt-0.5">
-            <h4 className="text-xs font-bold text-slate-700">Checklist bàn giao</h4>
-            <div className="space-y-1 text-xs font-medium">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
-                <span className={isSummaryFilled && isRootcauseFilled ? "text-slate-700" : "text-slate-400"}>
-                  Nội dung xử lý đã cập nhật
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${isReportFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
-                <span className={isReportFilled ? "text-slate-700" : "text-slate-400"}>
-                  Đã đính kèm file báo cáo
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${currentApprovalStatus === "Đã phê duyệt" ? "bg-[#0d9488]" : "bg-slate-300"}`} />
-                <span className={currentApprovalStatus === "Đã phê duyệt" ? "text-slate-700" : "text-slate-400"}>
-                  {currentApprovalStatus === "Đã phê duyệt" ? "Đã duyệt báo cáo" : "Chờ gửi duyệt"}
-                </span>
-              </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500 font-normal">
+            <div>
+              <span>Người yêu cầu: </span>
+              <strong className="text-slate-900 font-semibold">{ticket?.creator_name || createData.requestCode || "Trần Minh Anh"}</strong>
+            </div>
+            <div>
+              <span>Nhóm xử lý: </span>
+              <strong className="text-slate-900 font-semibold">{ticket?.category || createData.category || "Network Ops"}</strong>
+            </div>
+            <div>
+              <span>Người xử lý: </span>
+              <strong className="text-slate-900 font-semibold">{ticket?.assigned || getCurrentUser()?.name || "Lê Quốc Bảo"}</strong>
+            </div>
+            <div>
+              <span>Ưu tiên: </span>
+              <strong className="text-slate-900 font-semibold">{ticket?.priority || createData.priority || "P2 – Cao"}</strong>
             </div>
           </div>
         </div>
 
-        {/* ─────────────────────────────────────────────────────────── */}
-        {/* COLUMN 3: TỔNG KẾT                                          */}
-        {/* ─────────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">Tổng kết</h3>
-              <span className="text-xs font-medium text-slate-500">
-                {formatDateOnly(effectiveResolveTime || effectiveStartTime)}
-              </span>
-            </div>
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* 3-COLUMN DASHBOARD (WIDER SUMMARY, STRETCHED TO BOTTOM)    */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr_1fr] gap-2.5 sm:gap-3 items-stretch flex-1 min-h-0">
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* COLUMN 1: HOÀN THÀNH                                        */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+            <div className="space-y-3">
+              <h3 className="text-base font-bold text-slate-900 tracking-tight">Hoàn thành</h3>
 
-            {/* Segmented Timeline Progress Bar */}
-            <div className="space-y-1">
-              <div className="w-full h-2.5 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
-                <div style={{ width: `${pResponse}%` }} className="bg-slate-400 h-full" title={`Chờ tiếp nhận: ${pResponse}%`} />
-                <div style={{ width: `${pWork}%` }} className="bg-[#0d9488] h-full" title={`Đang xử lý: ${pWork}%`} />
-                {pHold > 0 && (
-                  <div
-                    style={{
-                      width: `${pHold}%`,
-                      backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 4px, #d97706 4px, #d97706 8px)"
+              {/* Row: Start & Resolve Times */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600 block">
+                    Thời gian bắt đầu <span className="text-red-500">*</span>
+                  </label>
+                  <DateTimePicker
+                    value={effectiveStartTime}
+                    onChange={(v) => {
+                      onFinishedDataChange({ startTime: v });
+                      onCreateDataChange({ startTime: v });
+                      onReportingDataChange({ thoiGianTiepNhan: v });
                     }}
-                    className="h-full"
-                    title={`Hold: ${pHold}%`}
+                    readOnly={!editing}
+                    placeholder="09/21/2026 09:00 AM"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600 block">
+                    Thời gian hoàn thành
+                  </label>
+                  <DateTimePicker
+                    value={effectiveResolveTime}
+                    onChange={(v) => {
+                      onFinishedDataChange({ resolveTime: v });
+                      onCloseTimeChange(v);
+                      onReportingDataChange({ thoiGianKetThuc: v });
+                    }}
+                    readOnly={!editing}
+                    placeholder="DD/MM/YYYY HH:mm"
+                  />
+                </div>
+              </div>
+
+              {/* Field: Tóm tắt xử lý */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600 block">
+                  Tóm tắt xử lý
+                </label>
+                <div className="relative">
+                  <textarea
+                    value={finishedData.briefSummary}
+                    onChange={(e) => onFinishedDataChange({ briefSummary: e.target.value.slice(0, 1000) })}
+                    disabled={!editing}
+                    rows={13}
+                    className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700 min-h-[280px]"
+                  />
+                  <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
+                    {(finishedData.briefSummary || "").length}/1000
+                  </div>
+                </div>
+              </div>
+
+              {/* Field: Kết luận / Nguyên nhân gốc */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600 block">
+                  Kết luận / Nguyên nhân gốc
+                </label>
+                <div className="relative">
+                  <textarea
+                    value={finishedData.rootcause || reportingData.chanDoan || ""}
+                    onChange={(e) => {
+                      const val = e.target.value.slice(0, 500);
+                      onFinishedDataChange({ rootcause: val });
+                      onReportingDataChange({ chanDoan: val });
+                    }}
+                    disabled={!editing}
+                    rows={6}
+                    className="w-full text-xs leading-relaxed p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-[#0d9488] focus:ring-1 focus:ring-[#0d9488] resize-none disabled:bg-slate-50/70 disabled:text-slate-700"
+                  />
+                  <div className="text-[11px] text-slate-400 text-right pr-1 pt-0.5">
+                    {(finishedData.rootcause || reportingData.chanDoan || "").length}/500
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Status inside Column 1 */}
+            <div className="pt-1 flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${isTimeFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
+              <span className={isTimeFilled ? "text-slate-600 font-medium" : "text-slate-400"}>
+                {isTimeFilled ? "Các trường bắt buộc đã hoàn tất" : "Vui lòng nhập đủ các trường bắt buộc"}
+              </span>
+            </div>
+          </div>
+
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* COLUMN 2: REPORT                                            */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">Report</h3>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                  <span>{currentApprovalStatus}</span>
+                </span>
+              </div>
+
+              {/* Template Download & Upload Box */}
+              <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2.5 shadow-2xs">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-slate-900 truncate" title={customTemplateName}>
+                      {customTemplateName}
+                    </p>
+                    {editing && (
+                      <button
+                        type="button"
+                        onClick={() => templateInputRef.current?.click()}
+                        className="text-slate-400 hover:text-teal-700 transition cursor-pointer"
+                        title="Tải lên template thay thế (.doc, .docx)"
+                      >
+                        <Upload size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Template báo cáo sự cố · 48 KB</p>
+                </div>
+
+                <div className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="flex flex-col items-center justify-center px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition shadow-2xs cursor-pointer group"
+                    title="Tải mẫu template về máy"
+                  >
+                    <Download size={13} className="text-slate-500 mb-0.5 group-hover:text-teal-700 transition" />
+                    <span className="text-[10.5px] font-bold">Tải template</span>
+                  </button>
+                </div>
+
+                {/* Hidden template file input */}
+                <input
+                  type="file"
+                  ref={templateInputRef}
+                  onChange={handleTemplateUpload}
+                  className="hidden"
+                  accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                />
+              </div>
+
+              {templateUploadSuccess && (
+                <div className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1.5">
+                  <Check size={12} className="text-emerald-600" />
+                  <span>Đã cập nhật template mới thành công!</span>
+                </div>
+              )}
+
+              {/* File Report Upload Box */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600 block">
+                  File report <span className="text-red-500">*</span>
+                </label>
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept=".doc,.docx,.pdf,.xls,.xlsx"
+                />
+
+                {finishedData.reportFileName || finishedData.reportUrl || ticket?.document_link ? (
+                  <div className="p-2.5 bg-white border border-teal-200/80 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        {finishedData.reportUrl || ticket?.document_link ? (
+                          <a
+                            href={finishedData.reportUrl || ticket?.document_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:underline truncate block flex items-center gap-1"
+                            title="Bấm để mở file trên Google Drive"
+                          >
+                            <span className="truncate">{finishedData.reportFileName || (ticket?.document_link ? "Tài liệu báo cáo sự cố" : "BaoCao_INC-20458.docx")}</span>
+                            <ExternalLink size={12} className="shrink-0 text-teal-600" />
+                          </a>
+                        ) : (
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {finishedData.reportFileName || "BaoCao_INC-20458.docx"}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                          <span>{finishedData.reportFileSize || "Đã tải lên"}</span>
+                          <span>•</span>
+                          <span className="text-emerald-600 font-medium flex items-center gap-0.5">
+                            <HardDrive size={11} /> Google Drive
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={handleTriggerUpload}
+                        disabled={isUploadingReport}
+                        className="p-1 text-slate-400 hover:text-teal-600 transition cursor-pointer"
+                        title="Tải lại file khác"
+                      >
+                        <UploadCloud size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editing && onEdit) onEdit();
+                          onFinishedDataChange({ reportFileName: "", reportUrl: "", reportFileSize: "", reportFileId: "" });
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 transition cursor-pointer"
+                        title="Xóa file đính kèm"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isUploadingReport}
+                    onClick={handleTriggerUpload}
+                    className="w-full py-2.5 px-3 border border-dashed border-slate-300 hover:border-[#0d9488] bg-[#f8fafc] hover:bg-teal-50/30 rounded-xl text-center transition cursor-pointer flex flex-col items-center justify-center gap-1 group"
+                  >
+                    {isUploadingReport ? (
+                      <>
+                        <Loader2 size={18} className="text-[#0d9488] animate-spin" />
+                        <span className="text-xs font-semibold text-teal-700">Đang đẩy file lên Google Drive...</span>
+                        <span className="text-[11px] text-slate-400">Vui lòng chờ trong giây lát</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={18} className="text-[#0d9488] group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-800">Tải lên file báo cáo sự cố</span>
+                        <span className="text-[11px] text-slate-400">Hỗ trợ định dạng .doc, .docx, .pdf, .xlsx (Tự động đẩy lên Google Drive)</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {uploadReportError && (
+                  <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded-lg border border-red-200 flex items-center gap-1.5">
+                    <AlertCircle size={13} className="shrink-0 text-red-500" />
+                    <span>{uploadReportError}</span>
+                  </div>
+                )}
+                {uploadReportSuccess && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                    <span>{uploadReportSuccess}</span>
+                  </div>
                 )}
               </div>
 
-              {/* Legend */}
-              <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium pt-0.5">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-xs bg-slate-400" />
-                  <span>Chờ tiếp nhận</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-xs bg-[#0d9488]" />
-                  <span>Đang xử lý</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span
-                    style={{ backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #d97706 2px, #d97706 4px)" }}
-                    className="w-2 h-2 rounded-xs"
+              {/* Row: Người duyệt & Trạng thái duyệt */}
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-7 space-y-1">
+                  <label className="text-xs font-medium text-slate-600 block">
+                    Người duyệt <span className="text-red-500">*</span>
+                  </label>
+                  <StaffSearchSelect
+                    mode="single"
+                    size="sm"
+                    staffList={nhanSuList}
+                    value={finishedData.approver?.split(" – ")[0] || finishedData.approver || ""}
+                    onChange={(val) => {
+                      if (!editing && onEdit) onEdit();
+                      const ns = nhanSuList.find(s => s.ten_nhan_su === val);
+                      const formatted = ns ? `${ns.ten_nhan_su} – ${ns.chuc_vu || "Kỹ thuật"}` : (val as string);
+                      onFinishedDataChange({ approver: formatted });
+                    }}
+                    disabled={!editing}
+                    placeholder="Chọn người duyệt..."
                   />
-                  <span>Hold</span>
-                </span>
+                </div>
+
+                <div className="col-span-5 space-y-1">
+                  <label className="text-xs font-medium text-slate-600 block">Trạng thái duyệt</label>
+                  <div className="h-8.5 px-2.5 rounded-xl bg-slate-100/90 border border-slate-200 flex items-center gap-1.5 text-xs font-medium text-slate-600 truncate">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                    <span className="truncate">{currentApprovalStatus}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Field: Lý do từ chối */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-600 block">Lý do từ chối</label>
+                <textarea
+                  value={finishedData.rejectReason || ""}
+                  onChange={(e) => onFinishedDataChange({ rejectReason: e.target.value })}
+                  disabled={currentApprovalStatus !== "Từ chối" || !editing}
+                  rows={2}
+                  placeholder="Chỉ hiển thị khi người duyệt từ chối report."
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-[#f9fafb] text-slate-600 placeholder:text-slate-400 resize-none disabled:text-slate-400 focus:outline-none"
+                />
               </div>
             </div>
 
-            {/* 4-Milestone Grid (Shows Date & Time) */}
-            <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-2 grid grid-cols-4 gap-1 text-center">
-              {/* Milestone 1: Tạo Ticket */}
-              <div className="border-r border-slate-200 pr-1">
-                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TẠO TICKET</span>
-                <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {formatTimeOnly(ticketCreatedAt, "08:30")}
-                </span>
-              </div>
-
-              {/* Milestone 2: Tiếp nhận */}
-              <div className="border-r border-slate-200 px-1">
-                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TIẾP NHẬN</span>
-                <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {formatTimeOnly(ticketReceivedAt, "08:42")}
-                </span>
-                <span className="text-[9.5px] text-teal-700 font-semibold block">
-                  +{getMinutesBetween(ticketCreatedAt, ticketReceivedAt) || 12} phút
-                </span>
-              </div>
-
-              {/* Milestone 3: Bắt đầu xử lý */}
-              <div className="border-r border-slate-200 px-1">
-                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate" title="BẮT ĐẦU XỬ LÝ">
-                  BẮT ĐẦU XỬ LÝ
-                </span>
-                <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {formatTimeOnly(effectiveStartTime, "09:00")}
-                </span>
-                <span className="text-[9.5px] text-teal-700 font-semibold block">
-                  +{getMinutesBetween(ticketReceivedAt, effectiveStartTime) || 18} phút
-                </span>
-              </div>
-
-              {/* Milestone 4: Hoàn thành */}
-              <div className="pl-1">
-                <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
-                <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {effectiveResolveTime ? formatTimeOnly(effectiveResolveTime, "—") : "—"}
-                </span>
-                <span className="text-[9.5px] text-slate-500 font-medium block truncate" title={effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}>
-                  {effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}
-                </span>
+            {/* Checklist bàn giao */}
+            <div className="space-y-1.5 pt-0.5">
+              <h4 className="text-xs font-bold text-slate-700">Checklist bàn giao</h4>
+              <div className="space-y-1 text-xs font-medium">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${isSummaryFilled && isRootcauseFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
+                  <span className={isSummaryFilled && isRootcauseFilled ? "text-slate-700" : "text-slate-400"}>
+                    Nội dung xử lý đã cập nhật
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${isReportFilled ? "bg-[#0d9488]" : "bg-slate-300"}`} />
+                  <span className={isReportFilled ? "text-slate-700" : "text-slate-400"}>
+                    Đã đính kèm file báo cáo
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${currentApprovalStatus === "Đã phê duyệt" ? "bg-[#0d9488]" : "bg-slate-300"}`} />
+                  <span className={currentApprovalStatus === "Đã phê duyệt" ? "text-slate-700" : "text-slate-400"}>
+                    {currentApprovalStatus === "Đã phê duyệt" ? "Đã duyệt báo cáo" : "Chờ gửi duyệt"}
+                  </span>
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Metrics List */}
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-                <div>
-                  <p className="font-semibold text-slate-800">Thời gian phản hồi</p>
-                  <p className="text-[10.5px] text-slate-400">Tạo ticket → bắt đầu xử lý</p>
-                </div>
-                <span className="font-semibold text-slate-800">{formatMinsToReadableVietnamese(responseTimeMins)}</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                <div>
-                  <p className="font-semibold text-slate-800">Tổng thời gian xử lý</p>
-                  <p className="text-[10.5px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
-                </div>
-                <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalProcessingMins) : "—"}</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                <div>
-                  <p className="font-semibold text-slate-800">Tổng thời gian hold</p>
-                  <p className="text-[10.5px] text-slate-400">Số lần hold: {realHoldsList.length}</p>
-                </div>
-                <span className="font-semibold text-slate-800">{formatMinsToShortReadable(calculatedHoldMins)}</span>
-              </div>
-
-              {/* Highlight Box: Thời gian xử lý thực */}
-              <div className="p-2.5 bg-[#dff3eb] border border-[#aee0d4] rounded-xl flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-[#0d544a]">Thời gian xử lý thực</p>
-                  <p className="text-[10.5px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
-                </div>
-                <span className="text-lg font-black text-[#0d544a]">
-                  {effectiveResolveTime ? formatMinsToShortReadable(netMins) : "—"}
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* COLUMN 3: TỔNG KẾT                                          */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between h-full space-y-3">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">Tổng kết</h3>
+                <span className="text-xs font-medium text-slate-500">
+                  {formatDateOnly(effectiveResolveTime || effectiveStartTime)}
                 </span>
               </div>
 
-              {/* Tổng vòng đời ticket */}
-              <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                <div>
-                  <p className="font-semibold text-slate-800">Tổng vòng đời ticket</p>
-                  <p className="text-[10.5px] text-slate-400">Tạo ticket → hoàn thành</p>
+              {/* Segmented Timeline Progress Bar */}
+              <div className="space-y-1">
+                <div className="w-full h-2.5 rounded-md overflow-hidden flex bg-slate-100 border border-slate-200/80">
+                  <div style={{ width: `${pResponse}%` }} className="bg-slate-400 h-full" title={`Chờ tiếp nhận: ${pResponse}%`} />
+                  <div style={{ width: `${pWork}%` }} className="bg-[#0d9488] h-full" title={`Đang xử lý: ${pWork}%`} />
+                  {pHold > 0 && (
+                    <div
+                      style={{
+                        width: `${pHold}%`,
+                        backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 4px, #d97706 4px, #d97706 8px)"
+                      }}
+                      className="h-full"
+                      title={`Hold: ${pHold}%`}
+                    />
+                  )}
                 </div>
-                <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalLifecycleMins) : "—"}</span>
+
+                {/* Legend */}
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium pt-0.5">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-xs bg-slate-400" />
+                    <span>Chờ tiếp nhận</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-xs bg-[#0d9488]" />
+                    <span>Đang xử lý</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span
+                      style={{ backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #d97706 2px, #d97706 4px)" }}
+                      className="w-2 h-2 rounded-xs"
+                    />
+                    <span>Hold</span>
+                  </span>
+                </div>
               </div>
 
-              {/* SLA Section */}
-              <div className="space-y-0.5 py-1 border-b border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-800">{slaLabel}</span>
-                  <span className={`font-bold ${effectiveResolveTime ? (isInSla ? "text-teal-700" : "text-rose-600") : "text-slate-500"}`}>
-                    {effectiveResolveTime
-                      ? (isInSla ? `Đạt SLA · còn ${formatMinsToShortReadable(slaRemainingMins)}` : `Vi phạm SLA · quá ${formatMinsToShortReadable(slaOverdueMins)}`)
-                      : "Chưa hoàn thành"}
+              {/* 4-Milestone Grid (Shows Date & Time) */}
+              <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-2 grid grid-cols-4 gap-1 text-center">
+                {/* Milestone 1: Tạo Ticket */}
+                <div className="border-r border-slate-200 pr-1">
+                  <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TẠO TICKET</span>
+                  <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                    {formatTimeOnly(ticketCreatedAt, "08:30")}
                   </span>
                 </div>
 
-                {/* SLA Progress Bar */}
-                <div className="space-y-0.5">
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      style={{ width: `${slaPercentage}%` }}
-                      className={`h-full rounded-full ${isInSla ? "bg-[#0d9488]" : "bg-rose-500"}`}
-                    />
+                {/* Milestone 2: Tiếp nhận */}
+                <div className="border-r border-slate-200 px-1">
+                  <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight">TIẾP NHẬN</span>
+                  <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                    {formatTimeOnly(ticketReceivedAt, "08:42")}
+                  </span>
+                  <span className="text-[9.5px] text-teal-700 font-semibold block">
+                    +{getMinutesBetween(ticketCreatedAt, ticketReceivedAt) || 12} phút
+                  </span>
+                </div>
+
+                {/* Milestone 3: Bắt đầu xử lý */}
+                <div className="border-r border-slate-200 px-1">
+                  <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate" title="BẮT ĐẦU XỬ LÝ">
+                    BẮT ĐẦU XỬ LÝ
+                  </span>
+                  <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                    {formatTimeOnly(effectiveStartTime, "09:00")}
+                  </span>
+                  <span className="text-[9.5px] text-teal-700 font-semibold block">
+                    +{getMinutesBetween(ticketReceivedAt, effectiveStartTime) || 18} phút
+                  </span>
+                </div>
+
+                {/* Milestone 4: Hoàn thành */}
+                <div className="pl-1">
+                  <span className="text-[9.5px] font-bold text-slate-400 block uppercase tracking-tight truncate">HOÀN THÀNH</span>
+                  <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                    {effectiveResolveTime ? formatTimeOnly(effectiveResolveTime, "—") : "—"}
+                  </span>
+                  <span className="text-[9.5px] text-slate-500 font-medium block truncate" title={effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}>
+                    {effectiveResolveTime ? `+${formatMinsToShortReadable(totalProcessingMins)}` : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Metrics List */}
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                  <div>
+                    <p className="font-semibold text-slate-800">Thời gian phản hồi</p>
+                    <p className="text-[10.5px] text-slate-400">Tạo ticket → bắt đầu xử lý</p>
                   </div>
-                  <div className="flex justify-between text-[10px] text-slate-500 font-medium">
-                    <span>{formatMinsToShortReadable(netMins)} đã dùng</span>
-                    <span>{slaPercentage}%</span>
+                  <span className="font-semibold text-slate-800">{formatMinsToReadableVietnamese(responseTimeMins)}</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                  <div>
+                    <p className="font-semibold text-slate-800">Tổng thời gian xử lý</p>
+                    <p className="text-[10.5px] text-slate-400">Bắt đầu xử lý → hoàn thành</p>
+                  </div>
+                  <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalProcessingMins) : "—"}</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                  <div>
+                    <p className="font-semibold text-slate-800">Tổng thời gian hold</p>
+                    <p className="text-[10.5px] text-slate-400">Số lần hold: {realHoldsList.length}</p>
+                  </div>
+                  <span className="font-semibold text-slate-800">{formatMinsToShortReadable(calculatedHoldMins)}</span>
+                </div>
+
+                {/* Highlight Box: Thời gian xử lý thực */}
+                <div className="p-2.5 bg-[#dff3eb] border border-[#aee0d4] rounded-xl flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-[#0d544a]">Thời gian xử lý thực</p>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5">Tổng xử lý trừ hold</p>
+                  </div>
+                  <span className="text-lg font-black text-[#0d544a]">
+                    {effectiveResolveTime ? formatMinsToShortReadable(netMins) : "—"}
+                  </span>
+                </div>
+
+                {/* Tổng vòng đời ticket */}
+                <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                  <div>
+                    <p className="font-semibold text-slate-800">Tổng vòng đời ticket</p>
+                    <p className="text-[10.5px] text-slate-400">Tạo ticket → hoàn thành</p>
+                  </div>
+                  <span className="font-semibold text-slate-800">{effectiveResolveTime ? formatMinsToShortReadable(totalLifecycleMins) : "—"}</span>
+                </div>
+
+                {/* SLA Section */}
+                <div className="space-y-0.5 py-1 border-b border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-800">{slaLabel}</span>
+                    <span className={`font-bold ${effectiveResolveTime ? (isInSla ? "text-teal-700" : "text-rose-600") : "text-slate-500"}`}>
+                      {effectiveResolveTime
+                        ? (isInSla ? `Đạt SLA · còn ${formatMinsToShortReadable(slaRemainingMins)}` : `Vi phạm SLA · quá ${formatMinsToShortReadable(slaOverdueMins)}`)
+                        : "Chưa hoàn thành"}
+                    </span>
+                  </div>
+
+                  {/* SLA Progress Bar */}
+                  <div className="space-y-0.5">
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        style={{ width: `${slaPercentage}%` }}
+                        className={`h-full rounded-full ${isInSla ? "bg-[#0d9488]" : "bg-rose-500"}`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                      <span>{formatMinsToShortReadable(netMins)} đã dùng</span>
+                      <span>{slaPercentage}%</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Real Hold Breakdown Table from Troubleshoot */}
-          <div className="space-y-1 pt-0.5">
-            <div className="grid grid-cols-12 text-[10px] font-semibold text-slate-400 pb-0.5">
-              <span className="col-span-4">Các lần hold</span>
-              <span className="col-span-5">Lý do</span>
-              <span className="col-span-3 text-right">Thời lượng</span>
-            </div>
+            {/* Real Hold Breakdown Table from Troubleshoot */}
+            <div className="space-y-1 pt-0.5">
+              <div className="grid grid-cols-12 text-[10px] font-semibold text-slate-400 pb-0.5">
+                <span className="col-span-4">Các lần hold</span>
+                <span className="col-span-5">Lý do</span>
+                <span className="col-span-3 text-right">Thời lượng</span>
+              </div>
 
-            <div className="space-y-0.5 max-h-20 overflow-y-auto">
-              {realHoldsList.length > 0 ? (
-                realHoldsList.map((h: any, idx: number) => {
-                  const durationStr = h.duration || formatMinsToReadableVietnamese(getMinutesBetween(h.startTime, h.stopTime));
-                  const rangeStr = h.timeRange || (h.startTime ? `${formatTimeOnly(h.startTime)} - ${formatTimeOnly(h.stopTime)}` : "—");
-                  return (
-                    <div key={idx} className="grid grid-cols-12 text-[10.5px] items-center text-slate-700 py-0.5">
-                      <span className="col-span-4 text-slate-500 truncate" title={rangeStr}>{rangeStr}</span>
-                      <span className="col-span-5 truncate pr-1" title={h.reason}>{h.reason || "Tạm dừng xử lý"}</span>
-                      <span className="col-span-3 text-right font-medium text-slate-800">{durationStr}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-[10.5px] text-slate-400 italic py-0.5 text-center">
-                  Không có lần hold nào trong Troubleshoot (0 phút)
-                </div>
-              )}
+              <div className="space-y-0.5 max-h-20 overflow-y-auto">
+                {realHoldsList.length > 0 ? (
+                  realHoldsList.map((h: any, idx: number) => {
+                    const durationStr = h.duration || formatMinsToReadableVietnamese(getMinutesBetween(h.startTime, h.stopTime));
+                    const rangeStr = h.timeRange || (h.startTime ? `${formatTimeOnly(h.startTime)} - ${formatTimeOnly(h.stopTime)}` : "—");
+                    return (
+                      <div key={idx} className="grid grid-cols-12 text-[10.5px] items-center text-slate-700 py-0.5">
+                        <span className="col-span-4 text-slate-500 truncate" title={rangeStr}>{rangeStr}</span>
+                        <span className="col-span-5 truncate pr-1" title={h.reason}>{h.reason || "Tạm dừng xử lý"}</span>
+                        <span className="col-span-3 text-right font-medium text-slate-800">{durationStr}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-[10.5px] text-slate-400 italic py-0.5 text-center">
+                    Không có lần hold nào trong Troubleshoot (0 phút)
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
@@ -3770,7 +3833,7 @@ function TroubleshootForm({
       return;
     }
     if (trimmedName.toLowerCase() !== activeRunbookName.toLowerCase() &&
-        runbooksList.some((r) => r.name.toLowerCase() === trimmedName.toLowerCase())) {
+      runbooksList.some((r) => r.name.toLowerCase() === trimmedName.toLowerCase())) {
       alert("Tên Runbook này đã tồn tại");
       return;
     }
@@ -4119,11 +4182,10 @@ function TroubleshootForm({
                     type="button"
                     disabled={isSending || !quickInput.trim()}
                     onClick={handleQuickSend}
-                    className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shrink-0 transition shadow-sm cursor-pointer ${
-                      isSending || !quickInput.trim()
-                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-md"
-                    }`}
+                    className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shrink-0 transition shadow-sm cursor-pointer ${isSending || !quickInput.trim()
+                      ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-md"
+                      }`}
                   >
                     {isSending ? (
                       <>
@@ -4858,12 +4920,12 @@ function ReportingForm({
       {/* THÔNG TIN CÁC BÊN */}
       <div className="bg-[#fafeff] p-5 rounded-xl border border-[#b2e5f5] space-y-4">
         <h4 className="text-sm font-bold text-[#0099cc] border-b border-[#e1f5fe] pb-2">Thông tin các bên tham gia</h4>
-        
+
         <div className="grid grid-cols-2 gap-8">
           {/* BÊN A */}
           <div className="space-y-4">
             <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Bên A (Khách hàng)</h5>
-            
+
             <div className="space-y-1.5">
               <label className={labelCls}>Khách hàng (Bên A)</label>
               <TealField
@@ -4873,7 +4935,7 @@ function ReportingForm({
                 placeholder="Tên khách hàng..."
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className={labelCls}>Đại diện</label>
@@ -4885,7 +4947,7 @@ function ReportingForm({
                   placeholder="— Chọn người đại diện —"
                 />
               </div>
-              
+
               <div className="space-y-1.5">
                 <label className={labelCls}>Chức vụ</label>
                 <TealField
@@ -4901,7 +4963,7 @@ function ReportingForm({
           {/* BÊN B */}
           <div className="space-y-4">
             <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Bên B (Đơn vị hỗ trợ)</h5>
-            
+
             <div className="space-y-1.5">
               <label className={labelCls}>Đơn vị (Bên B)</label>
               <TealField
@@ -4911,7 +4973,7 @@ function ReportingForm({
                 placeholder="Tên đơn vị..."
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className={labelCls}>Người tiếp nhận</label>
@@ -4923,7 +4985,7 @@ function ReportingForm({
                   placeholder="— Chọn nhân sự —"
                 />
               </div>
-              
+
               <div className="space-y-1.5">
                 <label className={labelCls}>Chức vụ tiếp nhận</label>
                 <TealField
@@ -4946,7 +5008,7 @@ function ReportingForm({
                   placeholder="— Chọn nhân sự —"
                 />
               </div>
-              
+
               <div className="space-y-1.5">
                 <label className={labelCls}>Chức vụ thực hiện</label>
                 <TealField
@@ -4964,7 +5026,7 @@ function ReportingForm({
       {/* CHI TIẾT SỰ CỐ VÀ YÊU CẦU */}
       <div className="bg-[#fafeff] p-5 rounded-xl border border-[#b2e5f5] space-y-4">
         <h4 className="text-sm font-bold text-[#0099cc] border-b border-[#e1f5fe] pb-2">Thông tin yêu cầu & sự cố</h4>
-        
+
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className={labelCls}>Loại yêu cầu</label>
@@ -4976,7 +5038,7 @@ function ReportingForm({
               placeholder="— Chọn loại yêu cầu —"
             />
           </div>
-          
+
           <div className="space-y-1.5">
             <label className={labelCls}>Hệ thống</label>
             <TealField
@@ -5009,7 +5071,7 @@ function ReportingForm({
               type="datetime-local"
             />
           </div>
-          
+
           <div className="space-y-1.5">
             <label className={labelCls}>Thời gian kết thúc</label>
             <TealField
@@ -5057,7 +5119,7 @@ function ReportingForm({
       {/* KẾT QUẢ VÀ GIẢI PHÁP */}
       <div className="bg-[#fafeff] p-5 rounded-xl border border-[#b2e5f5] space-y-4">
         <h4 className="text-sm font-bold text-[#0099cc] border-b border-[#e1f5fe] pb-2">Kết quả kiểm tra & Giải pháp xử lý</h4>
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className={labelCls}>Kết quả kiểm tra</label>
@@ -5069,7 +5131,7 @@ function ReportingForm({
               placeholder="Kết quả ghi nhận khi kiểm tra hệ thống..."
             />
           </div>
-          
+
           <div className="space-y-1.5">
             <label className={labelCls}>Chẩn đoán nguyên nhân</label>
             <TealField
@@ -5093,7 +5155,7 @@ function ReportingForm({
               placeholder="Các bước giải quyết hoặc phương án xử lý..."
             />
           </div>
-          
+
           <div className="space-y-1.5">
             <label className={labelCls}>Kết quả thực hiện</label>
             <TealField
@@ -5130,8 +5192,8 @@ function PlaceholderForm({ title }: { title: string }) {
 /* ═══════════════════════════════════════════════════════════ */
 /* MAIN MODAL — all state lifted here                          */
 /* ═══════════════════════════════════════════════════════════ */
-export default function TicketFormModal({ 
-  mode, ticket, isOpen, onClose, onSuccess, isPage = false 
+export default function TicketFormModal({
+  mode, ticket, isOpen, onClose, onSuccess, isPage = false
 }: TicketFormModalProps & { isPage?: boolean }) {
   const router = useRouter();
   const handleClose = () => {
@@ -5143,16 +5205,16 @@ export default function TicketFormModal({
   };
 
   /* Navigation */
-  const [currentStep,    setCurrentStep]    = useState<StepKey>("create");
+  const [currentStep, setCurrentStep] = useState<StepKey>("create");
   const [completedSteps, setCompletedSteps] = useState<Set<StepKey>>(new Set());
-  const [savedSteps,     setSavedSteps]     = useState<Set<StepKey>>(new Set());
-  const [editing,        setEditing]        = useState(mode === "create");
-  const [submitting,     setSubmitting]     = useState(false);
-  const [ttStatus,       setTtStatus]       = useState("In progress");
-  const [savedTicketId,  setSavedTicketId]  = useState<string>("");  // DB id after create
+  const [savedSteps, setSavedSteps] = useState<Set<StepKey>>(new Set());
+  const [editing, setEditing] = useState(mode === "create");
+  const [submitting, setSubmitting] = useState(false);
+  const [ttStatus, setTtStatus] = useState("In progress");
+  const [savedTicketId, setSavedTicketId] = useState<string>("");  // DB id after create
 
   /* Shared customer list */
-  const [customers,        setCustomers]        = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
 
   /* ── Form 1: Create Ticket data ── */
@@ -5181,7 +5243,7 @@ export default function TicketFormModal({
   const [updatesLog, setUpdatesLog] = useState<any[]>([]);
   const [onsite, setOnsite] = useState("");
   const [isFullScreenUpdate, setIsFullScreenUpdate] = useState(false);
-/* Runbook states */
+  /* Runbook states */
   const [activeSubTab, setActiveSubTab] = useState<"troubleshoot" | "hold" | "runbook">("troubleshoot");
   const [runbooksList, setRunbooksList] = useState<any[]>([]);
   const [activeRunbookName, setActiveRunbookName] = useState<string>("");
@@ -5290,12 +5352,12 @@ export default function TicketFormModal({
           initialTitle = params.get("title") || initialTitle;
           initialDescription = params.get("description") || initialDescription;
           initialCustomerId = params.get("customerId") || initialCustomerId;
-          
+
           const priority = params.get("priority") || "";
-          initialPriority = priority === "Critical" ? "L1(Critical)" : 
-                            priority === "High" ? "L2(Major)" : 
-                            priority === "Medium" ? "L3(Minor)" : "L4(Warning)";
-          
+          initialPriority = priority === "Critical" ? "L1(Critical)" :
+            priority === "High" ? "L2(Major)" :
+              priority === "Medium" ? "L3(Minor)" : "L4(Warning)";
+
           const paramCat = params.get("category");
           if (paramCat) {
             initialCategory = paramCat;
@@ -5370,7 +5432,7 @@ export default function TicketFormModal({
         saleRemark: initialRemark,
         healthCheckRound: "",
         projectId: (ticket as any)?.project_id || (ticket as any)?.projectId || "",
-      });      setArrangeData({ assigned: [], following: [] });
+      }); setArrangeData({ assigned: [], following: [] });
       setTroubleshootData({ holdTime: "", unholdTime: "", holdReason: "", runbook: "", newUpdate: "" });
       setUpdatesLog([]);
       setOnsite("");
@@ -5446,13 +5508,13 @@ export default function TicketFormModal({
       /* Pre-populate Create Ticket form */
       setCreateData({
         requestCode: (ticket as any).request_code || (ticket as any).requestCode || getTicketRequestCode(ticket as any),
-        title:       ticket.title        || "",
-        description: ticket.description  || "",
-        ttType:      ticket.tt_type      || "",
-        category:    ticket.category     || "",
+        title: ticket.title || "",
+        description: ticket.description || "",
+        ttType: ticket.tt_type || "",
+        category: ticket.category || "",
         requestTime: toDatetimeLocalValue(ticket.request_time || (ticket as any).requestTime || ticket.created_at),
-        startTime:   toDatetimeLocalValue(ticket.start_time || (ticket as any).startTime),
-        priority:    ticket.priority     || "",
+        startTime: toDatetimeLocalValue(ticket.start_time || (ticket as any).startTime),
+        priority: ticket.priority || "",
       });
       /* Parse remark (JSON or legacy string) */
       let saleRemark = "";
@@ -5518,21 +5580,21 @@ export default function TicketFormModal({
 
       /* Pre-populate Check Contract form */
       setCheckData({
-        customerId:     ticket.customer_id    || "",
-        customerName:   ticket.customer_name  || "",
-        contractId:     ticket.contract_id    || (ticket.contract_no === "No Contract" ? "no-contract" : ""),
-        contractNo:     ticket.contract_no    || "",
-        contractName:   "",   // filled when contract loads
-        scope:          ticket.contract_scope || "In scope",
-        saleResp:       "",   // filled when contract loads
-        contractStart:  "",
-        contractEnd:    "",
+        customerId: ticket.customer_id || "",
+        customerName: ticket.customer_name || "",
+        contractId: ticket.contract_id || (ticket.contract_no === "No Contract" ? "no-contract" : ""),
+        contractNo: ticket.contract_no || "",
+        contractName: "",   // filled when contract loads
+        scope: ticket.contract_scope || "In scope",
+        saleResp: "",   // filled when contract loads
+        contractStart: "",
+        contractEnd: "",
         contractStatus: "",
-        saleName:       "",
-        confirmStatus:  "",
-        saleRemark:     saleRemark,
+        saleName: "",
+        confirmStatus: "",
+        saleRemark: saleRemark,
         healthCheckRound: healthCheckRound,
-        projectId:      initialProjectId,
+        projectId: initialProjectId,
       });
       /* Pre-populate Arrange Resource form */
       const assignedArr = ticket.assigned ? ticket.assigned.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -5551,7 +5613,7 @@ export default function TicketFormModal({
             const tzoffset = ud.getTimezoneOffset() * 60000;
             unholdLocal = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
           }
-        } catch {}
+        } catch { }
       }
 
       setTroubleshootData({
@@ -5580,7 +5642,7 @@ export default function TicketFormModal({
                   const tzoffset = ud.getTimezoneOffset() * 60000;
                   legacyStart = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
                 }
-              } catch {}
+              } catch { }
             }
             let legacyStop = "";
             if (ticket.unhold_time) {
@@ -5590,7 +5652,7 @@ export default function TicketFormModal({
                   const tzoffset = ud.getTimezoneOffset() * 60000;
                   legacyStop = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
                 }
-              } catch {}
+              } catch { }
             }
             hList = [{
               reason: ticket.hold_reason || "",
@@ -5608,7 +5670,7 @@ export default function TicketFormModal({
                 const tzoffset = ud.getTimezoneOffset() * 60000;
                 legacyStart = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
               }
-            } catch {}
+            } catch { }
           }
           let legacyStop = "";
           if (ticket.unhold_time) {
@@ -5618,7 +5680,7 @@ export default function TicketFormModal({
                 const tzoffset = ud.getTimezoneOffset() * 60000;
                 legacyStop = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
               }
-            } catch {}
+            } catch { }
           }
           hList = [{
             reason: ticket.hold_reason || "",
@@ -5636,7 +5698,7 @@ export default function TicketFormModal({
               const tzoffset = ud.getTimezoneOffset() * 60000;
               legacyStart = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
             }
-          } catch {}
+          } catch { }
         }
         let legacyStop = "";
         if (ticket.unhold_time) {
@@ -5646,7 +5708,7 @@ export default function TicketFormModal({
               const tzoffset = ud.getTimezoneOffset() * 60000;
               legacyStop = (new Date(ud.getTime() - tzoffset)).toISOString().slice(0, 16);
             }
-          } catch {}
+          } catch { }
         }
         if (ticket.hold_reason || legacyStart || legacyStop) {
           hList = [{
@@ -5708,7 +5770,7 @@ export default function TicketFormModal({
           console.error("Failed to parse runbook JSON:", e);
         }
       }
-      
+
       setRunbooksList(list);
       setActiveRunbookName(activeName);
       setRunbookSteps(steps);
@@ -5722,7 +5784,7 @@ export default function TicketFormModal({
             const tzoffset = rd.getTimezoneOffset() * 60000;
             resolveLocal = (new Date(rd.getTime() - tzoffset)).toISOString().slice(0, 16);
           }
-        } catch {}
+        } catch { }
       }
 
       setFinishedData({
@@ -5745,7 +5807,7 @@ export default function TicketFormModal({
             const tzoffset = cd.getTimezoneOffset() * 60000;
             closeLocal = (new Date(cd.getTime() - tzoffset)).toISOString().slice(0, 16);
           }
-        } catch {}
+        } catch { }
       }
       setCloseTime(closeLocal);
 
@@ -5808,7 +5870,7 @@ export default function TicketFormModal({
     setReportingData(prev => {
       let updated = false;
       const patch: Partial<ReportingFormData> = {};
-      
+
       if (!prev.benA && checkData.customerName) {
         patch.benA = checkData.customerName;
         updated = true;
@@ -5833,9 +5895,9 @@ export default function TicketFormModal({
             patch.thoiGianTiepNhan = (new Date(sd.getTime() - tzoffset)).toISOString().slice(0, 16);
             updated = true;
           }
-        } catch {}
+        } catch { }
       }
-      
+
       if (updated) {
         return { ...prev, ...patch };
       }
@@ -5886,17 +5948,17 @@ export default function TicketFormModal({
 
         const updatePayload: any = {
           request_code: createData.requestCode || null,
-          title:        createData.title       || null,
-          description:  createData.description || null,
-          tt_type:      createData.ttType      || null,
-          category:     createData.category    || null,
-          priority:     createData.priority    || null,
-          tt_status:    ttStatus,
+          title: createData.title || null,
+          description: createData.description || null,
+          tt_type: createData.ttType || null,
+          category: createData.category || null,
+          priority: createData.priority || null,
+          tt_status: ttStatus,
           request_time: createData.requestTime || null,
-          start_time:   createData.startTime   || null,
-          remark:       finalRemark            || null,
-          progress:     progressStr,
-          updated_at:   new Date().toISOString(),
+          start_time: createData.startTime || null,
+          remark: finalRemark || null,
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         };
 
         const { error } = await safeTicketUpdate(dbId, updatePayload);
@@ -5904,12 +5966,12 @@ export default function TicketFormModal({
 
       } else if (currentStep === "check") {
         const { error } = await safeTicketUpdate(dbId, {
-          customer_id:    checkData.customerId    || null,
-          customer_name:  checkData.customerName  || null,
-          contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
-          contract_no:    checkData.contractNo    || null,
-          contract_scope: checkData.scope         || null,
-          project_id:     checkData.projectId     || null,
+          customer_id: checkData.customerId || null,
+          customer_name: checkData.customerName || null,
+          contract_id: checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+          contract_no: checkData.contractNo || null,
+          contract_scope: checkData.scope || null,
+          project_id: checkData.projectId || null,
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
@@ -5921,16 +5983,16 @@ export default function TicketFormModal({
             },
             report: reportingData
           }),
-          progress:       progressStr,
-          updated_at:     new Date().toISOString(),
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu contract: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "arrange") {
         const { error } = await safeTicketUpdate(dbId, {
-          assigned:   arrangeData.assigned.join(", ")  || null,
-          following:  arrangeData.following.join(", ") || null,
-          progress:   progressStr,
+          assigned: arrangeData.assigned.join(", ") || null,
+          following: arrangeData.following.join(", ") || null,
+          progress: progressStr,
           updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu arrange resource: " + (error.message || String(error))); return; }
@@ -5941,14 +6003,14 @@ export default function TicketFormModal({
         const lastHold = currentHolds[currentHolds.length - 1];
         const holdReasonStr = JSON.stringify({ holds: currentHolds });
         const { error } = await safeTicketUpdate(dbId, {
-          tt_status:   ttStatus,
-          hold_time:   lastHold?.startTime || null,
-          unhold_time: lastHold?.stopTime  || null,
+          tt_status: ttStatus,
+          hold_time: lastHold?.startTime || null,
+          unhold_time: lastHold?.stopTime || null,
           hold_reason: holdReasonStr,
-          runbook:     JSON.stringify(runbookObj),
-          onsite:      onsite                       || null,
-          progress:    progressStr,
-          updated_at:  new Date().toISOString(),
+          runbook: JSON.stringify(runbookObj),
+          onsite: onsite || null,
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu troubleshoot: " + (error.message || String(error))); return; }
 
@@ -5968,11 +6030,11 @@ export default function TicketFormModal({
 
       } else if (currentStep === "completed") {
         const updatePayload: any = {
-          tt_status:     ttStatus || finishedData.ticketStatus || "Completed",
-          start_time:    finishedData.startTime || createData.startTime || null,
-          end_time:      finishedData.resolveTime  || null,
-          resolve_time:  finishedData.resolveTime  || null,
-          close_time:    closeTime                 || null,
+          tt_status: ttStatus || finishedData.ticketStatus || "Completed",
+          start_time: finishedData.startTime || createData.startTime || null,
+          end_time: finishedData.resolveTime || null,
+          resolve_time: finishedData.resolveTime || null,
+          close_time: closeTime || null,
           tt_close_time: closeTime || finishedData.resolveTime || null,
           document_link: finishedData.reportUrl || ticket?.document_link || null,
           remark: JSON.stringify({
@@ -5982,8 +6044,8 @@ export default function TicketFormModal({
             finished: finishedData,
             report: reportingData
           }),
-          progress:      progressStr,
-          updated_at:    new Date().toISOString(),
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         };
         const { error } = await safeTicketUpdate(dbId, updatePayload);
         if (error) { alert("Lỗi lưu completed: " + (error.message || String(error))); return; }
@@ -5991,8 +6053,8 @@ export default function TicketFormModal({
       } else {
         // Generic step save
         const { error } = await safeTicketUpdate(dbId, {
-          tt_status:  ttStatus,
-          progress:   progressStr,
+          tt_status: ttStatus,
+          progress: progressStr,
           updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
@@ -6030,11 +6092,11 @@ export default function TicketFormModal({
       if (currentStep === "create") {
         /* Validate */
         if (!createData.requestCode || !createData.requestCode.trim()) { alert("Vui lòng chọn hoặc nhập Mã yêu cầu"); return; }
-        if (!createData.title.trim())  { alert("Vui lòng nhập Tiêu đề");  return; }
-        if (!createData.ttType)        { alert("Vui lòng chọn Loại yêu cầu");   return; }
-        if (!createData.category)      { alert("Vui lòng chọn Danh mục");  return; }
+        if (!createData.title.trim()) { alert("Vui lòng nhập Tiêu đề"); return; }
+        if (!createData.ttType) { alert("Vui lòng chọn Loại yêu cầu"); return; }
+        if (!createData.category) { alert("Vui lòng chọn Danh mục"); return; }
         if (!createData.requestTime || !createData.requestTime.trim()) { alert("Vui lòng chọn Thời gian nhận yêu cầu"); return; }
-        if (!createData.priority)      { alert("Vui lòng chọn Priority");  return; }
+        if (!createData.priority) { alert("Vui lòng chọn Priority"); return; }
       } else if (currentStep === "arrange") {
         /* Validate */
         if (arrangeData.assigned.length === 0) { alert("Vui lòng chọn ít nhất 1 nhân sự Assign"); return; }
@@ -6052,22 +6114,22 @@ export default function TicketFormModal({
           /* Create new ticket */
           const currentUser = getCurrentUser();
           const res = await createTicket({
-            requestCode:  createData.requestCode,
-            title:        createData.title,
-            description:  createData.description,
-            ttType:       createData.ttType,
-            category:     createData.category,
-            priority:     createData.priority,
+            requestCode: createData.requestCode,
+            title: createData.title,
+            description: createData.description,
+            ttType: createData.ttType,
+            category: createData.category,
+            priority: createData.priority,
             ttStatus,
-            requestTime:  createData.requestTime ? new Date(createData.requestTime).toISOString() : undefined,
-            startTime:    createData.startTime,
-            progress:     progressStr,
-            customerId:   checkData.customerId   || null,
+            requestTime: createData.requestTime ? new Date(createData.requestTime).toISOString() : undefined,
+            startTime: createData.startTime,
+            progress: progressStr,
+            customerId: checkData.customerId || null,
             customerName: checkData.customerName || null,
-            contractId:   checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
-            contractNo:   checkData.contractNo   || null,
-            projectId:    checkData.projectId    || null,
-            creatorName:  currentUser?.name      || checkData.saleName || undefined,
+            contractId: checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+            contractNo: checkData.contractNo || null,
+            projectId: checkData.projectId || null,
+            creatorName: currentUser?.name || checkData.saleName || undefined,
           });
           if (!res.success) { alert("Lỗi tạo ticket: " + res.error); return; }
           setSavedTicketId(res.dbId || "");
@@ -6097,17 +6159,17 @@ export default function TicketFormModal({
 
           const updatePayload: any = {
             request_code: createData.requestCode || null,
-            title:        createData.title       || null,
-            description:  createData.description || null,
-            tt_type:      createData.ttType      || null,
-            category:     createData.category    || null,
-            priority:     createData.priority    || null,
-            tt_status:    ttStatus,
+            title: createData.title || null,
+            description: createData.description || null,
+            tt_type: createData.ttType || null,
+            category: createData.category || null,
+            priority: createData.priority || null,
+            tt_status: ttStatus,
             request_time: createData.requestTime || null,
-            start_time:   createData.startTime   || null,
-            remark:       finalRemark            || null,
-            progress:     progressStr,
-            updated_at:   new Date().toISOString(),
+            start_time: createData.startTime || null,
+            remark: finalRemark || null,
+            progress: progressStr,
+            updated_at: new Date().toISOString(),
           };
           const { error } = await safeTicketUpdate(dbId, updatePayload);
           if (error) { alert("Lỗi cập nhật ticket: " + (error.message || String(error))); return; }
@@ -6129,12 +6191,12 @@ export default function TicketFormModal({
       } else if (currentStep === "check") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const { error } = await safeTicketUpdate(dbId, {
-          customer_id:    checkData.customerId    || null,
-          customer_name:  checkData.customerName  || null,
-          contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
-          contract_no:    checkData.contractNo    || null,
-          contract_scope: checkData.scope         || null,
-          project_id:     checkData.projectId     || null,
+          customer_id: checkData.customerId || null,
+          customer_name: checkData.customerName || null,
+          contract_id: checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+          contract_no: checkData.contractNo || null,
+          contract_scope: checkData.scope || null,
+          project_id: checkData.projectId || null,
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
@@ -6146,17 +6208,17 @@ export default function TicketFormModal({
             },
             report: reportingData
           }),
-          progress:       progressStr,
-          updated_at:     new Date().toISOString(),
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu contract: " + (error.message || String(error))); return; }
 
       } else if (currentStep === "arrange") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const { error } = await safeTicketUpdate(dbId, {
-          assigned:   arrangeData.assigned.join(", ")  || null,
-          following:  arrangeData.following.join(", ") || null,
-          progress:   progressStr,
+          assigned: arrangeData.assigned.join(", ") || null,
+          following: arrangeData.following.join(", ") || null,
+          progress: progressStr,
           updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu arrange resource: " + (error.message || String(error))); return; }
@@ -6172,13 +6234,13 @@ export default function TicketFormModal({
         const lastHold = holdsList[holdsList.length - 1];
         const holdReasonStr = JSON.stringify({ holds: holdsList });
         const { error } = await safeTicketUpdate(dbId, {
-          hold_time:   lastHold?.startTime || null,
-          unhold_time: lastHold?.stopTime  || null,
+          hold_time: lastHold?.startTime || null,
+          unhold_time: lastHold?.stopTime || null,
           hold_reason: holdReasonStr,
-          runbook:     JSON.stringify(runbookObj),
-          onsite:      onsite                       || null,
-          progress:    progressStr,
-          updated_at:  new Date().toISOString(),
+          runbook: JSON.stringify(runbookObj),
+          onsite: onsite || null,
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu troubleshoot: " + (error.message || String(error))); return; }
 
@@ -6199,11 +6261,11 @@ export default function TicketFormModal({
       } else if (currentStep === "completed") {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const updatePayload: any = {
-          tt_status:     ttStatus || finishedData.ticketStatus || "Completed",
-          start_time:    finishedData.startTime || createData.startTime || null,
-          end_time:      finishedData.resolveTime  || null,
-          resolve_time:  finishedData.resolveTime  || null,
-          close_time:    closeTime                 || null,
+          tt_status: ttStatus || finishedData.ticketStatus || "Completed",
+          start_time: finishedData.startTime || createData.startTime || null,
+          end_time: finishedData.resolveTime || null,
+          resolve_time: finishedData.resolveTime || null,
+          close_time: closeTime || null,
           tt_close_time: closeTime || finishedData.resolveTime || null,
           document_link: finishedData.reportUrl || ticket?.document_link || null,
           remark: JSON.stringify({
@@ -6213,8 +6275,8 @@ export default function TicketFormModal({
             finished: finishedData,
             report: reportingData
           }),
-          progress:      progressStr,
-          updated_at:    new Date().toISOString(),
+          progress: progressStr,
+          updated_at: new Date().toISOString(),
         };
         const { error } = await safeTicketUpdate(dbId, updatePayload);
         if (error) { alert("Lỗi lưu completed: " + (error.message || String(error))); return; }
@@ -6222,8 +6284,8 @@ export default function TicketFormModal({
       } else {
         if (!dbId) { alert("Không tìm thấy ticket ID"); return; }
         const { error } = await safeTicketUpdate(dbId, {
-          tt_status:  ttStatus,
-          progress:   progressStr,
+          tt_status: ttStatus,
+          progress: progressStr,
           updated_at: new Date().toISOString(),
         });
         if (error) { alert("Lỗi lưu step: " + (error.message || String(error))); return; }
@@ -6556,15 +6618,15 @@ export default function TicketFormModal({
   };
 
   const isStepDone = completedSteps.has(currentStep);
-  const stepLabel  = STEPS.find((s) => s.key === currentStep)?.label || "";
+  const stepLabel = STEPS.find((s) => s.key === currentStep)?.label || "";
 
   /* Extra buttons for Check Contract */
   // Removed unused checkExtra helper to avoid unused variable warnings.
 
   const outerContainer = (
     <div
-      className={isPage 
-        ? "bg-white rounded-xl border border-slate-200 flex overflow-hidden w-full h-[calc(100vh-28px)] shadow-xs animate-in fade-in duration-200" 
+      className={isPage
+        ? "bg-white rounded-xl border border-slate-200 flex overflow-hidden w-full h-[calc(100vh-28px)] shadow-xs animate-in fade-in duration-200"
         : "bg-white rounded-2xl shadow-2xl border border-slate-200 flex overflow-hidden"}
       style={isPage ? undefined : { width: "min(1250px, 95vw)", height: "min(800px, 92vh)" }}
     >
