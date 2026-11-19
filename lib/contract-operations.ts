@@ -170,10 +170,17 @@ export async function fetchContracts(): Promise<Contract[]> {
 }
 
 // ─── Fetch Contracts By Customer ──────────────────────────────
-export async function fetchContractsByCustomer(customerIdentifier: string): Promise<Contract[]> {
+export async function fetchContractsByCustomer(
+  customerIdentifier: string,
+  customerCode?: string,
+  customerName?: string
+): Promise<Contract[]> {
   if (!customerIdentifier || !customerIdentifier.trim()) return [];
   const raw = customerIdentifier.trim();
   const q = raw.toLowerCase();
+
+  let codeMatch = (customerCode || "").trim().toLowerCase();
+  let nameMatch = (customerName || "").trim().toLowerCase();
 
   // 1. Direct database query if UUID
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -191,18 +198,55 @@ export async function fetchContractsByCustomer(customerIdentifier: string): Prom
     } catch (e) {
       console.warn("Direct query by customer UUID warning:", e);
     }
+
+    if (!codeMatch || !nameMatch) {
+      try {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("id, code, name")
+          .eq("id", raw)
+          .single();
+        if (cust) {
+          if (!codeMatch && cust.code) codeMatch = cust.code.trim().toLowerCase();
+          if (!nameMatch && cust.name) nameMatch = cust.name.trim().toLowerCase();
+        }
+      } catch {}
+    }
   }
 
   // 2. Memory / cache filtering
   const all = await fetchContracts();
-  return all.filter(c =>
-    (c.customer_id && c.customer_id.toLowerCase() === q) ||
-    (c.supplier_id && c.supplier_id.toLowerCase() === q) ||
-    (c.customer && c.customer.toLowerCase().includes(q)) ||
-    (c.supplier && c.supplier.toLowerCase().includes(q)) ||
-    (c.end_user && c.end_user.toLowerCase().includes(q)) ||
-    (c.customer_name && c.customer_name.toLowerCase().includes(q))
-  );
+  return all.filter(c => {
+    const cid = (c.customer_id || "").toLowerCase();
+    const sid = (c.supplier_id || "").toLowerCase();
+    const cust = (c.customer || "").toLowerCase();
+    const sup = (c.supplier || "").toLowerCase();
+    const eu = (c.end_user || "").toLowerCase();
+    const cname = (c.customer_name || "").toLowerCase();
+
+    if (
+      cid === q || sid === q ||
+      (cust && cust.includes(q)) ||
+      (sup && sup.includes(q)) ||
+      (eu && eu.includes(q)) ||
+      (cname && cname.includes(q))
+    ) {
+      return true;
+    }
+
+    if (codeMatch) {
+      if (cust && cust.includes(codeMatch)) return true;
+      if (cname && cname.includes(codeMatch)) return true;
+      if (eu && eu.includes(codeMatch)) return true;
+    }
+
+    if (nameMatch) {
+      if (cust && (cust.includes(nameMatch) || nameMatch.includes(cust))) return true;
+      if (cname && (cname.includes(nameMatch) || nameMatch.includes(cname))) return true;
+    }
+
+    return false;
+  });
 }
 
 // ─── Create Contract ──────────────────────────────────────────

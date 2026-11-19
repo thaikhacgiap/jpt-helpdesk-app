@@ -65,6 +65,7 @@ export default function ProjectsPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState("");
+  const [linkSource, setLinkSource] = useState<"contract" | "opportunity">("contract");
   
   const [formData, setFormData] = useState({
     code: "",
@@ -111,6 +112,7 @@ export default function ProjectsPage() {
   };
 
   const handleOpenCreateModal = () => {
+    setLinkSource("contract");
     setFormData({
       code: "",
       name: "",
@@ -145,14 +147,15 @@ export default function ProjectsPage() {
       contractNo: "",
       opportunityId: "",
       opportunityCode: "",
-      opportunityName: ""
+      opportunityName: "",
+      code: ""
     }));
 
     if (customerId) {
       try {
         const [contracts, opportunities] = await Promise.all([
-          fetchContractsByCustomer(customerId),
-          fetchOpportunitiesByCustomer(customerId)
+          fetchContractsByCustomer(customerId, selectedCust?.code, selectedCust?.name),
+          fetchOpportunitiesByCustomer(customerId, selectedCust?.code, selectedCust?.name)
         ]);
         setCustomerContracts(contracts);
         setCustomerOpportunities(opportunities);
@@ -176,6 +179,8 @@ export default function ProjectsPage() {
         opportunityId: oppId,
         opportunityCode: selectedOpp?.code || "",
         opportunityName: selectedOpp?.name || "",
+        contractId: "",
+        contractNo: "",
         // Lấy từ "code" trong bảng opportunity nếu chọn "cơ hội"
         code: nextCode || prev.code
       };
@@ -191,6 +196,9 @@ export default function ProjectsPage() {
         ...prev,
         contractId,
         contractNo: selectedContr?.contract_no || selectedContr?.code || "",
+        opportunityId: "",
+        opportunityCode: "",
+        opportunityName: "",
         code: nextCode || prev.code
       };
     });
@@ -808,99 +816,138 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 3: Cơ hội & Hợp đồng (Lọc theo khách hàng đã chọn) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                    <span>Cơ hội (Opportunity)</span>
-                    {customerOpportunities.length > 0 && (
-                      <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
-                        {customerOpportunities.length} cơ hội
-                      </span>
-                    )}
+              {/* Row 3: Option chọn Cơ hội hoặc Hợp đồng (Chỉ chọn 1 trong 2) */}
+              <div className="space-y-2 p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>Liên kết dự án từ</span>
+                    <span className="text-red-500">*</span>
+                    <span className="text-[11px] text-slate-400 font-normal lowercase">(chọn 1 trong 2)</span>
                   </label>
-                  <select
-                    value={formData.opportunityId}
-                    onChange={(e) => handleOpportunityChange(e.target.value)}
-                    disabled={!formData.customerId || customerOpportunities.length === 0}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="">
-                      {!formData.customerId 
-                        ? "-- Vui lòng chọn khách hàng trước --" 
-                        : customerOpportunities.length === 0 
-                        ? "-- Không có cơ hội liên quan --" 
-                        : "-- Chọn cơ hội --"}
-                    </option>
-                    {customerOpportunities.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        [{o.code}] {o.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                    <span>Hợp đồng (Contract)</span>
-                    {customerContracts.length > 0 && (
-                      <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
-                        {customerContracts.length} hợp đồng
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    value={formData.contractId}
-                    onChange={(e) => handleContractChange(e.target.value)}
-                    disabled={!formData.customerId || customerContracts.length === 0}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="">
-                      {!formData.customerId 
-                        ? "-- Vui lòng chọn khách hàng trước --" 
-                        : customerContracts.length === 0 
-                        ? "-- Không có hợp đồng liên quan --" 
-                        : "-- Chọn hợp đồng liên quan --"}
-                    </option>
-                    {customerContracts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.service || c.name || "Hợp đồng"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                  {/* Radio Option Buttons */}
+                  <div className="inline-flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-2xs gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkSource("contract");
+                        setFormData(prev => ({
+                          ...prev,
+                          opportunityId: "",
+                          opportunityCode: "",
+                          opportunityName: "",
+                          code: customerContracts.find(c => c.id === prev.contractId)?.project_id ||
+                                customerContracts.find(c => c.id === prev.contractId)?.code ||
+                                customerContracts.find(c => c.id === prev.contractId)?.contract_no ||
+                                ""
+                        }));
+                      }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                        linkSource === "contract"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileText size={13} />
+                      <span>Hợp đồng (Contract)</span>
+                      {customerContracts.length > 0 && (
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                          linkSource === "contract" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {customerContracts.length}
+                        </span>
+                      )}
+                    </button>
 
-              {/* Row 4: PM & Budget */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Chủ nhiệm dự án (PM)
-                  </label>
-                  <StaffSearchSelect
-                    value={formData.manager}
-                    onChange={(val) => setFormData(prev => ({ ...prev, manager: val }))}
-                    staffList={staffList}
-                    placeholder="-- Tìm và chọn chủ nhiệm dự án (PM) --"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                    Ngân sách dự toán (VNĐ)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      name="budget"
-                      value={formData.budget || ""}
-                      onChange={handleInputChange}
-                      placeholder="0"
-                      className="w-full px-3 py-2.5 pl-8 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition font-mono"
-                    />
-                    <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkSource("opportunity");
+                        setFormData(prev => ({
+                          ...prev,
+                          contractId: "",
+                          contractNo: "",
+                          code: customerOpportunities.find(o => o.id === prev.opportunityId)?.code || ""
+                        }));
+                      }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                        linkSource === "opportunity"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Sparkles size={13} />
+                      <span>Cơ hội (Opportunity)</span>
+                      {customerOpportunities.length > 0 && (
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                          linkSource === "opportunity" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {customerOpportunities.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
+
+                {/* Dropdown tương ứng với Option đã chọn */}
+                {linkSource === "contract" ? (
+                  <div>
+                    <select
+                      value={formData.contractId}
+                      onChange={(e) => handleContractChange(e.target.value)}
+                      disabled={!formData.customerId || customerContracts.length === 0}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 font-medium"
+                    >
+                      <option value="">
+                        {!formData.customerId 
+                          ? "-- Vui lòng chọn khách hàng trước --" 
+                          : customerContracts.length === 0 
+                          ? "-- Không có hợp đồng liên quan --" 
+                          : "-- Chọn hợp đồng liên kết dự án --"}
+                      </option>
+                      {customerContracts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.service || c.name || "Hợp đồng"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <select
+                      value={formData.opportunityId}
+                      onChange={(e) => handleOpportunityChange(e.target.value)}
+                      disabled={!formData.customerId || customerOpportunities.length === 0}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 font-medium"
+                    >
+                      <option value="">
+                        {!formData.customerId 
+                          ? "-- Vui lòng chọn khách hàng trước --" 
+                          : customerOpportunities.length === 0 
+                          ? "-- Không có cơ hội liên quan --" 
+                          : "-- Chọn cơ hội liên kết dự án --"}
+                      </option>
+                      {customerOpportunities.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          [{o.code}] {o.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 4: PM (Đã bỏ ngân sách dự toán) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                  Chủ nhiệm dự án (PM)
+                </label>
+                <StaffSearchSelect
+                  value={formData.manager}
+                  onChange={(val) => setFormData(prev => ({ ...prev, manager: val }))}
+                  staffList={staffList}
+                  placeholder="-- Tìm và chọn chủ nhiệm dự án (PM) --"
+                />
               </div>
 
               {/* Row 5: Dates */}

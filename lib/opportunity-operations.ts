@@ -67,10 +67,17 @@ export async function fetchOpportunities(): Promise<Opportunity[]> {
 }
 
 // ─── Fetch Opportunities By Customer ─────────────────────────
-export async function fetchOpportunitiesByCustomer(customerIdentifier: string): Promise<Opportunity[]> {
+export async function fetchOpportunitiesByCustomer(
+  customerIdentifier: string,
+  customerCode?: string,
+  customerName?: string
+): Promise<Opportunity[]> {
   if (!customerIdentifier || !customerIdentifier.trim()) return [];
   const raw = customerIdentifier.trim();
   const q = raw.toLowerCase();
+
+  let codeMatch = (customerCode || "").trim().toLowerCase();
+  let nameMatch = (customerName || "").trim().toLowerCase();
 
   // 1. Direct database query if UUID
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -88,15 +95,54 @@ export async function fetchOpportunitiesByCustomer(customerIdentifier: string): 
     } catch (e) {
       console.warn("Direct query opportunities by customer UUID warning:", e);
     }
+
+    // If UUID and code/name not provided, look up customer to get code & name for matching
+    if (!codeMatch || !nameMatch) {
+      try {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("id, code, name")
+          .eq("id", raw)
+          .single();
+        if (cust) {
+          if (!codeMatch && cust.code) codeMatch = cust.code.trim().toLowerCase();
+          if (!nameMatch && cust.name) nameMatch = cust.name.trim().toLowerCase();
+        }
+      } catch (e) {
+        console.warn("Customer lookup for opp matching warning:", e);
+      }
+    }
   }
 
   // 2. Memory / cache filtering
   const all = await fetchOpportunities();
-  return all.filter(o =>
-    (o.customer_id && o.customer_id.toLowerCase() === q) ||
-    (o.customer_code && o.customer_code.toLowerCase() === q) ||
-    (o.customer_name && o.customer_name.toLowerCase().includes(q))
-  );
+  return all.filter(o => {
+    const oppCId = (o.customer_id || "").toLowerCase();
+    const oppCCode = (o.customer_code || "").toLowerCase();
+    const oppCName = (o.customer_name || "").toLowerCase();
+
+    // Direct match by identifier
+    if (oppCId === q || oppCCode === q || (oppCName && (oppCName === q || oppCName.includes(q)))) {
+      return true;
+    }
+
+    // Match by customer code (e.g. SHBFC)
+    if (codeMatch) {
+      if (oppCCode === codeMatch) return true;
+      if (oppCName === codeMatch || oppCName.includes(codeMatch)) return true;
+      if (o.name && o.name.toLowerCase().includes(codeMatch)) return true;
+      if (o.code && o.code.toLowerCase().includes(codeMatch)) return true;
+    }
+
+    // Match by customer name
+    if (nameMatch) {
+      if (oppCName && (oppCName === nameMatch || nameMatch.includes(oppCName) || oppCName.includes(nameMatch))) {
+        return true;
+      }
+    }
+
+    return false;
+  });
 }
 
 // ─── Create Opportunity ───────────────────────────────────────
