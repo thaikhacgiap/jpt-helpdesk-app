@@ -39,6 +39,8 @@ interface Ticket {
   customer_short?: string;
   customer_code?: string;
   contract_no?: string;
+  contract_id?: string;
+  project_id?: string;
   request_code?: string;
   request_id?: string;
   request_status?: string;
@@ -810,6 +812,33 @@ export default function TicketsPage() {
     return "";
   };
 
+  // Helper lấy Project ID từ ticket, remark hoặc tra cứu hợp đồng liên kết
+  const getTicketProjectId = (t: Ticket): string => {
+    if ((t as any).project_id) return String((t as any).project_id);
+    if ((t as any).projectId) return String((t as any).projectId);
+
+    // 1. Kiểm tra trong remark (JSON)
+    if (t.remark) {
+      try {
+        const parsed = typeof t.remark === "string" ? JSON.parse(t.remark) : t.remark;
+        if (parsed?.projectId) return String(parsed.projectId);
+        if (parsed?.project_id) return String(parsed.project_id);
+      } catch {}
+    }
+
+    // 2. Tra cứu từ danh sách Hợp đồng (dbContracts) dựa trên contract_id hoặc contract_no
+    if (t.contract_id || t.contract_no) {
+      const contr = dbContracts.find((c) =>
+        (t.contract_id && c.id === t.contract_id) ||
+        (t.contract_no && (c.contract_no === t.contract_no || c.code === t.contract_no))
+      );
+      if (contr?.project_id) return String(contr.project_id);
+      if (contr?.code && contr.code !== contr.contract_no) return String(contr.code);
+    }
+
+    return "";
+  };
+
   // On-behalf ticket linking states
   const [linkedRequestDbId, setLinkedRequestDbId] = useState<string | null>(null);
   const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null);
@@ -858,6 +887,14 @@ export default function TicketsPage() {
               loadedOrder.push("customer_short");
             }
           }
+          if (!loadedOrder.includes("project_id")) {
+            const custShortIdx = loadedOrder.indexOf("customer_short");
+            if (custShortIdx !== -1) {
+              loadedOrder.splice(custShortIdx + 1, 0, "project_id");
+            } else {
+              loadedOrder.push("project_id");
+            }
+          }
           const fullOrder = [
             ...loadedOrder,
             ...DEFAULT_COLUMN_ORDER.filter((k) => !loadedOrder.includes(k)),
@@ -872,6 +909,9 @@ export default function TicketsPage() {
           if (vis.customer_short === undefined) {
             vis.customer_short = true;
           }
+          if (vis.project_id === undefined) {
+            vis.project_id = true;
+          }
           setVisibleColumns((prev) => ({ ...prev, ...vis }));
         }
         if (parsed.widths && typeof parsed.widths === "object") {
@@ -881,6 +921,9 @@ export default function TicketsPage() {
           }
           if (!w.customer_short) {
             w.customer_short = DEFAULT_COL_WIDTHS.customer_short || 110;
+          }
+          if (!w.project_id) {
+            w.project_id = DEFAULT_COL_WIDTHS.project_id || 130;
           }
           setColWidths((prev) => ({ ...prev, ...w }));
         }
@@ -1367,7 +1410,8 @@ export default function TicketsPage() {
       const matchReqCode = getTicketRequestCode(t as any).toLowerCase().includes(q);
       const matchReqStatus = getTicketStatus(t).toLowerCase().includes(q);
       const matchCustShort = getCustomerShortName(t).toLowerCase().includes(q);
-      if (!matchObj && !matchReqCode && !matchReqStatus && !matchCustShort) return false;
+      const matchProjId = getTicketProjectId(t).toLowerCase().includes(q);
+      if (!matchObj && !matchReqCode && !matchReqStatus && !matchCustShort && !matchProjId) return false;
     }
     if (filters.tt_type.length > 0 && !filters.tt_type.includes(t.tt_type || "")) return false;
     if (filters.contract_scope.length > 0 && !filters.contract_scope.includes(t.contract_scope || "")) return false;
@@ -1498,6 +1542,7 @@ export default function TicketsPage() {
       "Tiêu đề",
       "Khách hàng",
       "Tên KH viết tắt",
+      "Project ID",
       "Người tạo",
       "Thời gian tạo",
       "Start time",
@@ -1532,6 +1577,7 @@ export default function TicketsPage() {
       escapeCsv(t.title),
       escapeCsv(t.customer_name || ""),
       escapeCsv(getCustomerShortName(t)),
+      escapeCsv(getTicketProjectId(t)),
       escapeCsv(t.creator_name || ""),
       escapeCsv(formatDateTime(t.created_at || t.created_time, true)),
       escapeCsv(formatDateTime(t.start_time || t.startTime)),
@@ -1679,6 +1725,26 @@ export default function TicketsPage() {
             {shortName ? (
               <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 font-mono tracking-tight shadow-2xs">
                 {shortName}
+              </span>
+            ) : (
+              <span className="text-slate-400">—</span>
+            )}
+          </td>
+        );
+      }
+
+      case "project_id": {
+        const projId = getTicketProjectId(ticket);
+        return (
+          <td
+            key="project_id"
+            style={{ width: `${colWidths.project_id || 130}px`, minWidth: `${colWidths.project_id || 130}px` }}
+            className="px-3 py-2 whitespace-nowrap truncate text-sm font-normal border-b border-slate-200"
+            title={projId || ""}
+          >
+            {projId ? (
+              <span className="inline-block px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-bold text-xs border border-purple-200 font-mono tracking-tight shadow-2xs">
+                {projId}
               </span>
             ) : (
               <span className="text-slate-400">—</span>

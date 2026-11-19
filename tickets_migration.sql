@@ -5,6 +5,7 @@
 
 -- Thêm các cột còn thiếu (dùng IF NOT EXISTS để tránh lỗi nếu đã tồn tại)
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS contract_scope  VARCHAR(50);
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS project_id      VARCHAR(100);
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS progress        VARCHAR(20);
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS creator_name    VARCHAR(255);
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS assigned        VARCHAR(255);

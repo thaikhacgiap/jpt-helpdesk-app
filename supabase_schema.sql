@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   contract_id UUID REFERENCES contracts(id) ON DELETE SET NULL,
   contract_no VARCHAR(100),
   contract_scope VARCHAR(50),
+  project_id VARCHAR(100),
   tt_type VARCHAR(50), -- 'Bug', 'Request', 'Feature', 'Incident'
   category VARCHAR(50), -- 'Payment', 'Technical', 'General'
   priority VARCHAR(50), -- 'Low', 'Medium', 'High', 'Critical'

@@ -23,6 +23,7 @@ export const DEFAULT_COLUMN_ORDER: string[] = [
   "title",
   "customer_name",
   "customer_short",
+  "project_id",
   "creator_name",
   "created_at",
   "start_time",
@@ -51,6 +52,7 @@ export const COLUMN_LABELS: Record<string, string> = {
   title: "Tiêu đề",
   customer_name: "Khách hàng",
   customer_short: "Tên KH viết tắt",
+  project_id: "Project ID",
   creator_name: "Người tạo",
   created_at: "Thời gian tạo",
   start_time: "Start time",
@@ -80,6 +82,7 @@ export const DEFAULT_COL_WIDTHS: Record<string, number> = {
   title: 220,
   customer_name: 180,
   customer_short: 110,
+  project_id: 130,
   creator_name: 140,
   created_at: 145,
   start_time: 145,
@@ -116,7 +119,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     name: "Tập trung SLA & Thời gian",
     isSystem: true,
     order: [
-      "ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "start_time",
+      "ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "project_id", "start_time",
       "resolve_time", "duration", "work_duration", "sla_time", "sla_status", "tt_status", "assigned"
     ],
     visible: {
@@ -126,6 +129,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
       title: true,
       customer_name: true,
       customer_short: true,
+      project_id: true,
       start_time: true,
       resolve_time: true,
       duration: true,
@@ -142,7 +146,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     name: "Phân loại & Trạng thái",
     isSystem: true,
     order: [
-      "ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "tt_type", "contract_scope",
+      "ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "project_id", "tt_type", "contract_scope",
       "category", "priority", "tt_status", "assigned", "creator_name", "created_at", "updated_at"
     ],
     visible: {
@@ -152,6 +156,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
       title: true,
       customer_name: true,
       customer_short: true,
+      project_id: true,
       tt_type: true,
       contract_scope: true,
       category: true,
@@ -168,7 +173,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
     id: "compact",
     name: "Gọn gàng (Cơ bản)",
     isSystem: true,
-    order: ["ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "priority", "tt_status", "sla_status", "assigned"],
+    order: ["ticket_id", "request_code", "request_status", "title", "customer_name", "customer_short", "project_id", "priority", "tt_status", "sla_status", "assigned"],
     visible: {
       ticket_id: true,
       request_code: true,
@@ -176,6 +181,7 @@ export const SYSTEM_TEMPLATES: ColumnTemplate[] = [
       title: true,
       customer_name: true,
       customer_short: true,
+      project_id: true,
       priority: true,
       tt_status: true,
       sla_status: true,

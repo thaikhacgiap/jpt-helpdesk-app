@@ -6,13 +6,14 @@ import {
   X, ChevronDown, Save, Edit2, CheckCircle, CheckCircle2,
   Search, Building2, FileText, Check, Maximize2, Download, Plus,
   Trash2, Pause, Info, Calendar, Clock, Flag, Layers, LayoutGrid, List, HelpCircle, Users, Wrench, Lock, Send, Shield, User, Activity, Rocket, ClipboardList,
-  Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, Upload, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3
+  Filter, AlertCircle, HardDrive, MessageSquare, Loader2, Printer, Paperclip, Link2, UploadCloud, Upload, AlertTriangle, TrendingUp, Sparkles, ExternalLink, Award, Timer, BarChart3, Hash
 } from "lucide-react";
 import { createTicket, updateTicket, fetchTickets, fetchTicketUpdates, addTicketUpdate, safeTicketUpdate, getTicketRequestCode, syncTicketToRequest } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer, isContractValid } from "@/lib/contract-operations";
 import type { Customer } from "@/lib/customer-operations";
 import type { Contract } from "@/lib/contract-operations";
+import { fetchProjects } from "@/lib/project-operations";
 import { NhanSu, fetchNhanSu } from "@/lib/nhan-su-operations";
 import { Contact, fetchContactsByCustomerCode } from "@/lib/contact-operations";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +36,8 @@ export interface TicketData {
   customer_name?: string;
   contract_no?: string;
   contract_id?: string;
+  project_id?: string;
+  projectId?: string;
   request_code?: string;
   request_id?: string;
   request_status?: string;
@@ -1463,6 +1466,7 @@ interface CheckFormData {
   contractStart: string; contractEnd: string; contractStatus: string;
   saleName: string; confirmStatus: string; saleRemark: string;
   healthCheckRound?: string;
+  projectId?: string;
 }
 function CheckContractForm({
   editing, data, onChange, customers, loadingCustomers, ticketType,
@@ -1477,6 +1481,16 @@ function CheckContractForm({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [maintenancePeriods, setMaintenancePeriods] = useState<string[]>([]);
+  const [projectSuggestions, setProjectSuggestions] = useState<any[]>([]);
+
+  /* Load project list for suggestion dropdown */
+  useEffect(() => {
+    fetchProjects()
+      .then((projs) => {
+        if (Array.isArray(projs)) setProjectSuggestions(projs);
+      })
+      .catch(() => {});
+  }, []);
 
   /* Sync customer from data.customerId when customers load */
   useEffect(() => {
@@ -1512,6 +1526,7 @@ function CheckContractForm({
             const found = list.find((c) => c.id === data.contractId);
             if (found) {
               setSelectedContract(found);
+              const foundProjId = (found as any).project_id || (found as any).projectId || "";
               /* Propagate auto-filled fields to parent so they display */
               onChange({
                 contractName:   found.name || (found as any).description || (found as any).service || "",
@@ -1519,6 +1534,7 @@ function CheckContractForm({
                 contractStart:  found.start_date || (found as any).signed_date || "",
                 contractEnd:    found.end_date || (found as any).expiry_date || "",
                 contractStatus: found.status || "",
+                ...(foundProjId && !data.projectId ? { projectId: foundProjId } : {}),
               });
             }
           }
@@ -1564,6 +1580,7 @@ function CheckContractForm({
       contractId: "", contractNo: "", contractName: "",
       saleResp: "", contractStart: "", contractEnd: "", contractStatus: "",
       healthCheckRound: "",
+      projectId: "",
       scope: data.scope || "In scope",
     });
   };
@@ -1571,6 +1588,7 @@ function CheckContractForm({
   /* Propagate contract selection up and auto-fill fields */
   const handleContractChange = (c: Contract | null) => {
     setSelectedContract(c);
+    const projId = (c as any)?.project_id || (c as any)?.projectId || "";
     onChange({
       contractId:     c?.id           || "",
       contractNo:     c?.contract_no  || c?.code || "",
@@ -1579,6 +1597,7 @@ function CheckContractForm({
       contractStart:  (c as any)?.start_date || (c as any)?.signed_date || "",
       contractEnd:    (c as any)?.end_date || (c as any)?.expiry_date || "",
       contractStatus: (c as any)?.status || "",
+      projectId:      projId || data.projectId || "",
       healthCheckRound: "",
     });
   };
@@ -1670,7 +1689,7 @@ function CheckContractForm({
           </div>
         </div>
 
-        {/* Contract No & Health Check Round inline */}
+        {/* Contract No & Project ID inline */}
         <div className="flex items-center gap-6">
           {/* Contract No Select */}
           <div className="flex-1 flex items-center gap-3">
@@ -1684,6 +1703,65 @@ function CheckContractForm({
                 disabled={!selectedCustomer}
                 readOnly={!editing}
               />
+            </div>
+          </div>
+
+          {/* Project ID */}
+          <div className="flex-1 flex items-center gap-3">
+            <label className={labelCls}>Project ID</label>
+            {editing ? (
+              <div className="flex-1 relative flex items-center">
+                <Hash size={15} className="absolute left-3 text-purple-500 pointer-events-none" />
+                <input
+                  type="text"
+                  list="contract-project-suggestions"
+                  value={data.projectId || ""}
+                  onChange={(e) => onChange({ projectId: e.target.value })}
+                  placeholder="Nhập hoặc chọn Project ID..."
+                  className="w-full bg-white border border-slate-200/80 rounded-xl text-sm font-mono outline-none pl-8 pr-8 h-10 text-slate-800 placeholder:text-slate-400 focus:border-[#0099cc] focus:ring-1 focus:ring-[#0099cc] transition-all"
+                />
+                {data.projectId && (
+                  <button
+                    type="button"
+                    onClick={() => onChange({ projectId: "" })}
+                    className="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-md"
+                    title="Xóa Project ID"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <datalist id="contract-project-suggestions">
+                  {projectSuggestions.map((p) => (
+                    <option key={p.id} value={p.code}>
+                      {p.code} - {p.name}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+            ) : (
+              <div className="flex-1 border border-slate-200/80 rounded-xl px-3.5 h-10 flex items-center bg-slate-50/30">
+                {data.projectId ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    <Hash size={13} className="text-purple-500" />
+                    {data.projectId}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-normal italic">Chưa gắn Project ID</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Contract Name & Health check round inline */}
+        <div className="flex items-center gap-6">
+          {/* Contract Name */}
+          <div className="flex-1 flex items-center gap-3">
+            <label className={labelCls}>Contract Name</label>
+            <div className="flex-1 border border-slate-200/80 rounded-xl px-3.5 h-10 flex items-center text-slate-700 bg-slate-50/30 truncate font-semibold">
+              {data.contractName || selectedContract?.name || (selectedContract as any)?.description || (selectedContract as any)?.service || (
+                <span className="text-slate-400 font-normal italic">Chưa có tên hợp đồng</span>
+              )}
             </div>
           </div>
 
@@ -1706,16 +1784,6 @@ function CheckContractForm({
               </select>
               <ChevronDown size={14} className="text-slate-400 absolute right-3.5 pointer-events-none" />
             </div>
-          </div>
-        </div>
-
-        {/* Contract Name */}
-        <div className="flex items-center gap-3">
-          <label className={labelCls}>Contract Name</label>
-          <div className="flex-1 border border-slate-200/80 rounded-xl px-3.5 h-10 flex items-center text-slate-700 bg-slate-50/30 truncate font-semibold">
-            {data.contractName || selectedContract?.name || (selectedContract as any)?.description || (selectedContract as any)?.service || (
-              <span className="text-slate-400 font-normal italic">Chưa có tên hợp đồng</span>
-            )}
           </div>
         </div>
 
@@ -5057,6 +5125,7 @@ export default function TicketFormModal({
     scope: "In scope", saleResp: "", contractStart: "", contractEnd: "", contractStatus: "",
     saleName: "", confirmStatus: "", saleRemark: "",
     healthCheckRound: "",
+    projectId: "",
   });
 
   /* ── Form 3: Arrange Resource data ── */
@@ -5259,6 +5328,7 @@ export default function TicketFormModal({
         confirmStatus: "",
         saleRemark: initialRemark,
         healthCheckRound: "",
+        projectId: (ticket as any)?.project_id || (ticket as any)?.projectId || "",
       });      setArrangeData({ assigned: [], following: [] });
       setTroubleshootData({ holdTime: "", unholdTime: "", holdReason: "", runbook: "", newUpdate: "" });
       setUpdatesLog([]);
@@ -5346,6 +5416,7 @@ export default function TicketFormModal({
       /* Parse remark (JSON or legacy string) */
       let saleRemark = "";
       let healthCheckRound = "";
+      let initialProjectId = (ticket as any)?.project_id || (ticket as any)?.projectId || "";
       let briefSummary = "";
       let rootcause = "";
       let currentStatus = "";
@@ -5359,6 +5430,9 @@ export default function TicketFormModal({
           if (parsed && typeof parsed === 'object') {
             saleRemark = parsed.saleRemark || "";
             healthCheckRound = parsed.healthCheckRound || "";
+            if (parsed.projectId && !initialProjectId) {
+              initialProjectId = parsed.projectId;
+            }
             if (parsed.finished) {
               briefSummary = parsed.finished.briefSummary || "";
               rootcause = parsed.finished.rootcause || "";
@@ -5417,6 +5491,7 @@ export default function TicketFormModal({
         confirmStatus:  "",
         saleRemark:     saleRemark,
         healthCheckRound: healthCheckRound,
+        projectId:      initialProjectId,
       });
       /* Pre-populate Arrange Resource form */
       const assignedArr = ticket.assigned ? ticket.assigned.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -5793,9 +5868,11 @@ export default function TicketFormModal({
           contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
           contract_no:    checkData.contractNo    || null,
           contract_scope: checkData.scope         || null,
+          project_id:     checkData.projectId     || null,
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
+            projectId: checkData.projectId || "",
             finished: {
               briefSummary: finishedData.briefSummary,
               currentStatus: finishedData.currentStatus,
@@ -5860,6 +5937,7 @@ export default function TicketFormModal({
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
+            projectId: checkData.projectId || "",
             finished: finishedData,
             report: reportingData
           }),
@@ -5945,6 +6023,9 @@ export default function TicketFormModal({
             progress:     progressStr,
             customerId:   checkData.customerId   || null,
             customerName: checkData.customerName || null,
+            contractId:   checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
+            contractNo:   checkData.contractNo   || null,
+            projectId:    checkData.projectId    || null,
             creatorName:  currentUser?.name      || checkData.saleName || undefined,
           });
           if (!res.success) { alert("Lỗi tạo ticket: " + res.error); return; }
@@ -6012,9 +6093,11 @@ export default function TicketFormModal({
           contract_id:    checkData.contractId === "no-contract" ? null : (checkData.contractId || null),
           contract_no:    checkData.contractNo    || null,
           contract_scope: checkData.scope         || null,
+          project_id:     checkData.projectId     || null,
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
+            projectId: checkData.projectId || "",
             finished: {
               briefSummary: finishedData.briefSummary,
               currentStatus: finishedData.currentStatus,
@@ -6085,6 +6168,7 @@ export default function TicketFormModal({
           remark: JSON.stringify({
             saleRemark: checkData.saleRemark || "",
             healthCheckRound: checkData.healthCheckRound || "",
+            projectId: checkData.projectId || "",
             finished: finishedData,
             report: reportingData
           }),

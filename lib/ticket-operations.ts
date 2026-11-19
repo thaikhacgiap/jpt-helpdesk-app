@@ -111,6 +111,7 @@ export async function createTicket(formData: any): Promise<{ success: boolean; t
       customer_name:  formData.customerName  || null,
       contract_id:    formData.contractId    || null,
       contract_no:    formData.contractNo    || null,
+      project_id:     formData.projectId     || formData.project_id || null,
       request_code:   requestCode,
       tt_type:        formData.ttType        || null,
       contract_scope: formData.contractScope || formData.contract_scope || 'In scope',

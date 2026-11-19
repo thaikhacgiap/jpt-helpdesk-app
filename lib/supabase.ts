@@ -53,6 +53,7 @@ export interface Contract {
   id: string
   code: string
   name: string
+  project_id?: string
   customer_id?: string
   start_date?: string
   end_date?: string
@@ -71,8 +72,10 @@ export interface Ticket {
   description?: string
   customer_id?: string
   customer_name?: string
+  customer_short?: string
   contract_no?: string
   contract_id?: string
+  project_id?: string
   request_code?: string
   request_id?: string
   request_status?: string
