@@ -22,6 +22,7 @@ interface HeaderProps {
   setActiveTab?: (id: string) => void;
   navTabs?: NavTabItem[];
   className?: string;
+  hideExtraActions?: boolean;
 }
 
 const getIconForTitle = (title: string) => {
@@ -48,8 +49,18 @@ export default function Header({
   setActiveTab,
   navTabs,
   className,
+  hideExtraActions,
 }: HeaderProps) {
   const pathname = usePathname();
+
+  const isMaintenanceOrProjects = 
+    pathname?.startsWith("/maintenance") || 
+    pathname?.startsWith("/projects") ||
+    title.toLowerCase().includes("bảo trì") ||
+    title.toLowerCase().includes("dự án") ||
+    title.toLowerCase().includes("triển khai");
+
+  const shouldHideActions = hideExtraActions ?? isMaintenanceOrProjects;
 
   return (
     <div className={`flex items-center justify-between gap-3 ${className || "mb-6"} bg-gradient-to-r from-teal-800/90 via-teal-900/95 to-slate-900/95 backdrop-blur-md border border-teal-700/30 text-white py-2.5 px-4 rounded-xl shadow-[0_4px_20px_rgba(13,148,136,0.15)] relative overflow-hidden shrink-0`}>
@@ -120,25 +131,28 @@ export default function Header({
           </div>
         )}
 
-        {/* GUIDE LINK */}
-        <Link
-          href="/guide"
-          title="Hướng dẫn sử dụng & Tải PDF"
-          className="cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1 text-slate-200 hover:text-cyan-300"
-        >
-          <HelpCircle size={16} />
-        </Link>
+        {/* GUIDE LINK & NOTIFICATION BELL (Hidden in Maintenance and Projects/Triển khai) */}
+        {!shouldHideActions && (
+          <>
+            <Link
+              href="/guide"
+              title="Hướng dẫn sử dụng & Tải PDF"
+              className="cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1 text-slate-200 hover:text-cyan-300"
+            >
+              <HelpCircle size={16} />
+            </Link>
 
-        {/* NOTIFICATION BELL */}
-        <div className="relative cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1">
-          <Bell
-            size={16}
-            className="text-slate-200 hover:text-white transition"
-          />
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
-            3
-          </div>
-        </div>
+            <div className="relative cursor-pointer w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 transition shrink-0 ml-1">
+              <Bell
+                size={16}
+                className="text-slate-200 hover:text-white transition"
+              />
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
+                3
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

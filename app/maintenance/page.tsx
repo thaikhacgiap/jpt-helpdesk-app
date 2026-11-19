@@ -1423,6 +1423,7 @@ export default function MaintenancePage() {
           activeTab={activeTab}
           setActiveTab={(id: any) => setActiveTab(id)}
           className="mb-2 shrink-0"
+          hideExtraActions={true}
         />
 
         {/* Toolbar */}

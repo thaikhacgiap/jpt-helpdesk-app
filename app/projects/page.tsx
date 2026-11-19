@@ -347,6 +347,7 @@ export default function ProjectsPage() {
         tabs={PROJECT_TABS}
         activeTab={activeTab}
         setActiveTab={(id: any) => setActiveTab(id as ProjectType)}
+        hideExtraActions={true}
       />
 
       {/* Stats Cards Row */}
