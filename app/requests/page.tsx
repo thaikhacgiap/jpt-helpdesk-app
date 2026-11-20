@@ -19,6 +19,7 @@ import { fetchAllTickets, updateServiceTicket, createServiceRequest, deleteServi
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
 import StaffSearchSelect from "@/components/common/staff-search-select";
+import MaintenanceSearchSelect from "@/components/common/maintenance-search-select";
 import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import { fetchProjects, Project } from "@/lib/project-operations";
 import AttachmentUploader from "@/components/common/attachment-uploader";
@@ -2366,13 +2367,16 @@ export default function RequestsPage() {
                               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
                                 Mã bảo trì
                               </label>
-                              <input
-                                type="text"
-                                name="taskRefCode"
+                              <MaintenanceSearchSelect
                                 value={formData.taskRefCode}
-                                onChange={handleInputChange}
-                                placeholder="Nhập mã hợp đồng / bảo trì..."
-                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm font-mono transition"
+                                onChange={(code, opt) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    taskRefCode: code,
+                                    taskRefTitle: opt?.title || prev.taskRefTitle
+                                  }));
+                                }}
+                                placeholder="-- Chọn hoặc tìm mã bảo trì (BTR-...) hoặc hợp đồng --"
                               />
                             </div>
                           )}
