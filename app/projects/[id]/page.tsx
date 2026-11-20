@@ -42,7 +42,7 @@ import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import StaffSearchSelect from "@/components/common/staff-search-select";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
 import CustomerSearchSelect from "@/components/common/customer-search-select";
-import { fetchContractsByCustomer, Contract } from "@/lib/contract-operations";
+import { fetchContractsByCustomer, fetchContracts, Contract } from "@/lib/contract-operations";
 import { fetchOpportunitiesByCustomer, Opportunity } from "@/lib/opportunity-operations";
 import {
   ArrowLeft,
@@ -82,7 +82,8 @@ import {
   GripVertical,
   Lock,
   Unlock,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from "lucide-react";
 
 const TABLE_COLUMNS = [
@@ -391,7 +392,9 @@ export default function ProjectDetailPage() {
   const [staffList, setStaffList] = useState<NhanSu[]>([]);
   const [customerList, setCustomerList] = useState<Customer[]>([]);
   const [customerContracts, setCustomerContracts] = useState<Contract[]>([]);
+  const [allContracts, setAllContracts] = useState<Contract[]>([]);
   const [customerOpportunities, setCustomerOpportunities] = useState<Opportunity[]>([]);
+  const [editLinkSource, setEditLinkSource] = useState<"contract" | "opportunity">("contract");
   const [activeTab, setActiveTab] = useState<"overview" | "plan" | "gantt" | "timeline" | "document" | "diary">("overview");
 
   // Overview Tab Edit States
@@ -593,9 +596,16 @@ export default function ProjectDetailPage() {
     setEditedDesc(project.description || "");
 
     let foundCustomerId = project.customerId || "";
-    if (!foundCustomerId && project.customer && customerList.length > 0) {
-      const match = customerList.find(c => c.name.toLowerCase() === project.customer.toLowerCase());
-      if (match) foundCustomerId = match.id;
+    let foundCustomerCode = "";
+    if (customerList.length > 0) {
+      const match = customerList.find(c => 
+        (foundCustomerId && c.id === foundCustomerId) ||
+        (project.customer && c.name.toLowerCase() === project.customer.toLowerCase())
+      );
+      if (match) {
+        foundCustomerId = match.id;
+        foundCustomerCode = match.code || "";
+      }
     }
     setEditedCustomerId(foundCustomerId);
     setEditedCustomer(project.customer || "");
@@ -608,23 +618,28 @@ export default function ProjectDetailPage() {
     setEditedStartDate(project.startDate || "");
     setEditedEndDate(project.endDate || "");
 
-    const searchIdent = foundCustomerId || project.customer;
-    if (searchIdent) {
-      try {
-        const [contracts, opps] = await Promise.all([
-          fetchContractsByCustomer(searchIdent).catch(() => []),
-          fetchOpportunitiesByCustomer(searchIdent).catch(() => [])
-        ]);
-        setCustomerContracts(contracts);
-        setCustomerOpportunities(opps);
-      } catch (err) {
-        console.warn("Could not load customer contracts/opps:", err);
-        setCustomerContracts([]);
-        setCustomerOpportunities([]);
-      }
+    // Phân loại nguồn liên kết: nếu có thông tin cơ hội thì mặc định tab cơ hội, ngược lại tab hợp đồng
+    if (project.opportunityId || project.opportunityCode) {
+      setEditLinkSource("opportunity");
     } else {
+      setEditLinkSource("contract");
+    }
+
+    try {
+      const searchIdent = foundCustomerId || project.customer;
+      const [contracts, opps, allCont] = await Promise.all([
+        searchIdent ? fetchContractsByCustomer(searchIdent, foundCustomerCode, project.customer).catch(() => []) : Promise.resolve([]),
+        searchIdent ? fetchOpportunitiesByCustomer(searchIdent, foundCustomerCode, project.customer).catch(() => []) : Promise.resolve([]),
+        fetchContracts().catch(() => [])
+      ]);
+      setCustomerContracts(contracts);
+      setCustomerOpportunities(opps);
+      setAllContracts(allCont);
+    } catch (err) {
+      console.warn("Could not load customer contracts/opps:", err);
       setCustomerContracts([]);
       setCustomerOpportunities([]);
+      setAllContracts([]);
     }
 
     setIsEditingDesc(true);
@@ -633,6 +648,7 @@ export default function ProjectDetailPage() {
   const handleCustomerSelect = async (val: string, cust?: Customer | null) => {
     const customerName = cust ? cust.name : val;
     const customerId = cust ? cust.id : (customerList.find(c => c.name === val)?.id || "");
+    const customerCode = cust ? cust.code : (customerList.find(c => c.name === val)?.code || "");
     setEditedCustomerId(customerId);
     setEditedCustomer(customerName);
     setEditedContractId("");
@@ -644,12 +660,14 @@ export default function ProjectDetailPage() {
     const searchIdent = customerId || customerName;
     if (searchIdent) {
       try {
-        const [contracts, opps] = await Promise.all([
-          fetchContractsByCustomer(searchIdent).catch(() => []),
-          fetchOpportunitiesByCustomer(searchIdent).catch(() => [])
+        const [contracts, opps, allCont] = await Promise.all([
+          fetchContractsByCustomer(searchIdent, customerCode, customerName).catch(() => []),
+          fetchOpportunitiesByCustomer(searchIdent, customerCode, customerName).catch(() => []),
+          allContracts.length > 0 ? Promise.resolve(allContracts) : fetchContracts().catch(() => [])
         ]);
         setCustomerContracts(contracts);
         setCustomerOpportunities(opps);
+        if (allContracts.length === 0) setAllContracts(allCont);
       } catch {
         setCustomerContracts([]);
         setCustomerOpportunities([]);
@@ -661,10 +679,19 @@ export default function ProjectDetailPage() {
   };
 
   const handleContractSelect = (contractId: string) => {
-    const c = customerContracts.find(item => item.id === contractId);
+    const list = customerContracts.length > 0 ? customerContracts.concat(allContracts.filter(ac => !customerContracts.some(cc => cc.id === ac.id))) : allContracts;
+    const c = list.find(item => item.id === contractId);
     if (c) {
       setEditedContractId(c.id);
       setEditedContractNo(c.contract_no || c.code || "");
+      setEditedOpportunityId("");
+      setEditedOpportunityCode("");
+      setEditedOpportunityName("");
+      // Match mã dự án theo hợp đồng (lấy từ project_id của hợp đồng, hoặc code / contract_no)
+      const nextCode = c.project_id || c.code || c.contract_no;
+      if (nextCode) {
+        setEditedCode(nextCode);
+      }
     } else {
       setEditedContractId("");
       setEditedContractNo("");
@@ -677,6 +704,12 @@ export default function ProjectDetailPage() {
       setEditedOpportunityId(opp.id);
       setEditedOpportunityCode(opp.code || "");
       setEditedOpportunityName(opp.name || "");
+      setEditedContractId("");
+      setEditedContractNo("");
+      // Match mã dự án theo cơ hội (lấy từ code của cơ hội)
+      if (opp.code) {
+        setEditedCode(opp.code);
+      }
     } else {
       setEditedOpportunityId("");
       setEditedOpportunityCode("");
@@ -693,18 +726,18 @@ export default function ProjectDetailPage() {
       customer: editedCustomer,
       customerId: editedCustomerId,
       manager: editedManager,
-      contractNo: editedContractNo,
-      contractId: editedContractId,
-      opportunityCode: editedOpportunityCode,
-      opportunityName: editedOpportunityName,
-      opportunityId: editedOpportunityId,
+      contractNo: editLinkSource === "contract" ? editedContractNo : "",
+      contractId: editLinkSource === "contract" ? editedContractId : "",
+      opportunityCode: editLinkSource === "opportunity" ? editedOpportunityCode : "",
+      opportunityName: editLinkSource === "opportunity" ? editedOpportunityName : "",
+      opportunityId: editLinkSource === "opportunity" ? editedOpportunityId : "",
       startDate: editedStartDate || project.startDate,
       endDate: editedEndDate || project.endDate,
     });
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",
-        content: `Cập nhật thông tin tổng quan dự án (Quản lý dự án: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
+        content: `Cập nhật thông tin tổng quan dự án (Mã dự án: "${editedCode || project.code}", Quản lý dự án: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
         category: "Update"
       });
       setIsEditingDesc(false);
@@ -2982,15 +3015,16 @@ export default function ProjectDetailPage() {
                           />
                         </div>
                         <div className="md:col-span-4">
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Mã dự án
+                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                            <span>Mã dự án</span>
+                            <span className="text-[10px] text-blue-600 font-normal lowercase">(tự điền từ HĐ / cơ hội)</span>
                           </label>
                           <input
                             type="text"
                             value={editedCode}
                             onChange={(e) => setEditedCode(e.target.value)}
                             placeholder="VD: TT03-PJ-0991"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white font-mono uppercase"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white font-mono uppercase font-semibold text-blue-700"
                           />
                         </div>
                       </div>
@@ -3049,79 +3083,138 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
 
-                      {/* Row 4: Contract & Opportunity */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <FileText size={13} className="text-indigo-500 shrink-0" />
-                              <span>Hợp đồng liên quan</span>
-                            </span>
-                            {customerContracts.length > 0 && (
-                              <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded">
-                                {customerContracts.length} hợp đồng
-                              </span>
-                            )}
+                      {/* Row 4: Option Link Source (Contract vs Opportunity) */}
+                      <div className="space-y-2 p-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                            <span>Liên kết dự án từ</span>
+                            <span className="text-red-500">*</span>
+                            <span className="text-[11px] text-slate-400 font-normal lowercase">(chọn 1 trong 2)</span>
                           </label>
-                          {customerContracts.length > 0 ? (
+
+                          {/* Radio Option Buttons */}
+                          <div className="inline-flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-2xs gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditLinkSource("contract");
+                                setEditedOpportunityId("");
+                                setEditedOpportunityCode("");
+                                setEditedOpportunityName("");
+                                const list = customerContracts.length > 0 ? customerContracts : allContracts;
+                                const c = list.find(item => item.id === editedContractId);
+                                if (c) {
+                                  const nextCode = c.project_id || c.code || c.contract_no;
+                                  if (nextCode) setEditedCode(nextCode);
+                                }
+                              }}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                                editLinkSource === "contract"
+                                  ? "bg-blue-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                              }`}
+                            >
+                              <FileText size={13} />
+                              <span>Hợp đồng (Contract)</span>
+                              {(customerContracts.length > 0 ? customerContracts.length : allContracts.length) > 0 && (
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                                  editLinkSource === "contract" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {customerContracts.length > 0 ? customerContracts.length : allContracts.length}
+                                </span>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditLinkSource("opportunity");
+                                setEditedContractId("");
+                                setEditedContractNo("");
+                                const o = customerOpportunities.find(item => item.id === editedOpportunityId);
+                                if (o && o.code) {
+                                  setEditedCode(o.code);
+                                }
+                              }}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                                editLinkSource === "opportunity"
+                                  ? "bg-amber-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                              }`}
+                            >
+                              <Sparkles size={13} />
+                              <span>Cơ hội (Opportunity)</span>
+                              {customerOpportunities.length > 0 && (
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                                  editLinkSource === "opportunity" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {customerOpportunities.length}
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Dropdown tương ứng */}
+                        {editLinkSource === "contract" ? (
+                          <div>
                             <select
                               value={editedContractId || ""}
                               onChange={(e) => handleContractSelect(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer"
+                              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer font-medium"
                             >
                               <option value="">-- Không gắn hợp đồng --</option>
-                              {customerContracts.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.contract_no || c.code} - {c.service || c.name || "Hợp đồng"}
-                                </option>
-                              ))}
+                              {customerContracts.length > 0 ? (
+                                <>
+                                  <optgroup label={`Hợp đồng của khách hàng (${customerContracts.length})`}>
+                                    {customerContracts.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.service || c.name || "Hợp đồng"}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                  {allContracts.filter(ac => !customerContracts.some(cc => cc.id === ac.id)).length > 0 && (
+                                    <optgroup label="Hợp đồng khác trong hệ thống">
+                                      {allContracts
+                                        .filter(ac => !customerContracts.some(cc => cc.id === ac.id))
+                                        .map((c) => (
+                                          <option key={c.id} value={c.id}>
+                                            {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.customer || c.service || c.name || "Hợp đồng"}
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                  )}
+                                </>
+                              ) : (
+                                allContracts.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.contract_no || c.code} {c.project_id ? `(Project ID: ${c.project_id})` : ""} - {c.customer || c.service || c.name || "Hợp đồng"}
+                                  </option>
+                                ))
+                              )}
                             </select>
-                          ) : (
-                            <input
-                              type="text"
-                              value={editedContractNo}
-                              onChange={(e) => setEditedContractNo(e.target.value)}
-                              placeholder="Nhập số/mã hợp đồng liên quan..."
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                            />
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <Tag size={13} className="text-amber-500 shrink-0" />
-                              <span>Cơ hội liên kết</span>
-                            </span>
-                            {customerOpportunities.length > 0 && (
-                              <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.2 rounded">
-                                {customerOpportunities.length} cơ hội
-                              </span>
-                            )}
-                          </label>
-                          {customerOpportunities.length > 0 ? (
+                          </div>
+                        ) : (
+                          <div>
                             <select
                               value={editedOpportunityId || ""}
                               onChange={(e) => handleOpportunitySelect(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer"
+                              disabled={customerOpportunities.length === 0}
+                              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-xs bg-white cursor-pointer font-medium disabled:bg-slate-100 disabled:text-slate-400"
                             >
-                              <option value="">-- Không gắn cơ hội --</option>
+                              <option value="">
+                                {customerOpportunities.length === 0
+                                  ? "-- Không có cơ hội liên quan cho khách hàng này --"
+                                  : "-- Chọn cơ hội liên kết dự án --"}
+                              </option>
                               {customerOpportunities.map((o) => (
                                 <option key={o.id} value={o.id}>
                                   [{o.code}] {o.name}
                                 </option>
                               ))}
                             </select>
-                          ) : (
-                            <input
-                              type="text"
-                              value={editedOpportunityCode}
-                              onChange={(e) => setEditedOpportunityCode(e.target.value)}
-                              placeholder="Nhập mã cơ hội liên kết..."
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white"
-                            />
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Row 5: Start & End Dates */}
