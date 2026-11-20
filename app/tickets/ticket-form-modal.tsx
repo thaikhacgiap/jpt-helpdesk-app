@@ -1211,10 +1211,12 @@ interface CreateFormData {
   title: string; description: string;
   ttType: string; category: string; requestTime?: string; startTime: string; priority: string;
 }
-function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
+function CreateTicketForm({ editing, data, onChange, onRequestSelect, currentTicketId, currentRequestCode }: {
   editing: boolean; data: CreateFormData;
   onChange: (patch: Partial<CreateFormData>) => void;
   onRequestSelect?: (req: RequestOption | null) => void;
+  currentTicketId?: string;
+  currentRequestCode?: string;
 }) {
   const req = <span className="text-red-500 ml-0.5">*</span>;
 
@@ -1242,6 +1244,9 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect }: {
         {editing ? (
           <RequestSearchSelect
             value={data.requestCode}
+            onlyUnassigned={true}
+            currentTicketId={currentTicketId}
+            currentRequestCode={currentRequestCode || data.requestCode}
             onChange={(code, req) => {
               const patch: Partial<CreateFormData> = { requestCode: code };
               if (req) {
@@ -6112,6 +6117,29 @@ export default function TicketFormModal({
       if (currentStep === "create") {
         if (mode === "create" && !savedTicketId) {
           /* Create new ticket */
+          // Double check request code is not already assigned to another ticket
+          const reqCode = (createData.requestCode || "").trim();
+          if (reqCode) {
+            const altCode = reqCode.startsWith("CR-")
+              ? reqCode.replace(/^CR-/, "TH-")
+              : reqCode.startsWith("TH-")
+              ? reqCode.replace(/^TH-/, "CR-")
+              : reqCode;
+
+            const { data: existingTk } = await supabase
+              .from("tickets")
+              .select("ticket_id")
+              .or(`request_code.eq.${reqCode},request_code.eq.${altCode},document_link.eq.${reqCode},document_link.eq.${altCode},remark.ilike.%${reqCode}%,remark.ilike.%${altCode}%`)
+              .ilike("ticket_id", "TK-%")
+              .limit(1);
+
+            if (existingTk && existingTk.length > 0) {
+              alert(`Mã yêu cầu "${reqCode}" đã được gán cho ticket ${existingTk[0].ticket_id}. Vui lòng chọn mã yêu cầu chưa được gán!`);
+              setSubmitting(false);
+              return;
+            }
+          }
+
           const currentUser = getCurrentUser();
           const res = await createTicket({
             requestCode: createData.requestCode,
@@ -6682,6 +6710,8 @@ export default function TicketFormModal({
           <CreateTicketForm
             editing={editing}
             data={createData}
+            currentTicketId={savedTicketId || ticket?.ticket_id || ticket?.id}
+            currentRequestCode={ticket?.request_code || createData.requestCode}
             onChange={(patch) => setCreateData((p) => ({ ...p, ...patch }))}
             onRequestSelect={(req) => {
               if (req?.customerId || req?.customerName) {

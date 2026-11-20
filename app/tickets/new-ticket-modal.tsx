@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X, ChevronDown, Search, Building2, Check, FileText } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { createTicket } from "@/lib/ticket-operations";
 import { fetchCustomers } from "@/lib/customer-operations";
 import { fetchContractsByCustomer } from "@/lib/contract-operations";
@@ -385,6 +386,27 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
 
     setSubmitting(true);
     try {
+      // Double check request code is not already assigned to another ticket
+      const reqCode = formData.requestCode.trim();
+      const altCode = reqCode.startsWith("CR-")
+        ? reqCode.replace(/^CR-/, "TH-")
+        : reqCode.startsWith("TH-")
+        ? reqCode.replace(/^TH-/, "CR-")
+        : reqCode;
+
+      const { data: existingTk } = await supabase
+        .from("tickets")
+        .select("ticket_id")
+        .or(`request_code.eq.${reqCode},request_code.eq.${altCode},document_link.eq.${reqCode},document_link.eq.${altCode},remark.ilike.%${reqCode}%,remark.ilike.%${altCode}%`)
+        .ilike("ticket_id", "TK-%")
+        .limit(1);
+
+      if (existingTk && existingTk.length > 0) {
+        alert(`Mã yêu cầu "${reqCode}" đã được gán cho ticket ${existingTk[0].ticket_id}. Vui lòng chọn mã yêu cầu chưa được gán!`);
+        setSubmitting(false);
+        return;
+      }
+
       const result = await createTicket({
         ...formData,
         requestCode:   formData.requestCode,
@@ -442,6 +464,7 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
             <label className={labelCls}>Mã yêu cầu <span className="text-red-500 normal-case">*</span></label>
             <RequestSearchSelect
               value={formData.requestCode}
+              onlyUnassigned={true}
               onChange={(code, req) => {
                 setFormData((prev) => {
                   const updated = { ...prev, requestCode: code };

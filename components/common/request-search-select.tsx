@@ -20,6 +20,8 @@ export interface RequestOption {
   startTime?: string;
   requestTime?: string;
   source: "customer" | "internal";
+  isAssigned?: boolean;
+  assignedTicketId?: string;
 }
 
 export interface RequestSearchSelectProps {
@@ -32,25 +34,81 @@ export interface RequestSearchSelectProps {
   className?: string;
   size?: "sm" | "md";
   dropdownPosition?: "fixed" | "absolute";
+  onlyUnassigned?: boolean;
+  currentTicketId?: string;
+  currentRequestCode?: string;
 }
 
 export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
   const options: RequestOption[] = [];
   const seenCodes = new Set<string>();
+  const assignedMap = new Map<string, string>();
 
-  // 1. Fetch from Supabase tickets (Customer portal & service requests)
+  // 1. Fetch all main tickets (TK-%) to find which requests have already been assigned to a ticket
+  try {
+    const { data: mainTickets, error: tkError } = await supabase
+      .from("tickets")
+      .select("id, ticket_id, request_code, request_id, remark, document_link")
+      .ilike("ticket_id", "TK-%");
+
+    if (!tkError && mainTickets) {
+      mainTickets.forEach((tk) => {
+        const rc = (tk.request_code || (tk.request_id && /^(CR|TH|SR|TR|YC)-/i.test(tk.request_id) ? tk.request_id.replace(/^TH-/, "CR-") : "") || "").trim();
+        
+        let fromRemark = "";
+        if (tk.remark) {
+          const match = tk.remark.match(/(?:Tạo từ yêu cầu|Mã yêu cầu|Yêu cầu)[:\s]+([A-Z0-9-]+)/i)
+            || tk.remark.match(/\[(?:Mã yêu cầu:\s*)?([A-Z0-9-]+)\]/i);
+          if (match && match[1] && !match[1].startsWith("TK-") && !match[1].startsWith("BTR-")) {
+            fromRemark = match[1].replace(/^TH-/, "CR-").trim();
+          }
+        }
+
+        const validCode = rc || fromRemark;
+        if (validCode) {
+          const upper = validCode.toUpperCase();
+          assignedMap.set(upper, tk.ticket_id);
+          assignedMap.set(upper.replace(/^CR-/, "TH-"), tk.ticket_id);
+          assignedMap.set(upper.replace(/^TH-/, "CR-"), tk.ticket_id);
+        }
+
+        if (tk.document_link && /^(CR|TH|SR|TR)-/i.test(tk.document_link)) {
+          const docUpper = tk.document_link.toUpperCase().trim();
+          assignedMap.set(docUpper, tk.ticket_id);
+          assignedMap.set(docUpper.replace(/^CR-/, "TH-"), tk.ticket_id);
+          assignedMap.set(docUpper.replace(/^TH-/, "CR-"), tk.ticket_id);
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Error fetching main tickets for assigned check:", err);
+  }
+
+  // 2. Fetch from Supabase tickets (Customer portal & service requests)
   try {
     const { data: portalTickets, error } = await supabase
       .from("tickets")
-      .select("id, ticket_id, title, description, customer_id, customer_name, priority, category, tt_type, tt_status, start_time, created_at")
+      .select("id, ticket_id, title, description, customer_id, customer_name, priority, category, tt_type, tt_status, start_time, created_at, document_link")
       .or("ticket_id.ilike.CR-%,ticket_id.ilike.TH-%,ticket_id.ilike.SR-%,ticket_id.ilike.TR-%")
       .order("created_at", { ascending: false });
 
     if (!error && portalTickets) {
       portalTickets.forEach((t) => {
         const displayCode = t.ticket_id.replace(/^TH-/, "CR-");
-        if (!seenCodes.has(displayCode.toUpperCase())) {
-          seenCodes.add(displayCode.toUpperCase());
+        const codeUpper = displayCode.toUpperCase();
+        const rawUpper = t.ticket_id.toUpperCase();
+
+        // Also check if request's document_link points to a ticket (TK-)
+        if (t.document_link && t.document_link.startsWith("TK-")) {
+          assignedMap.set(codeUpper, t.document_link);
+          assignedMap.set(rawUpper, t.document_link);
+        }
+
+        const assignedTicketId = assignedMap.get(codeUpper) || assignedMap.get(rawUpper);
+        const isAssigned = Boolean(assignedTicketId);
+
+        if (!seenCodes.has(codeUpper)) {
+          seenCodes.add(codeUpper);
           options.push({
             id: t.id,
             code: displayCode,
@@ -65,6 +123,8 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
             startTime: t.start_time || undefined,
             requestTime: undefined,
             source: "customer",
+            isAssigned,
+            assignedTicketId: assignedTicketId || undefined,
           });
         }
       });
@@ -73,13 +133,17 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
     console.error("Error fetching portal requests:", err);
   }
 
-  // 2. Fetch from LocalStorage / Internal requests
+  // 3. Fetch from LocalStorage / Internal requests
   try {
     const internalList = await fetchRequests();
     internalList.forEach((r) => {
       const code = r.code || r.id;
-      if (!seenCodes.has(code.toUpperCase())) {
-        seenCodes.add(code.toUpperCase());
+      const codeUpper = code.toUpperCase();
+      const assignedTicketId = assignedMap.get(codeUpper) || (r.linkedTicketId ? String(r.linkedTicketId) : undefined);
+      const isAssigned = Boolean(assignedTicketId);
+
+      if (!seenCodes.has(codeUpper)) {
+        seenCodes.add(codeUpper);
         options.push({
           id: r.id,
           code: code,
@@ -89,6 +153,8 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
           ttType: r.type,
           status: r.status,
           source: "internal",
+          isAssigned,
+          assignedTicketId: assignedTicketId || undefined,
         });
       }
     });
@@ -109,6 +175,9 @@ export function RequestSearchSelect({
   className = "",
   size = "md",
   dropdownPosition = "fixed",
+  onlyUnassigned = true,
+  currentTicketId,
+  currentRequestCode,
 }: RequestSearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -205,11 +274,39 @@ export function RequestSearchSelect({
     ) || null;
   }, [value, requests]);
 
+  // Filter unassigned requests if onlyUnassigned is true
+  const availableRequests = useMemo(() => {
+    if (!onlyUnassigned) return requests;
+    const currentCodeNorm = (value || currentRequestCode || "").toUpperCase().trim();
+    const currentTicketNorm = (currentTicketId || "").toUpperCase().trim();
+
+    return requests.filter((r) => {
+      const rCodeNorm = r.code.toUpperCase().trim();
+      // Keep currently selected or currently assigned to this ticket
+      if (
+        currentCodeNorm &&
+        (rCodeNorm === currentCodeNorm ||
+          rCodeNorm.replace(/^CR-/, "TH-") === currentCodeNorm ||
+          rCodeNorm.replace(/^TH-/, "CR-") === currentCodeNorm)
+      ) {
+        return true;
+      }
+      if (
+        currentTicketNorm &&
+        r.assignedTicketId &&
+        r.assignedTicketId.toUpperCase().trim() === currentTicketNorm
+      ) {
+        return true;
+      }
+      return !r.isAssigned;
+    });
+  }, [requests, onlyUnassigned, value, currentRequestCode, currentTicketId]);
+
   // Filter requests by search query
   const filteredRequests = useMemo(() => {
-    if (!searchQuery.trim()) return requests;
+    if (!searchQuery.trim()) return availableRequests;
     const q = searchQuery.toLowerCase().trim();
-    return requests.filter((r) => {
+    return availableRequests.filter((r) => {
       return (
         r.code.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
@@ -217,7 +314,7 @@ export function RequestSearchSelect({
         (r.ttType && r.ttType.toLowerCase().includes(q))
       );
     });
-  }, [requests, searchQuery]);
+  }, [availableRequests, searchQuery]);
 
   const handleSelect = (req: RequestOption) => {
     onChange(req.code, req);
@@ -231,16 +328,35 @@ export function RequestSearchSelect({
     setSearchQuery("");
   };
 
+  const handleUseCode = (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code) return;
+    const codeUpper = code.toUpperCase();
+    const existing = requests.find(
+      (r) =>
+        r.code.toUpperCase() === codeUpper ||
+        r.code.replace(/^CR-/, "TH-").toUpperCase() === codeUpper ||
+        r.code.replace(/^TH-/, "CR-").toUpperCase() === codeUpper
+    );
+    if (
+      onlyUnassigned &&
+      existing?.isAssigned &&
+      existing.assignedTicketId !== currentTicketId
+    ) {
+      alert(
+        `Mã yêu cầu "${code}" đã được gán cho ticket ${existing.assignedTicketId}. Vui lòng chọn mã yêu cầu chưa được gán!`
+      );
+      return;
+    }
+    onChange(existing ? existing.code : code, existing || null);
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
   const handleCustomCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      const code = searchQuery.trim();
-      const existing = requests.find(
-        (r) => r.code.toLowerCase() === code.toLowerCase()
-      );
-      onChange(existing ? existing.code : code, existing || null);
-      setIsOpen(false);
-      setSearchQuery("");
+      handleUseCode(searchQuery.trim());
     }
   };
 
@@ -388,11 +504,7 @@ export function RequestSearchSelect({
                 {searchQuery.trim() && (
                   <button
                     type="button"
-                    onClick={() => {
-                      onChange(searchQuery.trim(), null);
-                      setIsOpen(false);
-                      setSearchQuery("");
-                    }}
+                    onClick={() => handleUseCode(searchQuery)}
                     className="mt-2 text-xs font-semibold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-200/60 inline-flex items-center gap-1 cursor-pointer"
                   >
                     <span>Sử dụng mã &quot;{searchQuery.trim()}&quot;</span>
@@ -465,7 +577,11 @@ export function RequestSearchSelect({
 
           {/* Quick Footer */}
           <div className="p-2 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-[11px] text-slate-400 px-3">
-            <span>Tổng số: {requests.length} yêu cầu</span>
+            <span>
+              {onlyUnassigned
+                ? `Tổng số: ${availableRequests.length} yêu cầu chưa gán ticket`
+                : `Tổng số: ${requests.length} yêu cầu`}
+            </span>
             {value && (
               <button
                 type="button"
