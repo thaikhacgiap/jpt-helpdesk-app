@@ -1233,7 +1233,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect, currentTic
         <div className="flex justify-between items-center">
           <label className={labelStyle}>
             Mã yêu cầu {req}
-            <span title="Gắn ticket với Mã yêu cầu dịch vụ / sự cố (CR-, SR-, TR-)"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
+            <span title="Gắn ticket với Mã yêu cầu dịch vụ / sự cố (CR-, SR-)"><HelpCircle size={12} className="text-slate-400 cursor-help" /></span>
           </label>
           {data.requestCode && (
             <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
@@ -1267,7 +1267,7 @@ function CreateTicketForm({ editing, data, onChange, onRequestSelect, currentTic
                 onRequestSelect(req || null);
               }
             }}
-            placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-, TR-) --"
+            placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-) --"
           />
         ) : (
           <div className={inputWrapperStyle(!!data.requestCode)}>
@@ -6120,6 +6120,12 @@ export default function TicketFormModal({
           // Double check request code is not already assigned to another ticket
           const reqCode = (createData.requestCode || "").trim();
           if (reqCode) {
+            if (reqCode.toUpperCase().startsWith("TR-")) {
+              alert("Hệ thống chỉ cho phép tạo ticket từ mã yêu cầu CR hoặc SR, không hỗ trợ mã TR!");
+              setSubmitting(false);
+              return;
+            }
+
             const altCode = reqCode.startsWith("CR-")
               ? reqCode.replace(/^CR-/, "TH-")
               : reqCode.startsWith("TH-")

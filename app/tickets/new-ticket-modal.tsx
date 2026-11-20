@@ -388,6 +388,12 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
     try {
       // Double check request code is not already assigned to another ticket
       const reqCode = formData.requestCode.trim();
+      if (reqCode.toUpperCase().startsWith("TR-")) {
+        alert("Hệ thống chỉ cho phép tạo ticket từ mã yêu cầu CR hoặc SR, không hỗ trợ mã TR!");
+        setSubmitting(false);
+        return;
+      }
+
       const altCode = reqCode.startsWith("CR-")
         ? reqCode.replace(/^CR-/, "TH-")
         : reqCode.startsWith("TH-")
@@ -488,7 +494,7 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }: NewTicket
                   if (matchingCust) setSelectedCustomer(matchingCust);
                 }
               }}
-              placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-, TR-) --"
+              placeholder="-- Chọn hoặc tìm mã yêu cầu liên quan (CR-, SR-) --"
             />
           </div>
 

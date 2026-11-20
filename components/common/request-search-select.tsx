@@ -89,7 +89,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
     const { data: portalTickets, error } = await supabase
       .from("tickets")
       .select("id, ticket_id, title, description, customer_id, customer_name, priority, category, tt_type, tt_status, start_time, created_at, document_link")
-      .or("ticket_id.ilike.CR-%,ticket_id.ilike.TH-%,ticket_id.ilike.SR-%,ticket_id.ilike.TR-%")
+      .or("ticket_id.ilike.CR-%,ticket_id.ilike.TH-%,ticket_id.ilike.SR-%")
       .order("created_at", { ascending: false });
 
     if (!error && portalTickets) {
@@ -97,6 +97,8 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
         const displayCode = t.ticket_id.replace(/^TH-/, "CR-");
         const codeUpper = displayCode.toUpperCase();
         const rawUpper = t.ticket_id.toUpperCase();
+
+        if (codeUpper.startsWith("TR-") || rawUpper.startsWith("TR-")) return;
 
         // Also check if request's document_link points to a ticket (TK-)
         if (t.document_link && t.document_link.startsWith("TK-")) {
@@ -139,6 +141,11 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
     internalList.forEach((r) => {
       const code = r.code || r.id;
       const codeUpper = code.toUpperCase();
+      // Only allow CR- and SR- (exclude TR-)
+      if (!codeUpper.startsWith("CR-") && !codeUpper.startsWith("TH-") && !codeUpper.startsWith("SR-")) {
+        return;
+      }
+
       const assignedTicketId = assignedMap.get(codeUpper) || (r.linkedTicketId ? String(r.linkedTicketId) : undefined);
       const isAssigned = Boolean(assignedTicketId);
 
@@ -168,7 +175,7 @@ export async function fetchAllAvailableRequests(): Promise<RequestOption[]> {
 export function RequestSearchSelect({
   value = "",
   onChange,
-  placeholder = "-- Tìm và chọn mã yêu cầu (CR / SR / TR) --",
+  placeholder = "-- Tìm và chọn mã yêu cầu (CR / SR) --",
   allowClear = true,
   disabled = false,
   required = false,
@@ -332,6 +339,12 @@ export function RequestSearchSelect({
     const code = rawCode.trim();
     if (!code) return;
     const codeUpper = code.toUpperCase();
+
+    if (codeUpper.startsWith("TR-")) {
+      alert("Hệ thống chỉ cho phép gán mã yêu cầu từ CR hoặc SR, không lấy từ TR!");
+      return;
+    }
+
     const existing = requests.find(
       (r) =>
         r.code.toUpperCase() === codeUpper ||
@@ -474,7 +487,7 @@ export function RequestSearchSelect({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm mã (CR-, SR-, TR-), tiêu đề, khách hàng..."
+                placeholder="Tìm mã (CR-, SR-), tiêu đề, khách hàng..."
                 className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition"
               />
               {searchQuery && (
