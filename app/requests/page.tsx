@@ -51,7 +51,7 @@ import {
 const TT_TYPE_OPTIONS = [
   "Xử Lý Sự Cố",
   "Hỗ Trợ Kỹ Thuật",
-  "Điều Chỉnh/Thay đổi hệ thống",
+  "Tư Vấn Kỹ Thuật",
   "Bảo Trì",
   "Triển Khai Dự Án"
 ];

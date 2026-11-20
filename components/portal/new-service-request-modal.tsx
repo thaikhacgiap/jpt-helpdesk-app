@@ -180,7 +180,7 @@ export default function NewServiceRequestModal({
                 <option value="">-- Chọn loại yêu cầu --</option>
                 <option value="Xử Lý Sự Cố">Xử Lý Sự Cố</option>
                 <option value="Hỗ Trợ Kỹ Thuật">Hỗ Trợ Kỹ Thuật</option>
-                <option value="Điều Chỉnh/Thay đổi hệ thống">Điều Chỉnh/Thay đổi hệ thống</option>
+                <option value="Tư Vấn Kỹ Thuật">Tư Vấn Kỹ Thuật</option>
                 <option value="Bảo Trì">Bảo Trì</option>
                 <option value="Triển Khai Dự Án">Triển Khai Dự Án</option>
               </select>
