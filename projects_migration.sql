@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
   end_date TEXT,
   budget NUMERIC DEFAULT 0,
   status TEXT DEFAULT 'Planning', -- 'Planning' | 'Active' | 'On Hold' | 'Completed' | 'Delayed'
+  stage TEXT DEFAULT 'Tiếp nhận',
   description TEXT,
   progress NUMERIC DEFAULT 0,
   plan JSONB DEFAULT '[]'::jsonb,

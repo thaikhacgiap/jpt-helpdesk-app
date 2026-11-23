@@ -748,6 +748,7 @@ export default function ProjectDetailPage() {
       status: editedStatus,
     });
     if (updated) {
+      setProject(prev => prev ? { ...prev, ...updated } : null);
       addDiaryEntry(project.id, {
         author: "John D.",
         content: `Cập nhật thông tin tổng quan dự án (Mã: "${editedCode || project.code}", Trạng thái: "${getStatusLabel(editedStatus)}", Giai đoạn: "${editedStage || 'Tiếp nhận'}", PM: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
@@ -919,6 +920,7 @@ export default function ProjectDetailPage() {
       alert(`Tiến trình dự án chưa đạt 100% (hiện tại: ${project.progress || 0}%). Không thể chọn trạng thái "Hoàn thành" khi tiến trình chưa đạt 100%!`);
       return;
     }
+    setProject(prev => prev ? { ...prev, status } : null);
     const updated = updateProject(project.id, { status });
     if (updated) {
       // Log status change in diary
@@ -934,7 +936,8 @@ export default function ProjectDetailPage() {
   // Handle Project Stage Change
   const handleStageChange = (stage: ProjectStage | string) => {
     if (!project) return;
-    const updated = updateProject(project.id, { stage });
+    setProject(prev => prev ? { ...prev, stage: stage as ProjectStage } : null);
+    const updated = updateProject(project.id, { stage: stage as ProjectStage });
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",

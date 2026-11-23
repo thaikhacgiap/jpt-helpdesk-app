@@ -1151,7 +1151,7 @@ export function fromDbProject(r: any): Project {
     endDate: r.end_date || "",
     budget: Number(r.budget) || 0,
     status: r.status || "Chuẩn bị",
-    stage: r.stage || undefined,
+    stage: r.stage || (r.plan && typeof r.plan === 'object' && !Array.isArray(r.plan) && r.plan.stage) || undefined,
     description: r.description || "",
     progress: Number(r.progress) || 0,
     mainPlanName,
@@ -1185,19 +1185,20 @@ export function toDbProject(p: Partial<Project>): any {
   if (p.endDate !== undefined) dbObj.end_date = p.endDate;
   if (p.budget !== undefined) dbObj.budget = typeof p.budget === 'number' ? p.budget : Number(p.budget) || 0;
   if (p.status !== undefined) dbObj.status = p.status;
-  if (p.stage !== undefined) dbObj.stage = p.stage;
   if (p.description !== undefined) dbObj.description = p.description;
   if (p.progress !== undefined) dbObj.progress = typeof p.progress === 'number' ? p.progress : Number(p.progress) || 0;
 
-  if (p.plan !== undefined || p.subPlans !== undefined || p.mainPlanName !== undefined) {
+  if (p.plan !== undefined || p.subPlans !== undefined || p.mainPlanName !== undefined || p.stage !== undefined) {
     const hasSubPlans = p.subPlans && p.subPlans.length > 0;
     const hasCustomMain = p.mainPlanName && p.mainPlanName !== "M-Plan";
-    if (hasSubPlans || hasCustomMain) {
+    const hasStage = p.stage !== undefined;
+    if (hasSubPlans || hasCustomMain || hasStage) {
       dbObj.plan = {
         isMultiPlan: true,
         mainPlanName: p.mainPlanName || "M-Plan",
-        tasks: p.plan || [],
-        subPlans: p.subPlans || []
+        tasks: Array.isArray(p.plan) ? p.plan : [],
+        subPlans: p.subPlans || [],
+        stage: p.stage
       };
     } else {
       dbObj.plan = p.plan || [];
@@ -1458,6 +1459,9 @@ export async function fetchProjectById(id: string): Promise<Project | undefined>
           }
           if (list[idx].mainPlanName && (!p.mainPlanName || p.mainPlanName === "M-Plan")) {
             p.mainPlanName = list[idx].mainPlanName;
+          }
+          if (list[idx].stage && !p.stage) {
+            p.stage = list[idx].stage;
           }
           list[idx] = p;
         } else {
