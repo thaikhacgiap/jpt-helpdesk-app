@@ -65,6 +65,47 @@ export interface ProjectSubPlan {
 
 export type ProjectType = 'professional' | 'poc' | 'commercial' | 'internal';
 
+export type ProjectStatus =
+  | 'Chuẩn bị'
+  | 'Đang triển khai'
+  | 'Tạm dừng'
+  | 'Hủy bỏ'
+  | 'Hoàn thành'
+  | 'Planning'
+  | 'Active'
+  | 'On Hold'
+  | 'Completed'
+  | 'Delayed';
+
+export type ProjectStage =
+  | 'Tiếp nhận'
+  | 'Kick-off'
+  | 'Khảo sát'
+  | 'Thiết kế'
+  | 'Triển khai'
+  | 'Bàn giao'
+  | 'Nghiệm thu'
+  | 'Hoàn thành';
+
+export const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'Chuẩn bị', label: 'Chuẩn bị' },
+  { value: 'Đang triển khai', label: 'Đang triển khai' },
+  { value: 'Tạm dừng', label: 'Tạm dừng' },
+  { value: 'Hủy bỏ', label: 'Hủy bỏ' },
+  { value: 'Hoàn thành', label: 'Hoàn thành' },
+];
+
+export const PROJECT_STAGE_OPTIONS: ProjectStage[] = [
+  'Tiếp nhận',
+  'Kick-off',
+  'Khảo sát',
+  'Thiết kế',
+  'Triển khai',
+  'Bàn giao',
+  'Nghiệm thu',
+  'Hoàn thành',
+];
+
 export interface Project {
   id: string;
   code: string;
@@ -81,7 +122,8 @@ export interface Project {
   startDate: string;
   endDate: string;
   budget: number;
-  status: 'Planning' | 'Active' | 'On Hold' | 'Completed' | 'Delayed';
+  status: ProjectStatus;
+  stage?: ProjectStage | string;
   description: string;
   progress: number; // calculated from tasks
   mainPlanName?: string;
@@ -1108,7 +1150,8 @@ export function fromDbProject(r: any): Project {
     startDate: r.start_date || "",
     endDate: r.end_date || "",
     budget: Number(r.budget) || 0,
-    status: r.status || "Planning",
+    status: r.status || "Chuẩn bị",
+    stage: r.stage || undefined,
     description: r.description || "",
     progress: Number(r.progress) || 0,
     mainPlanName,
@@ -1142,6 +1185,7 @@ export function toDbProject(p: Partial<Project>): any {
   if (p.endDate !== undefined) dbObj.end_date = p.endDate;
   if (p.budget !== undefined) dbObj.budget = typeof p.budget === 'number' ? p.budget : Number(p.budget) || 0;
   if (p.status !== undefined) dbObj.status = p.status;
+  if (p.stage !== undefined) dbObj.stage = p.stage;
   if (p.description !== undefined) dbObj.description = p.description;
   if (p.progress !== undefined) dbObj.progress = typeof p.progress === 'number' ? p.progress : Number(p.progress) || 0;
 
@@ -1439,6 +1483,8 @@ export async function createProject(formData: Omit<Project, 'id' | 'progress' | 
     ...formData,
     id: `proj-${Date.now()}`,
     code,
+    stage: formData.stage || "Tiếp nhận",
+    status: formData.status || "Chuẩn bị",
     progress: 0,
     plan: [],
     timeline: [

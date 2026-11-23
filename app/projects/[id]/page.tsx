@@ -36,7 +36,10 @@ import {
   ProjectMilestone,
   ProjectDocument,
   ProjectDiaryEntry,
-  ProjectSowItem
+  ProjectSowItem,
+  ProjectStage,
+  PROJECT_STATUS_OPTIONS,
+  PROJECT_STAGE_OPTIONS
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import StaffSearchSelect from "@/components/common/staff-search-select";
@@ -412,6 +415,8 @@ export default function ProjectDetailPage() {
   const [editedOpportunityId, setEditedOpportunityId] = useState("");
   const [editedStartDate, setEditedStartDate] = useState("");
   const [editedEndDate, setEditedEndDate] = useState("");
+  const [editedStage, setEditedStage] = useState<ProjectStage | string>("Tiếp nhận");
+  const [editedStatus, setEditedStatus] = useState<Project["status"]>("Chuẩn bị");
 
   const [isSowModalOpen, setIsSowModalOpen] = useState(false);
   const [editedSows, setEditedSows] = useState<ProjectSowItem[]>([]);
@@ -617,6 +622,8 @@ export default function ProjectDetailPage() {
     setEditedOpportunityId(project.opportunityId || "");
     setEditedStartDate(project.startDate || "");
     setEditedEndDate(project.endDate || "");
+    setEditedStage(project.stage || "Tiếp nhận");
+    setEditedStatus(project.status || "Chuẩn bị");
 
     // Phân loại nguồn liên kết: nếu có thông tin cơ hội thì mặc định tab cơ hội, ngược lại tab hợp đồng
     if (project.opportunityId || project.opportunityCode) {
@@ -719,6 +726,10 @@ export default function ProjectDetailPage() {
 
   const handleSaveDesc = () => {
     if (!project) return;
+    if ((editedStatus === "Hoàn thành" || editedStatus === "Completed") && (project.progress || 0) < 100) {
+      alert(`Tiến trình dự án chưa đạt 100% (hiện tại: ${project.progress || 0}%). Không thể chuyển sang trạng thái "Hoàn thành"!`);
+      return;
+    }
     const updated = updateProject(project.id, {
       name: editedName.trim() || project.name,
       code: editedCode.trim() || project.code,
@@ -733,11 +744,13 @@ export default function ProjectDetailPage() {
       opportunityId: editLinkSource === "opportunity" ? editedOpportunityId : "",
       startDate: editedStartDate || project.startDate,
       endDate: editedEndDate || project.endDate,
+      stage: editedStage,
+      status: editedStatus,
     });
     if (updated) {
       addDiaryEntry(project.id, {
         author: "John D.",
-        content: `Cập nhật thông tin tổng quan dự án (Mã dự án: "${editedCode || project.code}", Quản lý dự án: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
+        content: `Cập nhật thông tin tổng quan dự án (Mã: "${editedCode || project.code}", Trạng thái: "${getStatusLabel(editedStatus)}", Giai đoạn: "${editedStage || 'Tiếp nhận'}", PM: "${editedManager || 'Chưa phân công'}", Khách hàng: "${editedCustomer || 'Chưa chọn'}")`,
         category: "Update"
       });
       setIsEditingDesc(false);
@@ -901,12 +914,31 @@ export default function ProjectDetailPage() {
 
   // Handle Project Status Change
   const handleStatusChange = (status: Project["status"]) => {
+    if (!project) return;
+    if ((status === "Hoàn thành" || status === "Completed") && (project.progress || 0) < 100) {
+      alert(`Tiến trình dự án chưa đạt 100% (hiện tại: ${project.progress || 0}%). Không thể chọn trạng thái "Hoàn thành" khi tiến trình chưa đạt 100%!`);
+      return;
+    }
     const updated = updateProject(project.id, { status });
     if (updated) {
       // Log status change in diary
       addDiaryEntry(project.id, {
         author: "John D.",
         content: `Thay đổi trạng thái dự án thành "${getStatusLabel(status)}"`,
+        category: "Milestone"
+      });
+      refreshProjectData();
+    }
+  };
+
+  // Handle Project Stage Change
+  const handleStageChange = (stage: ProjectStage | string) => {
+    if (!project) return;
+    const updated = updateProject(project.id, { stage });
+    if (updated) {
+      addDiaryEntry(project.id, {
+        author: "John D.",
+        content: `Chuyển giai đoạn dự án sang "${stage}"`,
         category: "Milestone"
       });
       refreshProjectData();
@@ -2508,23 +2540,68 @@ export default function ProjectDetailPage() {
 
   const getStatusLabel = (status: Project["status"]) => {
     switch (status) {
-      case "Planning": return "Lập kế hoạch";
-      case "Active": return "Đang triển khai";
-      case "On Hold": return "Tạm hoãn";
-      case "Completed": return "Hoàn thành";
-      case "Delayed": return "Trễ hạn";
-      default: return status;
+      case "Chuẩn bị":
+      case "Planning":
+        return "Chuẩn bị";
+      case "Đang triển khai":
+      case "Active":
+        return "Đang triển khai";
+      case "Tạm dừng":
+      case "On Hold":
+        return "Tạm dừng";
+      case "Hủy bỏ":
+      case "Delayed":
+        return "Hủy bỏ";
+      case "Hoàn thành":
+      case "Completed":
+        return "Hoàn thành";
+      default:
+        return status;
     }
   };
 
   const getStatusBadgeClass = (status: Project["status"]) => {
     switch (status) {
-      case "Planning": return "bg-slate-100 text-slate-700 border-slate-200";
-      case "Active": return "bg-teal-50 text-teal-700 border-teal-200/50";
-      case "On Hold": return "bg-amber-50 text-amber-700 border-amber-200/50";
-      case "Completed": return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
-      case "Delayed": return "bg-rose-50 text-rose-700 border-rose-200/50";
-      default: return "bg-slate-100 text-slate-700 border-slate-200";
+      case "Chuẩn bị":
+      case "Planning":
+        return "bg-slate-100 text-slate-700 border-slate-200";
+      case "Đang triển khai":
+      case "Active":
+        return "bg-teal-50 text-teal-700 border-teal-200/50";
+      case "Tạm dừng":
+      case "On Hold":
+        return "bg-amber-50 text-amber-700 border-amber-200/50";
+      case "Hủy bỏ":
+      case "Delayed":
+        return "bg-rose-50 text-rose-700 border-rose-200/50";
+      case "Hoàn thành":
+      case "Completed":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200/50";
+      default:
+        return "bg-slate-100 text-slate-700 border-slate-200";
+    }
+  };
+
+  const getStageBadgeClass = (stage?: string) => {
+    switch (stage) {
+      case "Tiếp nhận":
+        return "bg-sky-50 text-sky-700 border-sky-200";
+      case "Kick-off":
+        return "bg-indigo-50 text-indigo-700 border-indigo-200";
+      case "Khảo sát":
+        return "bg-violet-50 text-violet-700 border-violet-200";
+      case "Thiết kế":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "Triển khai":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Bàn giao":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Nghiệm thu":
+        return "bg-orange-50 text-orange-700 border-orange-200";
+      case "Hoàn thành":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      default:
+        return "bg-slate-50 text-slate-700 border-slate-200";
     }
   };
 
@@ -2781,22 +2858,47 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Right Status Controller & Actions */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              <span className="text-xs text-slate-500 font-semibold">Trạng thái:</span>
-              <div className="relative">
-                <select
-                  value={project.status}
-                  onChange={(e) => handleStatusChange(e.target.value as Project["status"])}
-                  className={`text-[11px] font-bold px-2.5 py-1.5 border rounded-lg outline-none bg-white appearance-none pr-8 cursor-pointer ${getStatusBadgeClass(project.status)}`}
-                >
-                  <option value="Planning">Lập kế hoạch</option>
-                  <option value="Active">Đang triển khai</option>
-                  <option value="On Hold">Tạm hoãn</option>
-                  <option value="Completed">Hoàn thành</option>
-                  <option value="Delayed">Trễ hạn</option>
-                </select>
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 font-bold text-[8px]">
-                  ▼
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              {/* Giai đoạn Controller */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs text-slate-500 font-semibold">Giai đoạn:</span>
+                <div className="relative">
+                  <select
+                    value={project.stage || "Tiếp nhận"}
+                    onChange={(e) => handleStageChange(e.target.value as ProjectStage)}
+                    className={`text-[11px] font-bold px-2.5 py-1.5 border rounded-lg outline-none bg-white appearance-none pr-8 cursor-pointer ${getStageBadgeClass(project.stage)}`}
+                  >
+                    {PROJECT_STAGE_OPTIONS.map((stg) => (
+                      <option key={stg} value={stg}>{stg}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 font-bold text-[8px]">
+                    ▼
+                  </div>
+                </div>
+              </div>
+
+              {/* Trạng thái Controller */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs text-slate-500 font-semibold">Trạng thái:</span>
+                <div className="relative">
+                  <select
+                    value={project.status}
+                    onChange={(e) => handleStatusChange(e.target.value as Project["status"])}
+                    className={`text-[11px] font-bold px-2.5 py-1.5 border rounded-lg outline-none bg-white appearance-none pr-8 cursor-pointer ${getStatusBadgeClass(project.status)}`}
+                  >
+                    {PROJECT_STATUS_OPTIONS.map((opt) => {
+                      const isDisabled = opt.value === "Hoàn thành" && (project.progress || 0) < 100;
+                      return (
+                        <option key={opt.value} value={opt.value} disabled={isDisabled}>
+                          {opt.label}{isDisabled ? " (Cần 100% tiến độ)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 font-bold text-[8px]">
+                    ▼
+                  </div>
                 </div>
               </div>
 
@@ -2826,87 +2928,21 @@ export default function ProjectDetailPage() {
             <span>Tổng quan dự án</span>
           </button>
 
-          {/* MAIN PLAN TAB (M-Plan) */}
-          <div className="flex items-center group relative">
-            <button
-              onClick={() => {
-                setActiveTab("plan");
-                setActivePlanId("main");
-              }}
-              className={`flex items-center gap-1.5 px-3.5 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === "plan" && resolvedPlanId === "main"
-                  ? "border-blue-600 text-blue-600 bg-blue-50/60"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <ListTodo size={14} />
-              <span>{project.mainPlanName || "M-Plan"}</span>
-              <span className="bg-slate-200/70 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {project.plan.length}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenRenamePlan("main", project.mainPlanName || "M-Plan");
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer mr-0.5"
-              title="Đổi tên Main Plan"
-            >
-              <Edit size={11} />
-            </button>
-          </div>
-
-          {/* SUB-PLAN TABS (S-Plans) */}
-          {project.subPlans?.map((sp) => {
-            const isSpActive = activeTab === "plan" && resolvedPlanId === sp.id;
-            return (
-              <div key={sp.id} className="flex items-center group relative">
-                <button
-                  onClick={() => {
-                    setActiveTab("plan");
-                    setActivePlanId(sp.id);
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                    isSpActive
-                      ? "border-indigo-600 text-indigo-700 bg-indigo-50/60"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <Tag size={13} className={isSpActive ? "text-indigo-600" : "text-slate-400"} />
-                  <span>{sp.name}</span>
-                  <span className="bg-slate-200/70 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                    {sp.tasks?.length || 0}
-                  </span>
-                </button>
-                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenRenamePlan(sp.id, sp.name);
-                    }}
-                    className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
-                    title="Đổi tên Sub-Plan"
-                  >
-                    <Edit size={11} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteSubPlan(sp.id);
-                    }}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
-                    title="Xóa Sub-Plan"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {/* PLAN TAB: Menu phía trên chỉ hiện Kế hoạch (Plan), chi tiết Main Plan và Sub-Plan nằm ở toolbar bên dưới */}
+          <button
+            onClick={() => setActiveTab("plan")}
+            className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "plan"
+                ? "border-blue-600 text-blue-600 bg-blue-50/60"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <ListTodo size={14} />
+            <span>Kế hoạch (Plan)</span>
+            <span className="bg-slate-200/70 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+              {project.plan.length + (project.subPlans?.reduce((sum, sp) => sum + (sp.tasks?.length || 0), 0) || 0)}
+            </span>
+          </button>
 
           <button
             onClick={() => setActiveTab("gantt")}
@@ -3246,6 +3282,44 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
 
+                      {/* Row 6: Trạng thái & Giai đoạn */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Trạng thái dự án
+                          </label>
+                          <select
+                            value={editedStatus}
+                            onChange={(e) => setEditedStatus(e.target.value as Project["status"])}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer font-medium"
+                          >
+                            {PROJECT_STATUS_OPTIONS.map((opt) => {
+                              const isDisabled = opt.value === "Hoàn thành" && (project.progress || 0) < 100;
+                              return (
+                                <option key={opt.value} value={opt.value} disabled={isDisabled}>
+                                  {opt.label}{isDisabled ? " (Cần 100% tiến độ)" : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Giai đoạn dự án
+                          </label>
+                          <select
+                            value={editedStage}
+                            onChange={(e) => setEditedStage(e.target.value as ProjectStage)}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-xs bg-white cursor-pointer font-medium"
+                          >
+                            {PROJECT_STAGE_OPTIONS.map((stg) => (
+                              <option key={stg} value={stg}>{stg}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
                       {/* Action buttons */}
                       <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 text-xs">
                         <button
@@ -3273,7 +3347,7 @@ export default function ProjectDetailPage() {
                   
                   {/* Additional Meta Details */}
                   {!isEditingDesc && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t border-slate-100 text-xs">
                       <div className="space-y-1">
                         <span className="text-slate-400 font-medium block">Khách hàng</span>
                         <span className="font-bold text-slate-700 text-sm flex items-center gap-1">
@@ -3301,6 +3375,22 @@ export default function ProjectDetailPage() {
                           <User size={14} className="text-purple-500 shrink-0" />
                           <span className="truncate">{project.manager || "Chưa phân công"}</span>
                         </span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Giai đoạn</span>
+                        <div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${getStageBadgeClass(project.stage)}`}>
+                            {project.stage || "Tiếp nhận"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 font-medium block">Trạng thái</span>
+                        <div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${getStatusBadgeClass(project.status)}`}>
+                            {getStatusLabel(project.status)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}

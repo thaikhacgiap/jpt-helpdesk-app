@@ -10,7 +10,11 @@ import {
   deleteProject, 
   subscribeToProjects,
   Project,
-  ProjectType
+  ProjectType,
+  ProjectStage,
+  ProjectStatus,
+  PROJECT_STATUS_OPTIONS,
+  PROJECT_STAGE_OPTIONS
 } from "@/lib/project-operations";
 import { fetchNhanSu, NhanSu } from "@/lib/nhan-su-operations";
 import { fetchCustomers, Customer } from "@/lib/customer-operations";
@@ -82,7 +86,8 @@ export default function ProjectsPage() {
     startDate: "",
     endDate: "",
     budget: 0,
-    status: "Planning" as Project["status"],
+    status: "Chuẩn bị" as Project["status"],
+    stage: "Tiếp nhận" as ProjectStage | string,
     description: ""
   });
 
@@ -128,7 +133,8 @@ export default function ProjectsPage() {
       startDate: new Date().toISOString().split('T')[0],
       endDate: "",
       budget: 0,
-      status: "Planning",
+      status: "Chuẩn bị",
+      stage: "Tiếp nhận",
       description: ""
     });
     setCustomerContracts([]);
@@ -266,7 +272,13 @@ export default function ProjectsPage() {
       (project.contractNo || "").toLowerCase().includes(query) ||
       (project.opportunityCode || "").toLowerCase().includes(query);
       
-    const matchesStatus = statusFilter === "All" || project.status === statusFilter;
+    const matchesStatus = statusFilter === "All" ||
+      project.status === statusFilter ||
+      (statusFilter === "Chuẩn bị" && project.status === "Planning") ||
+      (statusFilter === "Đang triển khai" && project.status === "Active") ||
+      (statusFilter === "Tạm dừng" && project.status === "On Hold") ||
+      (statusFilter === "Hủy bỏ" && project.status === "Delayed") ||
+      (statusFilter === "Hoàn thành" && project.status === "Completed");
     
     return matchesSearch && matchesStatus;
   });
@@ -290,25 +302,30 @@ export default function ProjectsPage() {
   // Calculate statistics for currently active tab
   const stats = {
     total: filteredProjects.length,
-    active: filteredProjects.filter(p => p.status === "Active").length,
-    planning: filteredProjects.filter(p => p.status === "Planning").length,
-    completed: filteredProjects.filter(p => p.status === "Completed").length,
-    delayed: filteredProjects.filter(p => p.status === "Delayed").length,
+    active: filteredProjects.filter(p => p.status === "Đang triển khai" || p.status === "Active").length,
+    planning: filteredProjects.filter(p => p.status === "Chuẩn bị" || p.status === "Planning").length,
+    completed: filteredProjects.filter(p => p.status === "Hoàn thành" || p.status === "Completed").length,
+    delayed: filteredProjects.filter(p => p.status === "Hủy bỏ" || p.status === "Tạm dừng" || p.status === "Delayed" || p.status === "On Hold").length,
     totalBudget: filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)
   };
 
   const getStatusBadgeClass = (status: Project["status"]) => {
     switch (status) {
+      case "Chuẩn bị":
       case "Planning":
         return "bg-slate-100 text-slate-700 border-slate-200";
+      case "Đang triển khai":
       case "Active":
         return "bg-blue-50 text-blue-700 border-blue-200/60";
+      case "Tạm dừng":
       case "On Hold":
         return "bg-amber-50 text-amber-700 border-amber-200/60";
-      case "Completed":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
+      case "Hủy bỏ":
       case "Delayed":
         return "bg-red-50 text-red-700 border-red-200/60";
+      case "Hoàn thành":
+      case "Completed":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200/60";
       default:
         return "bg-slate-100 text-slate-700 border-slate-200";
     }
@@ -316,12 +333,46 @@ export default function ProjectsPage() {
 
   const getStatusLabel = (status: Project["status"]) => {
     switch (status) {
-      case "Planning": return "Lập kế hoạch";
-      case "Active": return "Đang chạy";
-      case "On Hold": return "Tạm dừng";
-      case "Completed": return "Hoàn thành";
-      case "Delayed": return "Trễ hạn";
-      default: return status;
+      case "Chuẩn bị":
+      case "Planning":
+        return "Chuẩn bị";
+      case "Đang triển khai":
+      case "Active":
+        return "Đang triển khai";
+      case "Tạm dừng":
+      case "On Hold":
+        return "Tạm dừng";
+      case "Hủy bỏ":
+      case "Delayed":
+        return "Hủy bỏ";
+      case "Hoàn thành":
+      case "Completed":
+        return "Hoàn thành";
+      default:
+        return status;
+    }
+  };
+
+  const getStageBadgeClass = (stage?: string) => {
+    switch (stage) {
+      case "Tiếp nhận":
+        return "bg-sky-50 text-sky-700 border-sky-200";
+      case "Kick-off":
+        return "bg-indigo-50 text-indigo-700 border-indigo-200";
+      case "Khảo sát":
+        return "bg-violet-50 text-violet-700 border-violet-200";
+      case "Thiết kế":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "Triển khai":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Bàn giao":
+        return "bg-amber-50 text-amber-700 border-amber-200";
+      case "Nghiệm thu":
+        return "bg-orange-50 text-orange-700 border-orange-200";
+      case "Hoàn thành":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      default:
+        return "bg-slate-50 text-slate-700 border-slate-200";
     }
   };
 
@@ -437,11 +488,11 @@ export default function ProjectsPage() {
               className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white font-medium text-slate-700"
             >
               <option value="All">Tất cả trạng thái</option>
-              <option value="Active">Đang chạy (Active)</option>
-              <option value="Planning">Lập kế hoạch (Planning)</option>
-              <option value="On Hold">Tạm hoãn (On Hold)</option>
-              <option value="Completed">Hoàn thành (Completed)</option>
-              <option value="Delayed">Trễ hạn (Delayed)</option>
+              <option value="Chuẩn bị">Chuẩn bị</option>
+              <option value="Đang triển khai">Đang triển khai</option>
+              <option value="Tạm dừng">Tạm dừng</option>
+              <option value="Hủy bỏ">Hủy bỏ</option>
+              <option value="Hoàn thành">Hoàn thành</option>
             </select>
           </div>
         </div>
@@ -524,9 +575,16 @@ export default function ProjectsPage() {
                     </span>
                   </div>
                   
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(project.status)}`}>
-                    {getStatusLabel(project.status)}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {project.stage && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStageBadgeClass(project.stage)}`}>
+                        {project.stage}
+                      </span>
+                    )}
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(project.status)}`}>
+                      {getStatusLabel(project.status)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Project Title */}
@@ -634,6 +692,7 @@ export default function ProjectsPage() {
                   <th className="px-6 py-4">Chủ nhiệm (PM)</th>
                   <th className="px-6 py-4">Thời gian</th>
                   <th className="px-6 py-4 w-40">Tiến độ</th>
+                  <th className="px-6 py-4 text-center">Giai đoạn</th>
                   <th className="px-6 py-4 text-center">Trạng thái</th>
                   <th className="px-6 py-4 text-right">Thao tác</th>
                 </tr>
@@ -689,7 +748,12 @@ export default function ProjectsPage() {
                         <span className="text-xs font-semibold text-slate-600">{project.progress || 0}%</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${getStageBadgeClass(project.stage)}`}>
+                        {project.stage || "Tiếp nhận"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadgeClass(project.status)}`}>
                         {getStatusLabel(project.status)}
                       </span>
@@ -981,23 +1045,41 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Row 6: Status */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-                  Trạng thái khởi tạo
-                </label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
-                >
-                  <option value="Planning">Lập kế hoạch (Planning)</option>
-                  <option value="Active">Đang triển khai (Active)</option>
-                  <option value="On Hold">Tạm hoãn (On Hold)</option>
-                  <option value="Completed">Hoàn thành (Completed)</option>
-                  <option value="Delayed">Trễ hạn (Delayed)</option>
-                </select>
+              {/* Row 6: Status & Stage */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                    Trạng thái khởi tạo
+                  </label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                  >
+                    {PROJECT_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value} disabled={opt.value === "Hoàn thành"}>
+                        {opt.label}{opt.value === "Hoàn thành" ? " (cần 100% tiến độ)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+                    Giai đoạn khởi tạo
+                  </label>
+                  <select
+                    name="stage"
+                    value={formData.stage}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white cursor-pointer"
+                  >
+                    {PROJECT_STAGE_OPTIONS.map((stg) => (
+                      <option key={stg} value={stg}>{stg}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Row 7: Description */}
