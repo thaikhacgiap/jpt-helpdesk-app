@@ -425,6 +425,7 @@ export default function ProjectDetailPage() {
   const [editedNotesRaw, setEditedNotesRaw] = useState("");
 
   // Plan Edit State
+  const lastLocalActionTime = useRef<number>(0);
   const [isEditingPlan, setIsEditingPlan] = useState(false);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [isMoveMode, setIsMoveMode] = useState(false);
@@ -748,6 +749,7 @@ export default function ProjectDetailPage() {
       status: editedStatus,
     });
     if (updated) {
+      lastLocalActionTime.current = Date.now();
       setProject(prev => prev ? { ...prev, ...updated } : null);
       addDiaryEntry(project.id, {
         author: "John D.",
@@ -878,7 +880,21 @@ export default function ProjectDetailPage() {
     // Auto Realtime sync for this project
     const unsubscribe = subscribeToProjects((latestProjects) => {
       const match = latestProjects.find(p => p.id === projectId);
-      if (match) setProject(match);
+      if (match) {
+        setProject(prev => {
+          if (!prev) return match;
+          // If user just interacted with stage or status locally, protect against stale echoes
+          const isRecentLocalChange = Date.now() - lastLocalActionTime.current < 2500;
+          if (isRecentLocalChange) {
+            return {
+              ...match,
+              stage: prev.stage || match.stage,
+              status: prev.status || match.status
+            };
+          }
+          return match;
+        });
+      }
     });
 
     return () => {
@@ -893,7 +909,20 @@ export default function ProjectDetailPage() {
       setProject(loadedProj);
     }
     fetchProjectById(projectId).then(fresh => {
-      if (fresh) setProject(fresh);
+      if (fresh) {
+        setProject(prev => {
+          if (!prev) return fresh;
+          const isRecentLocalChange = Date.now() - lastLocalActionTime.current < 2500;
+          if (isRecentLocalChange) {
+            return {
+              ...fresh,
+              stage: prev.stage || fresh.stage,
+              status: prev.status || fresh.status
+            };
+          }
+          return fresh;
+        });
+      }
     });
   };
 
@@ -920,6 +949,7 @@ export default function ProjectDetailPage() {
       alert(`Tiến trình dự án chưa đạt 100% (hiện tại: ${project.progress || 0}%). Không thể chọn trạng thái "Hoàn thành" khi tiến trình chưa đạt 100%!`);
       return;
     }
+    lastLocalActionTime.current = Date.now();
     setProject(prev => prev ? { ...prev, status } : null);
     const updated = updateProject(project.id, { status });
     if (updated) {
@@ -929,13 +959,13 @@ export default function ProjectDetailPage() {
         content: `Thay đổi trạng thái dự án thành "${getStatusLabel(status)}"`,
         category: "Milestone"
       });
-      refreshProjectData();
     }
   };
 
   // Handle Project Stage Change
   const handleStageChange = (stage: ProjectStage | string) => {
     if (!project) return;
+    lastLocalActionTime.current = Date.now();
     setProject(prev => prev ? { ...prev, stage: stage as ProjectStage } : null);
     const updated = updateProject(project.id, { stage: stage as ProjectStage });
     if (updated) {
@@ -944,7 +974,6 @@ export default function ProjectDetailPage() {
         content: `Chuyển giai đoạn dự án sang "${stage}"`,
         category: "Milestone"
       });
-      refreshProjectData();
     }
   };
 

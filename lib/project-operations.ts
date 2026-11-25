@@ -1192,16 +1192,17 @@ export function toDbProject(p: Partial<Project>): any {
     const hasSubPlans = p.subPlans && p.subPlans.length > 0;
     const hasCustomMain = p.mainPlanName && p.mainPlanName !== "M-Plan";
     const hasStage = p.stage !== undefined;
+    const tasks = Array.isArray(p.plan) ? p.plan : (p.plan && (p.plan as any).tasks ? (p.plan as any).tasks : []);
     if (hasSubPlans || hasCustomMain || hasStage) {
       dbObj.plan = {
         isMultiPlan: true,
         mainPlanName: p.mainPlanName || "M-Plan",
-        tasks: Array.isArray(p.plan) ? p.plan : [],
+        tasks,
         subPlans: p.subPlans || [],
         stage: p.stage
       };
     } else {
-      dbObj.plan = p.plan || [];
+      dbObj.plan = tasks;
     }
   }
 
@@ -1269,9 +1270,14 @@ function recalculateProgress(project: Project): Project {
     return project;
   }
   // If phases exist, overall project progress is average of Phases
-  const phases = project.plan.filter(t => t.level === 'phase' || t.isHeader);
+  const phases = project.plan.filter(t => t.level === 'phase');
   if (phases.length > 0) {
     project.progress = Math.round(phases.reduce((sum, p) => sum + (p.progress || 0), 0) / phases.length);
+    return project;
+  }
+  const headers = project.plan.filter(t => t.isHeader);
+  if (headers.length > 0) {
+    project.progress = Math.round(headers.reduce((sum, p) => sum + (p.progress || 0), 0) / headers.length);
     return project;
   }
   const tasks = project.plan.filter(t => !t.isHeader);
